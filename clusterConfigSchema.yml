@@ -1,0 +1,17 @@
+## config cluster schema ##
+clusters:
+  - name: "cluster name"
+    api_ip: "..."
+    ingress_ip: "..."
+    masters:
+    - name: "A"
+      type: "<vm / physical / bf>"
+      node: ""
+      ip: ""
+    workers:
+    - name: "A"
+      type: "<vm / physical / bf>"
+      ip: ""
+      node: ""
+      bmc_user: "required if physical or bf"
+      bmc_password: "required if physical or bf"

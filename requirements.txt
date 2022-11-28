@@ -1,0 +1,8 @@
+GitPython
+aicli
+PyYAML==5.4.1
+requests
+setuptools-rust
+wheel
+paramiko==2.12.0
+tenacity
