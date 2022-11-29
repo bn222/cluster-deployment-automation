@@ -101,6 +101,7 @@ class ClusterDeployer():
       if "workers" in self._cc and self._cc["workers"]:
         local_vms.extend(self._cc["workers"])
 
+      lh = host.LocalHost()
       for m in local_vms:
         if m["type"] == "vm":
             assert(m["node"] == "localhost")
@@ -108,9 +109,9 @@ class ClusterDeployer():
             image = f"/guest_images/{name}.qcow2"
             if os.path.exists(image):
               os.remove(image)
-            r = run(f"virsh destroy {name}")
+            r = lh.run(f"virsh destroy {name}")
             print(r.err if r.err else r.out)
-            r = run(f"virsh undefine {name}")
+            r = lh.run(f"virsh undefine {name}")
             print(r.err if r.err else r.out)
 
       infra_name = f"{cluster_name}-x86"
@@ -122,19 +123,19 @@ class ClusterDeployer():
          infra_name in map(lambda x: x["name"], self._ai.list_infra_envs())):
         self._ai.delete_infra_env(infra_name)
 
-      xml_str = run("virsh net-dumpxml default").out
+      xml_str = lh.run("virsh net-dumpxml default").out
       q = et.fromstring(xml_str)
       nodes = self._cc["masters"]
       removed_macs = []
       for e in q[-1][0][1:]:
-        if (e.attrib["name"] in map(lambda x: x["name"], nodes) or
-            e.attrib["ip"] in map(lambda x: x["ip"], nodes)):
+        if (e.attrib["name"] in [x["name"] for x in nodes] or
+            e.attrib["ip"] in [ x["ip"] for x in  nodes]):
           mac = e.attrib["mac"]
           name = e.attrib["name"]
           ip = e.attrib["ip"]
           pre = "virsh net-update default delete ip-dhcp-host".split()
           cmd = pre + [f"<host mac='{mac}' name='{name}' ip='{ip}'/>", "--live", "--config"]
-          print(run(cmd))
+          print(lh.run(cmd))
           removed_macs.append(mac)
 
       fn = "/var/lib/libvirt/dnsmasq/virbr0.status"
@@ -143,12 +144,28 @@ class ClusterDeployer():
 
       if contents:
         j = json.loads(contents)
+        names = [x["name"] for x in self._cc["masters"]]
+        print(f'Cleaning up {fn}')
+        print(f'removing hosts with mac in {removed_macs} or name in {names}')
+        filtered = []
+        for entry in j:
+          if entry["mac-address"] in removed_macs:
+            print(f'Removed host with mac {entry["mac-address"]}')
+            continue
+          if "hostname" in entry and entry["hostname"] in names:
+            print(f'Removed host with name {entry["hostname"]}')
+            continue
+          else:
+            print(f'Kept entry {entry}')
+          filtered.append(entry)
 
-        filtered = [entry for entry in j if entry["mac-address"] not in removed_macs]
+        print(lh.run("virsh net-destroy default"))
         with open(fn, "w") as f:
-          json.dumps(filtered, indent=4)
+          f.write(json.dumps(filtered, indent=4))
+        print(lh.run("virsh net-start default"))
 
-      print(run(f"ip link set eno1 nomaster"))
+      print(lh.run(f"ip link set eno1 nomaster"))
+
 
     def deploy(self):
         self.teardown()
