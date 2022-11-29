@@ -95,7 +95,13 @@ class ClusterDeployer():
         print("cluster found, deleting it")
         self._ai.delete_cluster(cluster_name)
 
-      for m in self._cc["masters"] or [] + self._cc["workers"] or []:
+      local_vms = []
+      if "masters" in self._cc and self._cc["masters"]:
+        local_vms.extend(self._cc["masters"])
+      if "workers" in self._cc and self._cc["workers"]:
+        local_vms.extend(self._cc["workers"])
+
+      for m in local_vms:
         if m["type"] == "vm":
             assert(m["node"] == "localhost")
             name = m["name"]
@@ -146,9 +152,11 @@ class ClusterDeployer():
 
     def deploy(self):
         self.teardown()
-        self.create_cluster()
-        self.create_masters()
-        self.create_workers()
+        if self._cc["masters"]:
+          self.create_cluster()
+          self.create_masters()
+        if self._cc["workers"]:
+          self.create_workers()
 
     def create_cluster(self):
         cluster_name = self._cc["name"]

@@ -16,6 +16,12 @@ class ClustersConfig():
         with open(yamlPath, 'r') as f:
             self.fullConfig = safe_load(f)
 
+        for cc in self.fullConfig["clusters"]:
+            if "masters" not in cc:
+                cc["masters"] = []
+            if "workers" not in cc:
+                cc["workers"] = []
+
     def print(self) -> None:
         print(safe_dump(self.fullConfig))
 
