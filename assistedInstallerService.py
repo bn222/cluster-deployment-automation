@@ -1,7 +1,7 @@
 import subprocess
 from collections import namedtuple
 from requests import get as get_url
-import os
+import os, sys
 from shutil import rmtree as rmdir
 import yaml
 import json
@@ -34,11 +34,23 @@ class AssistedInstallerService():
     y["data"]["AGENT_DOCKER_IMAGE"] = "registry.redhat.io/rhai-tech-preview/assisted-installer-agent-rhel8:latest"
     y["data"]["CONTROLLER_IMAGE"] = "registry.redhat.io/rhai-tech-preview/assisted-installer-reporter-rhel8:latest"
     y["data"]["INSTALLER_IMAGE"] = "registry.redhat.io/rhai-tech-preview/assisted-installer-rhel8:latest"
+
     j = json.loads(y["data"]["HW_VALIDATOR_REQUIREMENTS"])
     j[0]["master"]["disk_size_gb"] = 8
     j[0]["worker"]["disk_size_gb"] = 8
     j[0]["sno"]["disk_size_gb"] = 8
     y["data"]["HW_VALIDATOR_REQUIREMENTS"] = json.dumps(j)
+
+    j = json.loads(y["data"]["RELEASE_IMAGES"])
+    to_add = {
+      'openshift_version': '4.12.0-multi',
+      'cpu_architecture': 'multi',
+      'cpu_architectures': ['x86_64', 'arm64', 'ppc64le', 's390x'],
+      'url': 'quay.io/openshift-release-dev/ocp-release:4.12.0-rc.4-multi',
+      'version': '4.12.0-multi'
+    }
+    j.append(to_add)
+    y["data"]["RELEASE_IMAGES"] = json.dumps(j)
 
     with open(f'{self.workdir}/configmap.yml', 'w') as out_configmap:
       yaml.dump(y, out_configmap, sort_keys=False)
