@@ -46,7 +46,7 @@ class AssistedInstallerService():
       'openshift_version': '4.12.0-multi',
       'cpu_architecture': 'multi',
       'cpu_architectures': ['x86_64', 'arm64', 'ppc64le', 's390x'],
-      'url': 'quay.io/openshift-release-dev/ocp-release:4.12.0-rc.4-multi',
+      'url': 'quay.io/openshift-release-dev/ocp-release:4.12.0-rc.6-multi',
       'version': '4.12.0-multi'
     }
     j.append(to_add)
