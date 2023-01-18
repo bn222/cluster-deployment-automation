@@ -25,20 +25,12 @@ from extraConfigDpuInfra import ExtraConfigDpuInfra
 import paramiko
 import common
 
-def run(cmd):
-  if not isinstance(cmd, list):
-    cmd = cmd.split()
-  Result = namedtuple("Result", "out err")
-  with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as proc:
-    return Result(proc.stdout.read().decode("utf-8"), proc.stderr.read().decode("utf-8"))
-
-
 def setup_vms(masters, iso_path):
-  # cmd = aicli()
-  print(run(f"virsh pool-define-as guest_images dir - - - - /guest_images"))
-  print(run(f"mkdir -p /guest_images"))
-  print(run(f"chmod a+rw /guest_images"))
-  print(run(f"virsh pool-start guest_images"))
+  lh = host.LocalHost()
+  print(lh.run(f"virsh pool-define-as guest_images dir - - - - /guest_images"))
+  print(lh.run(f"mkdir -p /guest_images"))
+  print(lh.run(f"chmod a+rw /guest_images"))
+  print(lh.run(f"virsh pool-start guest_images"))
 
   pre = "virsh net-update default add ip-dhcp-host".split()
 
@@ -48,8 +40,7 @@ def setup_vms(masters, iso_path):
     ip = e["ip"]
     mac = "52:54:"+":".join(re.findall("..", secrets.token_hex()[:8]))
     cmd = pre + [f"<host mac='{mac}' name='{name}' ip='{ip}'/>", "--live", "--config"]
-    print(cmd)
-    print(run(cmd))
+    print(lh.run(cmd))
 
     OS_VARIANT="rhel8.5"
     RAM_MB="32784"
@@ -74,6 +65,12 @@ def setup_vms(masters, iso_path):
       --wait=-1
 """
     print(f"starting virsh {cmd}")
+
+    def run(cmd):
+      print(f"Running {cmd} in a thread")
+      ret = lh.run(cmd)
+      print(f"Finished running {cmd} with result {ret}")
+      return ret
 
     t1 = Thread(target=run, args=(cmd,))
     t1.start()
@@ -293,7 +290,8 @@ class ClusterDeployer():
         for p in procs:
           p.join()
         print("link eno1 to virbr0")
-        run(f"ip link set eno1 master virbr0")
+        lh = host.LocalHost()
+        lh.run(f"ip link set eno1 master virbr0")
         print(f'downloading kubeconfig to {self._cc["kubeconfig"]}')
         self._ai.download_kubeconfig(self._cc["name"], os.path.dirname(self._cc["kubeconfig"]))
         self._update_etc_hosts()
