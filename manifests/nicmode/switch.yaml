@@ -1,0 +1,34 @@
+apiVersion: machineconfiguration.openshift.io/v1
+kind: MachineConfig
+metadata:
+  labels:
+    machineconfiguration.openshift.io/role: sriov
+  name: 99-bf2-dpu
+spec:
+  config:
+    ignition:
+      version: 3.2.0
+    storage:
+      files:
+      - contents:
+          source: data:text/plain;charset=utf-8;base64,ZmluZF9jb250YWluZXIoKSB7CiAgY3JpY3RsIHBzIC1vIGpzb24gfCBqcSAtciAnLmNvbnRhaW5lcnNbXSB8IHNlbGVjdCgubWV0YWRhdGEubmFtZT09InNyaW92LW5ldHdvcmstY29uZmlnLWRhZW1vbiIpIHwgLmlkJwp9CnVudGlsIG91dHB1dD0kKGZpbmRfY29udGFpbmVyKTsgW1sgLW4gIiRvdXRwdXQiIF1dOyBkbwogIGVjaG8gIndhaXRpbmcgZm9yIGNvbnRhaW5lciB0byBjb21lIHVwIgogIHNsZWVwIDE7CmRvbmUKISBzdWRvIGNyaWN0bCBleGVjICRvdXRwdXQgL2JpbmRhdGEvc2NyaXB0cy9iZjItc3dpdGNoLW1vZGUuc2ggIiRAIgo=
+        mode: 0755
+        overwrite: true
+        path: /etc/default/switch_in_sriov_config_daemon.sh
+    systemd:
+      units:
+        - name: dpu-switch.service
+          enabled: true
+          contents: |
+            [Unit]
+            Description=Switch BlueField2 card to NIC/DPU mode
+            RequiresMountsFor=%t/containers
+            Wants=network.target
+            After=network-online.target kubelet.service
+            [Service]
+            SuccessExitStatus=0 120
+            RemainAfterExit=True
+            ExecStart=/bin/bash -c '/etc/default/switch_in_sriov_config_daemon.sh nic 0000:5e:00.0 || shutdown -r now'
+            Type=oneshot
+            [Install]
+            WantedBy=multi-user.target

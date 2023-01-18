@@ -17,8 +17,13 @@ import nfs
 import requests
 import socket
 from git import Repo
-from coreosBuilder import CoreosBuilder
+import coreosBuilder
 import ipaddress
+from extraConfigBFB import ExtraConfigBFB, ExtraConfigSwitchNicMode
+from extraConfigDpuTenant import ExtraConfigDpuTenant
+from extraConfigDpuInfra import ExtraConfigDpuInfra
+import paramiko
+import common
 
 def run(cmd):
   if not isinstance(cmd, list):
@@ -27,16 +32,8 @@ def run(cmd):
   with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as proc:
     return Result(proc.stdout.read().decode("utf-8"), proc.stderr.read().decode("utf-8"))
 
-def first(l, x):
-  return next(filter(l, x))
 
-def extract_ip(jsonipa, port_name):
-  ipa = json.loads(jsonipa)
-  interface = first(lambda x: x["ifname"] == port_name, ipa)
-  inet = first(lambda x: x["family"] == "inet", interface["addr_info"])
-  return inet["local"]
-
-def setup_vms(masters, iso_path) -> None:
+def setup_vms(masters, iso_path):
   # cmd = aicli()
   print(run(f"virsh pool-define-as guest_images dir - - - - /guest_images"))
   print(run(f"mkdir -p /guest_images"))
@@ -56,7 +53,7 @@ def setup_vms(masters, iso_path) -> None:
 
     OS_VARIANT="rhel8.5"
     RAM_MB="32784"
-    DISK_GB="50"
+    DISK_GB="64"
     CPU_CORE="8"
     RHCOS_ISO=iso_path
     network="default"
@@ -96,6 +93,7 @@ class ClusterDeployer():
       self._secrets_path = secrets_path
       self._iso_path = "/root/iso"
       os.makedirs(self._iso_path, exist_ok=True)
+      self._extra_config = {}
 
     def teardown(self):
       cluster_name = self._cc["name"]
@@ -110,24 +108,19 @@ class ClusterDeployer():
             print("failed to delete cluster, will retry..")
             time.sleep(1)
 
-      local_vms = []
-      if "masters" in self._cc and self._cc["masters"]:
-        local_vms.extend(self._cc["masters"])
-      if "workers" in self._cc and self._cc["workers"]:
-        local_vms.extend(self._cc["workers"])
+      local_vms = [x for x in (self._cc["masters"] + self._cc["workers"]) if x["type"] == "vm"]
 
       lh = host.LocalHost()
       for m in local_vms:
-        if m["type"] == "vm":
-            assert(m["node"] == "localhost")
-            name = m["name"]
-            image = f"/guest_images/{name}.qcow2"
-            if os.path.exists(image):
-              os.remove(image)
-            r = lh.run(f"virsh destroy {name}")
-            print(r.err if r.err else r.out)
-            r = lh.run(f"virsh undefine {name}")
-            print(r.err if r.err else r.out)
+        assert(m["node"] == "localhost")
+        name = m["name"]
+        image = f"/guest_images/{name}.qcow2"
+        if os.path.exists(image):
+          os.remove(image)
+        r = lh.run(f"virsh destroy {name}")
+        print(r.err if r.err else r.out)
+        r = lh.run(f"virsh undefine {name}")
+        print(r.err if r.err else r.out)
 
       infra_name = f"{cluster_name}-x86"
       if infra_name in map(lambda x: x["name"], self._ai.list_infra_envs()):
@@ -182,19 +175,59 @@ class ClusterDeployer():
 
       print(lh.run(f"ip link set eno1 nomaster"))
 
+    def _preconfig(self):
+      for e in self._cc["preconfig"]:
+        self._prepost_config(e)
+
+    def _postconfig(self):
+      for e in self._cc["postconfig"]:
+        self._prepost_config(e)
+
+    def _prepost_config(self, to_run):
+      if not to_run:
+        return
+
+      if not self._extra_config:
+        self._extra_config["bf_bfb_image"] = ExtraConfigBFB(self._cc)
+        self._extra_config["switch_to_nic_mode"] = ExtraConfigSwitchNicMode(self._cc)
+        self._extra_config["dpu_infra"] = ExtraConfigDpuInfra(self._cc)
+        self._extra_config["dpu_tenant"] = ExtraConfigDpuTenant(self._cc)
+
+      if to_run["name"] not in self._extra_config:
+        print(f"{to_run['name']} is not an extra config")
+        sys.exit(-1)
+      else:
+        print(f"running extra config {to_run['name']}")
+        self._extra_config[to_run['name']].run(to_run)
+
+    def ensure_linked_to_bridge(self):
+        lh = host.LocalHost()
+        interface = list(filter(lambda x: x["ifname"] == "eno1", lh.ipa()))
+        if not interface:
+            print("Missing interface eno1")
+
+        interface = interface[0]
+
+        if "master" not in interface:
+            print("No master set for interface eno1")
+            sys.exit(-1)
+        if interface["master"] != "virbr0":
+            print("Incorrect master set for interface eno1")
+            sys.exit(-1)
 
     def deploy(self):
-      if self._cc["preconfig"] == "bf_bfb_image":
-        self.bf_bfb_image()
+      if not self.args.onlypost:
+        if not self.args.skipmasters and self._cc["masters"]:
+          self._preconfig()
+          self.teardown()
+          self.create_cluster()
+          self.create_masters()
 
-      if not self.args.skipmasters and self._cc["masters"]:
-        self.teardown()
-        self.create_cluster()
-        self.create_masters()
+        self.ensure_linked_to_bridge()
+        if self._cc["workers"]:
+          self.create_workers()
 
-      print(self._cc["kubeconfig"])
-      if self._cc["workers"]:
-        self.create_workers()
+      self._postconfig()
 
     def create_cluster(self):
         cluster_name = self._cc["name"]
@@ -211,6 +244,7 @@ class ClusterDeployer():
         cfg["base_dns_domain"] = "redhat.com"
 
         print("Creating cluster")
+        print(cfg)
         self._ai.create_cluster(cluster_name, cfg)
 
     def create_masters(self):
@@ -242,15 +276,18 @@ class ClusterDeployer():
         while True:
           try:
             self._ai.start_cluster(cluster_name)
-            break
           except:
-            time.sleep(1)
+            pass
 
           cluster = list(filter(lambda e: e["name"] == cluster_name, self._ai.list_clusters()))
-          if cluster[0]["status"] == "ready":
+          status = cluster[0]["status"]
+
+          if status == "installing":
+            print(f"Cluster {cluster_name} is in state installing")
             break
           else:
             print(f"Retrying to start cluster {cluster_name}")
+            time.sleep(5)
 
         self._ai.wait_cluster(cluster_name)
         for p in procs:
@@ -278,7 +315,7 @@ class ClusterDeployer():
           if rhn in status:
             status[rhn] = h["status"]
         print(status)
-        if all(v == "known" for (k, v) in status.items()):
+        if all(v == "known" for (_, v) in status.items()):
           break
         time.sleep(1)
 
@@ -292,14 +329,49 @@ class ClusterDeployer():
         else:
           self._create_bf_workers()
       else:
-        if not all(is_physical):
-          print(f"Not supported yet {list(is_physical)}")
-        else:
-          self._create_x86_workers()
+        vms = (x for x in self._cc["workers"] if x["type"] == "vm")
+        self._create_x86_workers()
+
+      print("Setting password to for root to redhat")
+      for w in self._cc["workers"]:
+          ai_ip = self._get_ai_ip(w["name"])
+          assert ai_ip is not None
+          rh = host.RemoteHost(ai_ip)
+          rh.ssh_connect("core")
+          rh.run("echo root:redhat | sudo chpasswd")
 
     def _allow_add_workers(self, cluster_name):
       uuid = self._ai.info_cluster(cluster_name).to_dict()["id"]
       requests.post(f"http://{self._ai.url}/api/assisted-install/v2/clusters/{uuid}/actions/allow-add-workers")
+
+    def _create_physical_x86_workers(self):
+      def boot_helper(worker, iso):
+        return self.boot_iso_x86(worker, iso)
+
+      executor = ThreadPoolExecutor(max_workers=len(self._cc["workers"]))
+      futures = []
+
+      workers = list(x for x in self._cc["workers"] if x["type"] == "physical")
+      cluster_name = self._cc["name"]
+      infra_env_name = f"{cluster_name}-x86"
+      for h in workers:
+        futures.append(executor.submit(boot_helper, h, f"{infra_env_name}.iso"))
+
+      for f in futures:
+        print(f.result())
+
+      for w in workers:
+        w["ip"] = socket.gethostbyname(w["node"])
+
+    def _create_vm_x86_workers(self):
+        cluster_name = self._cc["name"]
+        infra_env = f"{cluster_name}-x86"
+        vm = list(x for x in self._cc["workers"] if x["type"] == "vm")
+        print(infra_env)
+        procs = setup_vms(vm, os.path.join(os.getcwd(), f"{infra_env}.iso"))
+        print("Waiting for all hosts to be in \'known\' state")
+        self._wait_known_state(e["name"] for e in vm)
+
 
     def _create_x86_workers(self):
       print("Setting up x86 workers")
@@ -320,20 +392,8 @@ class ClusterDeployer():
       os.makedirs(self._iso_path, exist_ok = True)
       self._download_iso(infra_env_name, self._iso_path)
 
-      def boot_helper(worker, iso):
-        return self.boot_iso_x86(worker, iso)
-
-      executor = ThreadPoolExecutor(max_workers=len(self._cc["workers"]))
-      futures = []
-
-      for h in self._cc["workers"]:
-        futures.append(executor.submit(boot_helper, h, f"{infra_env_name}.iso"))
-
-      for f in futures:
-        print(f.result())
-
-      for w in self._cc["workers"]:
-        w["ip"] = socket.gethostbyname(w["node"])
+      self._create_physical_x86_workers()
+      self._create_vm_x86_workers()
 
       print("renaming workers")
       self._rename_workers(infra_env_name)
@@ -359,9 +419,10 @@ class ClusterDeployer():
       infra_env_id = self._ai.get_infra_env_id(infra_env_name)
       renamed = 0
 
+      print(f"looking for workers with ip {[w['ip'] for w in self._cc['workers']]}")
+
       for w in self._cc["workers"]:
         ip = w["ip"]
-        print(f"looking for worker with ip {ip}")
         for h in filter(lambda x: x["infra_env_id"] == infra_env_id, self._ai.list_hosts()):
           if not "inventory" in h:
             continue
@@ -381,7 +442,7 @@ class ClusterDeployer():
       print(f"trying to boot {host_name}")
 
       lh = host.LocalHost()
-      nfs_server = extract_ip(lh.run("ip -json a").out, "eno3")
+      nfs_server = common.extract_ip(lh.run("ip -json a").out, "eno3")
 
       h = host.RemoteHostWithBF2(host_name, worker["bmc_user"], worker["bmc_password"])
 
@@ -389,16 +450,6 @@ class ClusterDeployer():
       h.ssh_connect("core")
       print("connected")
       print(h.run("hostname"))
-
-    def _ensure_fcos_exists(self):
-      print("ensuring that fcos exists")
-      dst = os.path.join(self._iso_path, "fedora-coreos.iso")
-      if os.path.exists(dst):
-        print("fcos found, not rebuilding it")
-      else:
-        print("fcos not found, building it now")
-        builder = CoreosBuilder("/tmp/build")
-        builder.build(dst)
 
     def _create_bf_workers(self):
       cluster_name = self._cc["name"]
@@ -415,12 +466,10 @@ class ClusterDeployer():
           print(f"Creating infraenv {infra_env_name}")
           self._ai.create_infra_env(infra_env_name, cfg)
 
-      infra_env_id = next(x["id"] for x in self._ai.list_infra_envs() if x["name"] == infra_env_name)
-
       self._download_iso(infra_env_name, self._iso_path)
 
       id_rsa_file = "/root/.ssh/id_rsa"
-      self._ensure_fcos_exists()
+      coreosBuilder.ensure_fcos_exists()
       nfs.export(self._iso_path)
       shutil.copyfile(id_rsa_file, os.path.join(self._iso_path, "id_rsa"))
 
@@ -435,6 +484,9 @@ class ClusterDeployer():
 
       for (h, f) in zip(self._cc["workers"], futures):
         h["ip"] = f.result()
+        if h["ip"] is None:
+            print(f"Couldn't find ip of worker {h['name']}")
+            sys.exit(-1)
 
       self._rename_workers(infra_env_name)
       print("waiting for workers to be on 'known' state before starting infraenv")
@@ -511,19 +563,32 @@ class ClusterDeployer():
 
     def boot_iso_bf(self, worker, iso):
       lh = host.LocalHost()
-      nfs_server = extract_ip(lh.run("ip -json a").out, "eno3")
+      nfs_server = common.extract_ip(lh.run("ip -json a").out, "eno3")
 
       host_name = worker["node"]
       print(f"Preparing BF on host {host_name}")
       h = host.RemoteHostWithBF2(host_name, worker["bmc_user"], worker["bmc_password"])
-      h.boot_iso_redfish(f"{nfs_server}:/root/iso/fedora-coreos.iso")
-      h.ssh_connect("core")
+      skip_boot = False
+      if h.ping():
+        try:
+          h.ssh_connect("core")
+          d = h.os_release()
+          skip_boot = d["NAME"] == 'Fedora Linux' and d['VARIANT'] == 'CoreOS'
+        except paramiko.ssh_exception.AuthenticationException as e:
+          print("Authentication failed, will not be able to skip boot")
+
+      if skip_boot:
+        print(f"Skipping booting {host_name}, already booted with FCOS")
+      else:
+        h.boot_iso_redfish(f"{nfs_server}:/root/iso/fedora-coreos.iso")
+        time.sleep(10)
+        h.ssh_connect("core")
 
       output = h.bf_pxeboot(iso, nfs_server)
       ipa_json = output[-1]
       bf_interface = "enp3s0f0"
       try:
-        ip = extract_ip(ipa_json, bf_interface)
+        ip = common.extract_ip(ipa_json, bf_interface)
         print(ip)
       except:
         ip = None
@@ -531,9 +596,10 @@ class ClusterDeployer():
       return ip
 
     def wait_for_workers(self):
-      cluster_name = self._cc["name"]
-
       print(f'waiting for {self._cc["workers"]} workers')
+      lh = host.LocalHost()
+      bf_workers = list(filter(lambda x: x["type"] == "bf", self._cc["workers"]))
+      connections = {}
       while True:
         workers = [w["name"] for w in self._cc["workers"]]
         if all(self.is_ready(w, self._cc["kubeconfig"]) for w in workers):
@@ -541,19 +607,43 @@ class ClusterDeployer():
 
         self.approve_csr(self._cc["kubeconfig"])
 
-        lh = host.LocalHost()
-        d = lh.run("date").out
-        # Workaround: Time is not set and consequently HTTPS
-        for w in filter(lambda x: x["type"] == "bf", self._cc["workers"]):
-          ai_ip = self._get_ai_ip(w["name"])
-          if ai_ip is None:
-            continue
-          h = host.RemoteHost(ai_ip, None, None)
-          h.ssh_connect("core")
-          h.run(f"sudo date -s '{d}'")
-          h.run("date")[0]
+        d = lh.run("date").out.strip()
+        if len(connections) != len(bf_workers):
+            for e in filter(lambda x: x["name"] not in connections, bf_workers):
+                ai_ip = self._get_ai_ip(e["name"])
+                if ai_ip is None:
+                    continue
+                h = host.RemoteHost(ai_ip, None, None)
+                h.ssh_connect("core")
+                h.enable_autoreconnect()
+                connections[e["name"]] = h
 
-        time.sleep(5)
+        # Workaround: Time is not set and consequently HTTPS doesn't work
+        for w in filter(lambda x: x["type"] == "bf", self._cc["workers"]):
+          if w["name"] not in connections:
+              continue
+          h = connections[w["name"]]
+          h.run(f"sudo date -s '{d}'")
+
+          # Workaround: images might become corrupt for an unknown reason. In that case, remove it to allow retries
+          out = "".join(h.run("sudo podman images"))
+          e = re.search(r".*Top layer (\w+) of image (\w+) not found in layer tree. The storage may be corrupted, consider running", out)
+          if e:
+            print(f'Removing corrupt image from worker {w["name"]}')
+            print(h.run(f"sudo podman rmi {e.group(2)}"))
+          try:
+            out = "".join(h.run("sudo podman images --format json"))
+            podman_images = json.loads(out)
+            for image in podman_images:
+              inspect_output = "".join(h.run(f"sudo podman image inspect {image['Id']}"))
+              if "A storage corruption might have occurred" in inspect_output:
+                print("Corrupt image found")
+                h.run(f"sudo podman rmi {image['id']}")
+          except Exception as e:
+            print(e)
+            pass
+
+        time.sleep(10)
 
     def _get_ai_ip(self, name):
       ai_host = self._get_ai_host(name)
@@ -569,33 +659,3 @@ class ClusterDeployer():
             return addr
       return None
 
-    def bf_bfb_image(self):
-      self._ensure_fcos_exists()
-      print("Loading BF-2 with BFB image on all workers")
-      lh = host.LocalHost()
-      nfs_server = extract_ip(lh.run("ip -json a").out, "eno3")
-      iso_url = f"{nfs_server}:/root/iso/fedora-coreos.iso"
-
-      def helper(e):
-        h = host.RemoteHostWithBF2(e["node"], e["bmc_user"], e["bmc_password"])
-        h.boot_iso_redfish(iso_url)
-        h.ssh_connect("core")
-        h.prep_container()
-        print("updating firmware")
-        h.bf_firmware_upgrade()
-        print("setting firmware config to defaults")
-        h.bf_firmware_defaults()
-        h.cold_boot()
-        h.boot_iso_redfish(iso_url)
-        h.ssh_connect("core")
-        h.prep_container()
-        print("loading bfb image")
-        h.bf_load_bfb()
-
-      executor = ThreadPoolExecutor(max_workers=len(self._cc["workers"]))
-      futures = []
-      # Assuming that all workers have BF that need to reset to bfb image in dpu mode
-      for e in self._cc["workers"]:
-        f = executor.submit(helper, e)
-        futures.append(f)
-      [f.result() for f in futures]

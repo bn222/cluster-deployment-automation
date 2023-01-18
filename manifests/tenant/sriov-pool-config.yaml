@@ -1,0 +1,8 @@
+apiVersion: sriovnetwork.openshift.io/v1
+kind: SriovNetworkPoolConfig
+metadata:
+  name: default
+  namespace: openshift-sriov-network-operator
+spec:
+  ovsHardwareOffloadConfig:
+    name: dpu-host

@@ -1,0 +1,33 @@
+apiVersion: machineconfiguration.openshift.io/v1
+kind: MachineConfig
+metadata:
+  labels:
+    machineconfiguration.openshift.io/role: dpu-host
+  name: disable-ovs
+spec:
+  config:
+    ignition:
+      version: 3.2.0
+    systemd:
+      units:
+        - name: ovs-unconfiguration.service
+          enabled: true
+          contents: |
+            [Unit]
+            Description=undoes the configuration of OVS.
+            # This service ensures that ports are not assigned to OVS
+            Requires=openvswitch.service
+            Wants=NetworkManager-wait-online.service
+            After=NetworkManager-wait-online.service openvswitch.service network.service
+            Before=network-online.target kubelet.service crio.service node-valid-hostname.service
+            [Service]
+            # Need oneshot to delay kubelet
+            Type=oneshot
+            ExecStart=/usr/local/bin/configure-ovs.sh OpenShiftSDN
+            StandardOutput=journal+console
+            StandardError=journal+console
+            [Install]
+            WantedBy=network-online.target
+            WantedBy=multi-user.target
+        - name: ovs-configuration.service
+          enabled: false
