@@ -40,7 +40,14 @@ def setup_vms(masters, iso_path):
     ip = e["ip"]
     mac = "52:54:"+":".join(re.findall("..", secrets.token_hex()[:8]))
     cmd = pre + [f"<host mac='{mac}' name='{name}' ip='{ip}'/>", "--live", "--config"]
-    print(lh.run(cmd))
+    print("Creating static DHCP entry")
+    ret = lh.run(cmd)
+    if ret.err:
+        print(cmd)
+        print(ret.err)
+        sys.exit(-1)
+    else:
+        print(ret.out)
 
     OS_VARIANT="rhel8.5"
     RAM_MB="32784"
