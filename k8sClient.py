@@ -50,8 +50,11 @@ class K8sClient():
 
         assert os.path.exists("build")
         if not os.path.exists("build/oc"):
-            print("downloading oc command")
-            response = requests.get(oc_url + "openshift-client_linux.tar.gz")
+            url = oc_url + "openshift-client-linux.tar.gz"
+            print(f"downloading oc command from {url}")
+            response = requests.get(url)
             open("build/oc.tar.gz", "wb").write(response.content)
             lh.run("tar xf build/oc.tar.gz build/oc")
+            lh.run("rm build/oc.tar.gz")
+            lh.run("mv oc build/oc")
         return lh.run(f"build/oc {cmd} --kubeconfig {self._kc}")
