@@ -2,6 +2,10 @@ import kubernetes
 import yaml
 import time
 import host
+import os
+import requests
+
+oc_url = "https://mirror.openshift.com/pub/openshift-v4/clients/ocp/latest/openshift-client-linux.tar.gz"
 
 class K8sClient():
   def __init__(self, kubeconfig):
@@ -33,9 +37,7 @@ class K8sClient():
       if e.status.conditions is None:
         # body = kubernetes.client.V1CertificateSigningRequest()
         # certs_api.replace_certificate_signing_request_approval(e.metadata.name, body)
-        name = e.name
-        lh = host.LocalHost()
-        lh.run(f"oc adm certificate approve {name} --kubeconfig {self._kubeconfig}")
+        self.oc(f"adm certificate approve {e.name}")
 
   def get_ip(self, name):
     for e in self._client.list_node().items:
@@ -46,7 +48,15 @@ class K8sClient():
 
   def oc(self, cmd):
     lh = host.LocalHost()
-    return lh.run(f"oc {cmd} --kubeconfig {self._kubeconfig}")
+
+    assert os.path.exists("build")
+    if not os.path.exists("build/oc"):
+      print("downloading oc command")
+      response = requests.get(oc_url)
+      open("build/oc.tar.gz", "wb").write(response.content)
+      lh.run("tar xf build/oc.tar.gz /build/oc")
+
+    return lh.run(f"build/oc {cmd} --kubeconfig {self._kubeconfig}")
 
 
     # print(dir(self._client))
