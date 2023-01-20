@@ -13,6 +13,7 @@ import io
 import yaml
 import secrets
 import re
+from k8sClient import K8sClient
 import nfs
 import requests
 import socket
@@ -235,6 +236,11 @@ class ClusterDeployer():
           self.create_workers()
 
       self._postconfig()
+
+    def client(self):
+        if self._client is None:
+            self._client = K8sClient(self._cc["kubeconfig"])
+        return self._client
 
     def create_cluster(self):
         cluster_name = self._cc["name"]
@@ -520,7 +526,7 @@ class ClusterDeployer():
         print(f"Missing kubeconfig at {kubeconfig}")
         sys.exit(-1)
 
-      result = lh.run(f"oc get node -o yaml --kubeconfig {kubeconfig}")
+      result = self.client().oc("get node -o yaml")
       if result.err:
         print(result.err)
         sys.exit(-1)
@@ -543,15 +549,6 @@ class ClusterDeployer():
           if e["type"] == "Ready":
              return e["status"] == "True"
       return False
-
-    def approve_csr(self, kubeconfig):
-      lh = host.LocalHost()
-      result = lh.run(f"oc get csr -o yaml --kubeconfig {kubeconfig}").out
-      for e in yaml.safe_load(io.StringIO(result))["items"]:
-        if not e["status"]:
-          name = e["metadata"]["name"]
-          print(f"approving csr {name}")
-          lh.run(f"oc adm certificate approve {name} --kubeconfig {kubeconfig}")
 
     def _update_etc_hosts(self):
       cluster_name = self._cc["name"]
@@ -613,7 +610,7 @@ class ClusterDeployer():
         if all(self.is_ready(w, self._cc["kubeconfig"]) for w in workers):
           break
 
-        self.approve_csr(self._cc["kubeconfig"])
+        self.client().approve_csr()
 
         d = lh.run("date").out.strip()
         if len(connections) != len(bf_workers):

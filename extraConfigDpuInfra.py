@@ -157,26 +157,26 @@ class ExtraConfigDpuInfra:
             time.sleep(1)
 
         print("Creating OVNKubeConfig cr")
-        print(lh.run(f"oc create -f manifests/infra/ovnkubeconfig.yaml --kubeconfig {kc}"))
+        client.oc("create -f manifests/infra/ovnkubeconfig.yaml")
 
         print("Labeling nodes")
         for b in bf_names:
-            lh.run(f"oc label node {b} node-role.kubernetes.io/dpu-worker= --kubeconfig {kc}")
+            client.oc(f"label node {b} node-role.kubernetes.io/dpu-worker=")
 
         print("Creating config map")
-        print(lh.run(f"oc create -f manifests/infra/cm.yaml --kubeconfig {kc}"))
+        print(client.oc("create -f manifests/infra/cm.yaml"))
 
         for b in bf_names:
-            lh.run(f"oc label node {b} network.operator.openshift.io/dpu= --kubeconfig {kc}")
+            client.oc("label node {b} network.operator.openshift.io/dpu=")
         print("Waiting for mcp to be ready")
         time.sleep(60)
-        lh.run("oc wait mcp dpu --for condition=updated --timeout=50m")
+        client.oc("wait mcp dpu --for condition=updated --timeout=50m")
 
         # https://issues.redhat.com/browse/NHE-325
         good = {b: False for b in bf_names}
         while not all(good.values()):
             time.sleep(60)
-            lh.run("oc wait mcp dpu --for condition=updated --timeout=50m")
+            client.oc("wait mcp dpu --for condition=updated --timeout=50m")
             for b in bf_names:
                 ip = client.get_ip(b)
                 rh = host.RemoteHost(ip)
