@@ -213,8 +213,8 @@ class ClusterDeployer():
         interface = interface[0]
 
         if "master" not in interface:
-            print("No master set for interface eno1")
-            sys.exit(-1)
+            print("No master set for interface eno1, setting it to virbr0")
+            lh.run(f"ip link set eno1 master virbr0")
         if interface["master"] != "virbr0":
             print("Incorrect master set for interface eno1")
             sys.exit(-1)
