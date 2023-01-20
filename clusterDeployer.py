@@ -137,11 +137,12 @@ class ClusterDeployer():
 
       xml_str = lh.run("virsh net-dumpxml default").out
       q = et.fromstring(xml_str)
-      nodes = self._cc["masters"]
+      all_nodes = self._cc["masters"] + self._cc["workers"]
+      all_local_vm = [x for x in all_nodes if x["node"] == "localhost" and x["type"] == "vm"]
       removed_macs = []
       for e in q[-1][0][1:]:
-        if (e.attrib["name"] in [x["name"] for x in nodes] or
-            e.attrib["ip"] in [ x["ip"] for x in  nodes]):
+        if (e.attrib["name"] in [x["name"] for x in all_local_vm] or
+            e.attrib["ip"] in [x["ip"] for x in all_local_vm]):
           mac = e.attrib["mac"]
           name = e.attrib["name"]
           ip = e.attrib["ip"]
@@ -156,7 +157,9 @@ class ClusterDeployer():
 
       if contents:
         j = json.loads(contents)
-        names = [x["name"] for x in self._cc["masters"]]
+        all_nodes = self._cc["masters"] + self._cc["workers"]
+        all_local_vm = [x for x in all_nodes if x["node"] == "localhost" and x["type"] == "vm"]
+        names = [x["name"] for x in all_local_vm]
         print(f'Cleaning up {fn}')
         print(f'removing hosts with mac in {removed_macs} or name in {names}')
         filtered = []
