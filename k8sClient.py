@@ -36,7 +36,7 @@ class K8sClient():
         certs_api = kubernetes.client.CertificatesV1Api(self._api_client)
         for e in certs_api.list_certificate_signing_request().items:
             if e.status.conditions is None:
-                self.oc(f"adm certificate approve {e.name}")
+                self.oc(f"adm certificate approve {e.metadata.name}")
 
     def get_ip(self, name):
         for e in self._client.list_node().items:
