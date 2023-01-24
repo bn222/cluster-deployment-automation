@@ -9,7 +9,7 @@ class ExtraConfigBFB:
     def __init__(self, cc):
         self._cc = cc
 
-    def run(self):
+    def run(self, cfg):
         coreosBuilder.ensure_fcos_exists()
         print("Loading BF-2 with BFB image on all workers")
         lh = host.LocalHost()
@@ -46,7 +46,7 @@ class ExtraConfigSwitchNicMode:
     def __init__(self, cc):
         self._cc = cc
 
-    def run(self):
+    def run(self, cfg):
         client = K8sClient(self._cc._kubeconfig)
 
         for e in self._cc["workers"]:
