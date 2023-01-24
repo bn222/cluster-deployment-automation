@@ -11,6 +11,8 @@ import os
 import time
 import json
 
+Result = namedtuple("Result", "out err returncode")
+
 class LocalHost():
   def __init__(self):
     pass
@@ -18,7 +20,6 @@ class LocalHost():
   def run(self, cmd, env = None):
     if not isinstance(cmd, list):
        cmd = cmd.split()
-    Result = namedtuple("Result", "out err returncode")
     if env is None:
       env = os.environ.copy()
     with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env) as proc:
@@ -82,7 +83,26 @@ class RemoteHost():
 
     return ret
 
+  def _read_output2(self, cmd):
+    _, stdout, stderr = self._host.exec_command(cmd)
+
+    out = []
+    for line in iter(stdout.readline, ""):
+      print(f"{self._hostname}: {line.strip()}")
+      out += line
+
+    err = []
+    for line in iter(stderr.readline, ""):
+      err += line
+
+    exit_code = stdout.channel.recv_exit_status()
+    out = "".join(out)
+    err = "".join(err)
+
+    return Result(out, err, exit_code)
+
   def run(self, cmd):
+    print("warning: using old run, use run2 instead")
     print(cmd)
     if not self.auto_reconnect:
       return self._read_output(cmd)
@@ -91,6 +111,21 @@ class RemoteHost():
         try:
           print("running command", cmd)
           return self._read_output(cmd)
+        except Exception as e:
+          print(e)
+          print("Connection lost while running command, trying to reconnect")
+          self.ssh_connect_looped(self._username)
+
+  def run2(self, cmd):
+    print("warning: using old run, use run2 instead")
+    print(cmd)
+    if not self.auto_reconnect:
+      return self._read_output2(cmd)
+    else:
+      while True:
+        try:
+          print("running command", cmd)
+          return self._read_output2(cmd)
         except Exception as e:
           print(e)
           print("Connection lost while running command, trying to reconnect")
@@ -171,43 +206,43 @@ class RemoteHostWithBF2(RemoteHost):
     self._container_name = "bfb"
     print("starting container")
     cmd = f"sudo podman run --pull always --replace --pid host --network host --user 0 --name {self._container_name} -dit --privileged -v /dev:/dev quay.io/bnemeth/bf"
-    self.run(cmd)
+    self.run2(cmd)
 
   def bf_pxeboot(self, iso_name, nfs_server):
     self.prep_container()
     print("mounting nfs inside container")
     cmd = f"sudo killall python3"
-    self.run(cmd)
+    self.run2(cmd)
     print("starting pxe server and booting bf")
     cmd = f"sudo podman exec -it {self._container_name} /pxeboot {nfs_server}:/root/iso/{iso_name} -w {nfs_server}:/root/iso/id_rsa"
-    return self.run(cmd)
+    return self.run2(cmd)
 
   def bf_firmware_upgrade(self):
     self.prep_container()
     cmd = f"sudo podman exec {self._container_name} /fwup"
-    self.run(cmd)
+    self.run2(cmd)
 
   def bf_firmware_defaults(self):
     self.prep_container()
     cmd = f"sudo podman exec {self._container_name} /fwdefaults"
-    self.run(cmd)
+    self.run2(cmd)
 
   def bf_set_mode(self, mode):
     self.prep_container()
     cmd = f"sudo podman exec {self._container_name} /set_mode {mode}"
-    self.run(cmd)
+    self.run2(cmd)
 
   def bf_get_mode(self):
     self.prep_container()
     cmd = f"sudo podman exec {self._container_name} /get_mode"
-    self.run(cmd)
+    self.run2(cmd)
 
   def bf_firmware_version(self):
     self.prep_container()
     cmd = f"sudo podman exec {self._container_name} /fwversion"
-    self.run(cmd)
+    self.run2(cmd)
 
   def bf_load_bfb(self):
     self.prep_container()
     cmd = f"sudo podman exec {self._container_name} /bfb"
-    self.run(cmd)
+    self.run2(cmd)

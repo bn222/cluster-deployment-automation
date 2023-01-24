@@ -92,6 +92,7 @@ def ip_in_subnet(addr, subnet):
 
 class ClusterDeployer():
     def __init__(self, cc, ai, args, secrets_path):
+      self._client = None
       self.args = args
       self._cc = cc
       self._ai = ai
@@ -590,7 +591,15 @@ class ClusterDeployer():
         h.ssh_connect("core")
 
       output = h.bf_pxeboot(iso, nfs_server)
-      ipa_json = output[-1]
+      print(output)
+      if output.returncode:
+          print(f"Failed to run pxeboot on bf {host_name}")
+          sys.exit(-1)
+      else:
+          print(f"succesfully ran pxeboot on bf {host_name}")
+
+
+      ipa_json = output.out.strip().split("\n")[-1].strip()
       bf_interface = "enp3s0f0"
       try:
         ip = common.extract_ip(ipa_json, bf_interface)
@@ -598,6 +607,7 @@ class ClusterDeployer():
       except:
         ip = None
         print(f"Failed to find ip on {bf_interface}, output was {ipa_json}")
+        sys.exit(-1)
       return ip
 
     def wait_for_workers(self):
