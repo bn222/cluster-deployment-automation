@@ -9,7 +9,7 @@ import sys
 
 def install_remotely(ip, links):
     try:
-        install_remotelyh(ip, links)
+        return install_remotelyh(ip, links)
     except Exception as e:
         print(e)
 
