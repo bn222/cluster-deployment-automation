@@ -54,7 +54,6 @@ class K8sClient():
             print(f"downloading oc command from {url}")
             response = requests.get(url)
             open("build/oc.tar.gz", "wb").write(response.content)
-            lh.run("tar xf build/oc.tar.gz")
+            lh.run("tar xf build/oc.tar.gz -C build")
             lh.run("rm build/oc.tar.gz")
-            lh.run("mv oc build/oc")
         return lh.run(f"build/oc {cmd} --kubeconfig {self._kc}")
