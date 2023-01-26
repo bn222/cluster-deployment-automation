@@ -167,7 +167,7 @@ class ExtraConfigDpuInfra:
         print(client.oc("create -f manifests/infra/cm.yaml"))
 
         for b in bf_names:
-            client.oc("label node {b} network.operator.openshift.io/dpu=")
+            client.oc(f"label node {b} network.operator.openshift.io/dpu=")
         print("Waiting for mcp to be ready")
         time.sleep(60)
         client.oc("wait mcp dpu --for condition=updated --timeout=50m")
