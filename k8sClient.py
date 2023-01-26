@@ -15,6 +15,7 @@ class K8sClient():
             c = yaml.safe_load(f)
         self._api_client = kubernetes.config.new_client_from_config_dict(c)
         self._client = kubernetes.client.CoreV1Api(self._api_client)
+        self.ensure_oc_binary()
 
     def is_ready(self, name):
         for e in self._client.list_node().items:
@@ -47,7 +48,10 @@ class K8sClient():
 
     def oc(self, cmd):
         lh = host.LocalHost()
+        return lh.run(f"{self.oc_bin} {cmd} --kubeconfig {self._kc}")
 
+    def ensure_oc_binary(self):
+        lh = host.LocalHost()
         assert os.path.exists("build")
         if not os.path.exists("build/oc"):
             url = oc_url + "openshift-client-linux.tar.gz"
@@ -56,4 +60,4 @@ class K8sClient():
             open("build/oc.tar.gz", "wb").write(response.content)
             lh.run("tar xf build/oc.tar.gz -C build")
             lh.run("rm build/oc.tar.gz")
-        return lh.run(f"build/oc {cmd} --kubeconfig {self._kc}")
+        self.oc_bin = os.path.join(os.getcwd(), "build/oc")
