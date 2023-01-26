@@ -29,7 +29,16 @@ def read_sheet():
         'https://www.googleapis.com/auth/spreadsheets',
         'https://www.googleapis.com/auth/drive'
     ]
-    cred_path = os.path.join(os.environ["HOME"], "credentials.json")
+    cred_paths = [
+        os.path.join(os.getcwd(), "credentials.json"),
+        os.path.join(os.environ["HOME"], "credentials.json")
+    ]
+    cred_path = None
+    for e in cred_paths:
+        if os.path.exists(e):
+            cred_path = e
+    if cred_path is None:
+        print("Missing credentials.json while using templated config file")
     credentials = ServiceAccountCredentials.from_json_keyfile_name(cred_path, scopes)
     file = gspread.authorize(credentials)
     sheet = file.open("ANL lab HW enablement clusters and connections")
