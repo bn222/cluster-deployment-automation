@@ -28,12 +28,20 @@ from extraConfigOvnK import ExtraConfigOvnK
 import paramiko
 import common
 
+def pool_initialized(lh, pool_name):
+  return lh.run(f"virsh pool-info {pool_name}").returncode == 0
+
 def setup_vms(masters, iso_path, images_path, pool_name):
   lh = host.LocalHost()
-  print(lh.run(f"virsh pool-define-as {pool_name} dir - - - - {images_path}"))
-  print(lh.run(f"mkdir -p {images_path}"))
-  print(lh.run(f"chmod a+rw {images_path}"))
-  print(lh.run(f"virsh pool-start {pool_name}"))
+
+  if not pool_initialized(lh, pool_name):
+    print(f"Initializing pool {pool_name}")
+    print(lh.run(f"virsh pool-define-as {pool_name} dir - - - - {images_path}"))
+    print(lh.run(f"mkdir -p {images_path}"))
+    print(lh.run(f"chmod a+rw {images_path}"))
+    print(lh.run(f"virsh pool-start {pool_name}"))
+  else:
+    print(f"Pool {pool_name} already initialized")
 
   pre = "virsh net-update default add ip-dhcp-host".split()
 
