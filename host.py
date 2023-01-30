@@ -10,6 +10,7 @@ import io
 import os
 import time
 import json
+import shlex
 
 Result = namedtuple("Result", "out err returncode")
 
@@ -19,7 +20,7 @@ class LocalHost():
 
   def run(self, cmd, env = None):
     if not isinstance(cmd, list):
-       cmd = cmd.split()
+       cmd = shlex.split(cmd)
     if env is None:
       env = os.environ.copy()
     with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env) as proc:

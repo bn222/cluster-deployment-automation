@@ -5,7 +5,7 @@ from git import Repo
 from k8sClient import K8sClient
 import os
 import sys
-
+import shutil
 
 def install_remotely(ip, links):
     try:
@@ -87,15 +87,14 @@ def install_custom_kernel(ips):
 
 def run_dpu_network_operator_git(lh, kc):
     repo_dir = "/root/dpu-network-operator"
-    url = "https://github.com/openshift/dpu-network-operator.git"
+    url = "https://github.com/bn222/dpu-network-operator.git"
 
     if os.path.exists(repo_dir):
-        print(f"Repo exists at {repo_dir}, not touching it")
-    else:
-        print(f"Cloning repo to {repo_dir}")
-        Repo.clone_from(url, repo_dir)
+        print(f"Repo exists at {repo_dir}, deleting it")
+        shutil.rmtree(repo_dir)
+    print(f"Cloning repo to {repo_dir}")
+    Repo.clone_from(url, repo_dir, branch='wip')
 
-    print(f"going in dir {repo_dir}")
     cur_dir = os.getcwd()
     os.chdir(repo_dir)
     lh.run("rm -rf bin")

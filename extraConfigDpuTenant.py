@@ -16,11 +16,10 @@ def deploy_sriov_network_operator(client: K8sClient):
         print(f"Cloning repo to {repo_dir}")
         Repo.clone_from(url, repo_dir)
 
-    print(f"cd into dir {repo_dir}")
     cur_dir = os.getcwd()
     os.chdir(repo_dir)
     env = os.environ.copy()
-    env["KUBECONFIG"] = client._kubeconfig
+    env["KUBECONFIG"] = client._kc
     # cleanup first, to make this script idempotent
     print("running make undeploy")
     print(lh.run("make undeploy", env))
@@ -47,7 +46,8 @@ class ExtraConfigDpuTenant:
         tclient.oc("wait mcp dpu-host --for condition=updated")
         print("Labeling nodes")
         for e in self._cc["workers"]:
-            print(tclient.oc(f"label node {e['name']} node-role.kubernetes.io/dpu-host="))
+            cmd = f"label node {e['name']} node-role.kubernetes.io/dpu-host="
+            print(tclient.oc(cmd))
         print("Deploying sriov network operator")
         deploy_sriov_network_operator(tclient)
         print("Creating sriov pool config")
@@ -66,36 +66,53 @@ class ExtraConfigDpuTenant:
         tclient.oc("wait mcp dpu-host --for condition=updated --timeout=50m")
 
         print("setting ovn kube node env-override to set management port")
+        print(os.getcwd())
         contents = open("manifests/tenant/setenvovnkube.yaml").read()
         for e in cfg["mapping"]:
-           a = {}
-           a["OVNKUBE_NODE_MGMT_PORT_NETDEV"] = "ens1f0v0"
-           contents += f"  {e['worker']}: |\n"
-           for (k,v) in a.items():
-               contents += f"    {k}={v}\n"
+            a = {}
+            a["OVNKUBE_NODE_MGMT_PORT_NETDEV"] = "ens1f0v0"
+            contents += f"  {e['worker']}: |\n"
+            for (k, v) in a.items():
+                contents += f"    {k}={v}\n"
         open("/tmp/1.yaml", "w").write(contents)
 
         print("Running create")
         print(tclient.oc("create -f /tmp/1.yaml"))
 
-        # Final infrastructure cluster configuration
+        for e in self._cc["workers"]:
+            cmd = f"label node {e['name']} network.operator.openshift.io/dpu-host="
+            print(tclient.oc(cmd))
+            rh = host.RemoteHost(tclient.get_ip(e['name']))
+            rh.ssh_connect("core")
+            # workaround for https://issues.redhat.com/browse/NHE-335
+            print(rh.run2("sudo ovs-vsctl del-port br-int ovn-k8s-mp0"))
+
+        print("Final infrastructure cluster configuration")
         iclient = K8sClient("/root/kubeconfig.infracluster")
 
-        print(iclient.oc(f"create secret generic tenant-cluster-1-kubeconf --from-file=config={tclient._kubeconfig}"))
+        # https://issues.redhat.com/browse/NHE-334
+        for e in iclient.get_nodes():
+            ip = iclient.get_ip(e)
+            rh = host.RemoteHost(ip)
+            rh.ssh_connect("core")
+            cmd = f"echo \'{self._cc['api_ip']} api.{self._cc['name']}.redhat.com\' | sudo tee -a /etc/hosts"
+            print(rh.run2(cmd))
+        print(iclient.oc(f"create secret generic tenant-cluster-1-kubeconf --from-file=config={tclient._kc}"))
 
         contents = open("manifests/tenant/envoverrides.yaml").read()
         for e in cfg["mapping"]:
-           a = {}
-           a["TENANT_K8S_NODE"] = e['worker']
-           a["DPU_IP"] = iclient.get_ip(e['bf'])
-           a["MGMT_IFNAME"] = "eth1"
-           contents += f"  {e['bf']}: |\n"
-           for (k,v) in a.items():
-               contents += f"    {k}={v}\n"
+            a = {}
+            a["TENANT_K8S_NODE"] = e['worker']
+            a["DPU_IP"] = iclient.get_ip(e['bf'])
+            a["MGMT_IFNAME"] = "eth1"
+            contents += f"  {e['bf']}: |\n"
+            for (k, v) in a.items():
+                contents += f"    {k}={v}\n"
         open("/tmp/envoverrides.yaml", "w").write(contents)
 
         iclient.oc("create -f /tmp/envoverrides.yaml")
         iclient.oc("patch --type merge -p {\"spec\":{\"kubeConfigFile\":\"tenant-cluster-1-kubeconf\"}} OVNKubeConfig ovnkubeconfig-sample")
+        print("Creating network attachement definition")
         tclient.oc("create -f manifests/tenant/nad.yaml")
 
 

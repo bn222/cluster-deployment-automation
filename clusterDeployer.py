@@ -8,6 +8,7 @@ import xml.etree.ElementTree as et
 from shutil import rmtree as rmdir
 import shutil
 from concurrent.futures import ThreadPoolExecutor
+from extraConfigOvnK import ExtraConfigOvnK
 import host
 import io
 import yaml
@@ -23,6 +24,7 @@ import ipaddress
 from extraConfigBFB import ExtraConfigBFB, ExtraConfigSwitchNicMode
 from extraConfigDpuTenant import ExtraConfigDpuTenant
 from extraConfigDpuInfra import ExtraConfigDpuInfra
+from extraConfigOvnK import ExtraConfigOvnK
 import paramiko
 import common
 
@@ -201,6 +203,7 @@ class ClusterDeployer():
         self._extra_config["switch_to_nic_mode"] = ExtraConfigSwitchNicMode(self._cc)
         self._extra_config["dpu_infra"] = ExtraConfigDpuInfra(self._cc)
         self._extra_config["dpu_tenant"] = ExtraConfigDpuTenant(self._cc)
+        self._extra_config["ovnk8s"] = ExtraConfigOvnK(self._cc)
 
       if to_run["name"] not in self._extra_config:
         print(f"{to_run['name']} is not an extra config")
