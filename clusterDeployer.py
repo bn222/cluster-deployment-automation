@@ -285,7 +285,17 @@ class ClusterDeployer():
         procs = setup_vms(self._cc["masters"], os.path.join(os.getcwd(), f"{infra_env}.iso"))
 
         print("Waiting for all hosts to be in \'known\' state")
-        self._wait_known_state(e["name"] for e in self._cc["masters"])
+
+        names = { e["name"] for e in self._cc["masters"] }
+        self._init_hosts_state(names)
+        while True:
+            if self._check_known_state(names):
+              break;
+            time.sleep(1)
+
+            if any(not p.is_alive() for p in procs):
+              raise Exception("Can't install VMs")
+
         print("starting cluster")
         while True:
           try:
@@ -320,18 +330,22 @@ class ClusterDeployer():
           return h
       return None
 
-    def _wait_known_state(self, names):
-      status = {}
-      for e in names:
-        status[e] = ""
-      while True:
+    def _init_hosts_state(self, names):
+      self.status = {e : "" for e in names}
+
+    def _check_known_state(self, names):
         for h in filter(lambda x: "inventory" in x, self._ai.list_hosts()):
           rhn = h["requested_hostname"]
-          if rhn in status:
-            status[rhn] = h["status"]
-        print(status)
-        if all(v == "known" for (_, v) in status.items()):
-          break
+          if rhn in self.status:
+            self.status[rhn] = h["status"]
+        print(self.status)
+        return all(v == "known" for (_, v) in self.status.items())
+
+    def _wait_known_state(self, names):
+      self._init_hosts_state(names)
+      while True:
+        if self._check_known_state(names):
+          break;
         time.sleep(1)
 
     def create_workers(self):

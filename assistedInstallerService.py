@@ -89,6 +89,7 @@ class AssistedInstallerService():
     else:
       print("assisted-installer is not running")
     if not skip_start:
+      print("Starting assisted-installer")
       run(f"podman play kube --configmap {self.workdir}/configmap.yml {self.workdir}/pod.yml")
 
   def waitForAPI(self) -> None:
