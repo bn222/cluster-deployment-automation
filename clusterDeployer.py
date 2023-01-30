@@ -28,11 +28,11 @@ from extraConfigOvnK import ExtraConfigOvnK
 import paramiko
 import common
 
-def setup_vms(masters, iso_path):
+def setup_vms(masters, iso_path, images_path):
   lh = host.LocalHost()
-  print(lh.run(f"virsh pool-define-as guest_images dir - - - - /guest_images"))
-  print(lh.run(f"mkdir -p /guest_images"))
-  print(lh.run(f"chmod a+rw /guest_images"))
+  print(lh.run(f"virsh pool-define-as guest_images dir - - - - {images_path}"))
+  print(lh.run(f"mkdir -p {images_path}"))
+  print(lh.run(f"chmod a+rw {images_path}"))
   print(lh.run(f"virsh pool-start guest_images"))
 
   pre = "virsh net-update default add ip-dhcp-host".split()
@@ -103,6 +103,9 @@ class ClusterDeployer():
       os.makedirs(self._iso_path, exist_ok=True)
       self._extra_config = {}
 
+    def images_path(self, name):
+      return common.first(lambda h: h["name"] == name, self._cc["hosts"])["images_path"]
+
     def teardown(self):
       cluster_name = self._cc["name"]
       print(f"Tearing down {cluster_name}")
@@ -121,8 +124,9 @@ class ClusterDeployer():
       lh = host.LocalHost()
       for m in local_vms:
         assert(m["node"] == "localhost")
+        images_path = self.images_path("localhost")
         name = m["name"]
-        image = f"/guest_images/{name}.qcow2"
+        image = f"/{images_path}/{name}.qcow2"
         if os.path.exists(image):
           os.remove(image)
         r = lh.run(f"virsh destroy {name}")
@@ -285,7 +289,8 @@ class ClusterDeployer():
             print("iso not ready, retrying...")
             time.sleep(1)
 
-        procs = setup_vms(self._cc["masters"], os.path.join(os.getcwd(), f"{infra_env}.iso"))
+        images_path = self.images_path("localhost")
+        procs = setup_vms(self._cc["masters"], os.path.join(os.getcwd(), f"{infra_env}.iso"), images_path)
 
         print("Waiting for all hosts to be in \'known\' state")
 
@@ -402,7 +407,7 @@ class ClusterDeployer():
         infra_env = f"{cluster_name}-x86"
         vm = list(x for x in self._cc["workers"] if x["type"] == "vm")
         print(infra_env)
-        procs = setup_vms(vm, os.path.join(os.getcwd(), f"{infra_env}.iso"))
+        procs = setup_vms(vm, os.path.join(os.getcwd(), f"{infra_env}.iso"), self.images_path("localhost"))
         print("Waiting for all hosts to be in \'known\' state")
         self._wait_known_state(e["name"] for e in vm)
 
