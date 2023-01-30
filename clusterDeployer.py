@@ -191,6 +191,10 @@ class ClusterDeployer():
         print(lh.run("virsh net-start default"))
         print(lh.run("systemctl restart libvirtd"))
 
+      pool_name = self.images_pool_name()
+      print(lh.run(f"virsh pool-destroy {pool_name}"))
+      print(lh.run(f"virsh pool-undefine {pool_name}"))
+
       print(lh.run(f"ip link set eno1 nomaster"))
 
     def _preconfig(self):
