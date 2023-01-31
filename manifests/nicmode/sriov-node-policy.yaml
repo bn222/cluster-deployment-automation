@@ -7,12 +7,8 @@ spec:
   deviceType: netdevice
   eSwitchMode: "switchdev"
   nicSelector:
-    deviceID: "1019"
-    rootDevices:
-    - 0000:d8:00.0
-    vendor: "15b3"
     pfNames:
-    - ens8f0
+    - ens1f0
   nodeSelector:
     feature.node.kubernetes.io/network-sriov.capable: "true"
   numVfs: 6
