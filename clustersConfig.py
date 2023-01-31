@@ -99,7 +99,7 @@ class ClustersConfig():
             # all hosts
             for host_config in cc["hosts"]:
               if "images_path" not in host_config:
-                host_config["images_path"] = "/home/guests_images"
+                host_config["images_path"] = f'/home/{cc["name"]}_guests_images'
 
     def _apply_jinja(self, contents):
         def worker_number(a):
