@@ -63,6 +63,8 @@ class ClustersConfig():
 
         with open(yamlPath, 'r') as f:
             contents = f.read()
+            # load it twice, so that self-reference becomes possible
+            self.fullConfig = safe_load(io.StringIO(contents))
             contents = self._apply_jinja(contents)
             self.fullConfig = safe_load(io.StringIO(contents))
 
@@ -83,7 +85,6 @@ class ClustersConfig():
                 cc["version"] += "-multi"
 
     def _apply_jinja(self, contents):
-
         def worker_number(a):
             self._ensure_clusters_loaded()
             name = self._clusters[self._current_host].workers[a]
@@ -99,7 +100,10 @@ class ClustersConfig():
         template.globals['worker_number'] = worker_number
         template.globals['worker_name'] = worker_name
 
-        t = template.render()
+        kwargs = {}
+        kwargs["cluster_name"] = self.fullConfig["clusters"][0]["name"]
+
+        t = template.render(**kwargs)
         return t
 
     def _ensure_clusters_loaded(self):
