@@ -299,11 +299,13 @@ class ClusterDeployer():
             if any(not p.is_alive() for p in procs):
               raise Exception("Can't install VMs")
 
-        print("starting cluster")
+        print(f"Starting cluster {cluster_name} (will retry until that succeeds)")
+        tries = 0
         while True:
           try:
+            tries += 1
             self._ai.start_cluster(cluster_name)
-          except:
+          except Exception:
             pass
 
           cluster = list(filter(lambda e: e["name"] == cluster_name, self._ai.list_clusters()))
@@ -313,8 +315,8 @@ class ClusterDeployer():
             print(f"Cluster {cluster_name} is in state installing")
             break
           else:
-            print(f"Retrying to start cluster {cluster_name}")
-            time.sleep(5)
+            time.sleep(10)
+        print(f"Took {tries} tries to start cluster {cluster_name}")
 
         self._ai.wait_cluster(cluster_name)
         for p in procs:
