@@ -1,35 +1,9 @@
-from git import Repo
+
 from k8sClient import K8sClient
 import os
 import host
 import time
-
-
-def deploy_sriov_network_operator(client: K8sClient):
-    lh = host.LocalHost()
-    repo_dir = "/root/sriov-network-operator"
-    url = "https://github.com/openshift/sriov-network-operator.git"
-
-    if os.path.exists(repo_dir):
-        print(f"Repo exists at {repo_dir}, not touching it")
-    else:
-        print(f"Cloning repo to {repo_dir}")
-        Repo.clone_from(url, repo_dir)
-
-    cur_dir = os.getcwd()
-    os.chdir(repo_dir)
-    env = os.environ.copy()
-    env["KUBECONFIG"] = client._kc
-    # cleanup first, to make this script idempotent
-    print("running make undeploy")
-    print(lh.run("make undeploy", env))
-    print("running make deploy-setup")
-    time.sleep(60)
-    print("Waiting for mcp dpu-host to become ready")
-    client.oc("wait mcp dpu-host --for condition=updated --timeout=50m")
-    print(lh.run("make deploy-setup", env).out)
-    os.chdir(cur_dir)
-
+from extraConfigSriov import ExtraConfigSriov
 
 class ExtraConfigDpuTenant:
     def __init__(self, cc):
@@ -37,7 +11,6 @@ class ExtraConfigDpuTenant:
 
     def run(self, cfg):
         print("Running post config step")
-
         tclient = K8sClient("/root/kubeconfig.tenantcluster")
         print("Apply DPU tenant mc")
         tclient.oc("create -f manifests/tenant/dputenantmachineconfig.yaml")
@@ -49,7 +22,10 @@ class ExtraConfigDpuTenant:
             cmd = f"label node {e['name']} node-role.kubernetes.io/dpu-host="
             print(tclient.oc(cmd))
         print("Deploying sriov network operator")
-        deploy_sriov_network_operator(tclient)
+        ec = ExtraConfigSriov(self._cc)
+        ec.run(cfg)
+        print("Waiting for mcp dpu-host to become ready")
+        tclient.oc("wait mcp dpu-host --for condition=updated --timeout=50m")
         print("Creating sriov pool config")
         tclient.oc("create -f manifests/tenant/sriov-pool-config.yaml")
         tclient.oc("create -f manifests/tenant/SriovNetworkNodePolicy.yaml")

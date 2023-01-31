@@ -28,7 +28,7 @@ spec:
             [Service]
             SuccessExitStatus=0 120
             RemainAfterExit=True
-            ExecStart=/bin/bash -c '/etc/default/switch_in_sriov_config_daemon.sh nic 0000:5e:00.0 || shutdown -r now'
+            ExecStart=/bin/bash -c '/etc/default/switch_in_sriov_config_daemon.sh nic || shutdown -r now'
             Type=oneshot
             [Install]
             WantedBy=multi-user.target

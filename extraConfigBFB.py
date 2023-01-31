@@ -3,13 +3,15 @@ import coreosBuilder
 from concurrent.futures import ThreadPoolExecutor
 import common
 from k8sClient import K8sClient
+from extraConfigSriov import ExtraConfigSriov
+import time
 
 
 class ExtraConfigBFB:
     def __init__(self, cc):
         self._cc = cc
 
-    def run(self, cfg):
+    def run(self, _):
         coreosBuilder.ensure_fcos_exists()
         print("Loading BF-2 with BFB image on all workers")
         lh = host.LocalHost()
@@ -46,9 +48,21 @@ class ExtraConfigSwitchNicMode:
     def __init__(self, cc):
         self._cc = cc
 
-    def run(self, cfg):
-        client = K8sClient(self._cc._kubeconfig)
+    def run(self, _):
+        client = K8sClient(self._cc["kubeconfig"])
 
+        ec = ExtraConfigSriov(self._cc)
+        ec.run(None)
+
+        client.oc("create -f manifests/nicmode/pool.yaml")
+
+        # label nodes
         for e in self._cc["workers"]:
-            client.oc(f'label node {e["name"]} node-role.kubernetes.io/sriov=')
+            name = e["name"]
+            print(client.oc(f"label node {name} machineconfiguration.openshift.io/role=sriov"))
+            print(client.oc(f"label node {name} node-role.kubernetes.io/sriov="))
+
+        client.oc("delete -f manifests/nicmode/switch.yaml")
         client.oc("create -f manifests/nicmode/switch.yaml")
+        time.sleep(60)
+        print(client.oc("wait mcp sriov --for condition=updated --timeout=50m"))
