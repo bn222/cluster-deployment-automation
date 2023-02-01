@@ -140,10 +140,13 @@ class ClusterDeployer():
         image = f"/{images_path}/{name}.qcow2"
         if os.path.exists(image):
           os.remove(image)
-        r = lh.run(f"virsh destroy {name}")
-        print(r.err if r.err else r.out)
-        r = lh.run(f"virsh undefine {name}")
-        print(r.err if r.err else r.out)
+
+        # destroy the VM only if that really exists
+        if lh.run(f"virsh desc {name}").returncode == 0:
+          r = lh.run(f"virsh destroy {name}")
+          print(r.err if r.err else r.out)
+          r = lh.run(f"virsh undefine {name}")
+          print(r.err if r.err else r.out)
 
       infra_name = f"{cluster_name}-x86"
       if infra_name in map(lambda x: x["name"], self._ai.list_infra_envs()):
@@ -200,8 +203,9 @@ class ClusterDeployer():
         print(lh.run("systemctl restart libvirtd"))
 
       pool_name = self.images_pool_name()
-      print(lh.run(f"virsh pool-destroy {pool_name}"))
-      print(lh.run(f"virsh pool-undefine {pool_name}"))
+      if pool_initialized(lh, pool_name):
+        print(lh.run(f"virsh pool-destroy {pool_name}"))
+        print(lh.run(f"virsh pool-undefine {pool_name}"))
 
       print(lh.run(f"ip link set eno1 nomaster"))
 
