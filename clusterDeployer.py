@@ -402,6 +402,7 @@ class ClusterDeployer():
       is_bf = (x["type"] == "bf" for x in self._cc["workers"])
       is_physical = (x["type"] == "physical" for x in self._cc["workers"])
 
+      nfs.export(self._iso_path)
       if any(is_bf):
         if not all(is_bf):
           print("Not yet supported to have mixed BF and non-bf workers")
@@ -552,7 +553,6 @@ class ClusterDeployer():
 
       id_rsa_file = "/root/.ssh/id_rsa"
       coreosBuilder.ensure_fcos_exists()
-      nfs.export(self._iso_path)
       shutil.copyfile(id_rsa_file, os.path.join(self._iso_path, "id_rsa"))
 
       def boot_iso_bf_helper(worker, iso):
