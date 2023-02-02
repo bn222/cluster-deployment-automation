@@ -6,6 +6,8 @@ from shutil import rmtree as rmdir
 import yaml
 import json
 import time
+import requests
+import host
 
 def run(cmd):
   if not isinstance(cmd, list):
@@ -19,7 +21,7 @@ class AssistedInstallerService():
     self._ip = ip
     base_url = f"https://raw.githubusercontent.com/openshift/assisted-service/{branch}"
     self.podConfig = get_url(f"{base_url}/deploy/podman/configmap.yml").text
-    self.podFile = get_url(f"{base_url}/deploy/podman/pod.yml").text
+    self.podFile = get_url(f"{base_url}/deploy/podman/pod-persistent.yml").text
     self.workdir = os.path.join(os.getcwd(), "build")
 
   def _configure(self) -> None:
@@ -58,39 +60,65 @@ class AssistedInstallerService():
       'version': '4.11.0-multi'
     }
     j.append(to_add)
+
+    versions = (("4.13", "ec.2"),)
+    for v in versions:
+        if "ec" in v[1]:
+            to_add = self._create_ec_version(v)
+        elif "nightly" in v[1]:
+            to_add = self._create_nightly_version(v)
+        else:
+            print(f"unsupported version {v[1]}")
+            sys.exit(-1)
+        j.append(to_add)
+
     y["data"]["RELEASE_IMAGES"] = json.dumps(j)
 
     with open(f'{self.workdir}/configmap.yml', 'w') as out_configmap:
       yaml.dump(y, out_configmap, sort_keys=False)
 
-    with open(f'{self.workdir}/pod.yml', 'w') as out_pod:
+    with open(f'{self.workdir}/pod-persistent.yml', 'w') as out_pod:
       yaml.dump(yaml.safe_load(self.podFile), out_pod, default_flow_style=False)
 
+  def _create_ec_version(self, v):
+    version, ec_version = v
+    version_string = f"{version}-{ec_version}"
+    url = f"quay.io/openshift-release-dev/ocp-release:{version}.0-{ec_version}-multi"
+    return self._create_json_version(version_string, url)
+
+  def _create_json_version(self, version_string, url):
+    return {
+      'openshift_version': version_string,
+      'cpu_architecture': 'multi',
+      'cpu_architectures': ['x86_64', 'arm64', 'ppc64le', 's390x'],
+      'url': url,
+      'version': version_string,
+    }
+
+  def _create_nightly_version(self, v):
+      version, release_type = v
+      version_string = f"{version}-{release_type}"
+      url = f"https://multi.ocp.releases.ci.openshift.org/api/v1/releasestream/{version}.0-0.{release_type}-multi/latest"
+      response = requests.get(url)
+      j = json.loads(response.content)
+      return self._create_json_version(version, j["downloadURL"])
+
   def _start_pod(self, force) -> None:
-    result = run("podman pod ps")
+    result = run("podman pod ps --format json")
     if result.err:
       print("Error {result.err}")
       exit(1)
+    lh = host.LocalHost()
+    name = "assisted-installer"
+    for pod in json.loads(result.out):
+        if pod["Name"] == name:
+            print(lh.run(f"podman pod stop {name}"))
+            print(lh.run(f"podman pod rm {name}"))
+            break
 
-    ai = list(filter(lambda x: "assisted-installer" in x, result.out.split("\n")[1:]))
-    skip_start = False
-    if len(ai) > 1:
-      print("too many assisted-installer pods")
-      skip_start = True
-    elif len(ai) == 1:
-      if force:
-        print("Stopping assisted-installer")
-        hash = ai[0].split()[0]
-        run(f"podman pod stop {hash}")
-        run(f"podman pod rm {hash}")
-      else:
-        print("Assisted already running")
-        skip_start = True
-    else:
-      print("assisted-installer is not running")
-    if not skip_start:
-      print("Starting assisted-installer")
-      run(f"podman play kube --configmap {self.workdir}/configmap.yml {self.workdir}/pod.yml")
+    cfg_map_path = f"{self.workdir}/configmap.yml"
+    pod_path = f"{self.workdir}/pod-persistent.yml"
+    print(lh.run(f"podman play kube --configmap {cfg_map_path} {pod_path}"))
 
   def waitForAPI(self) -> None:
     print("Waiting for API to be ready...")
