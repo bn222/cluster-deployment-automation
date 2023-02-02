@@ -251,11 +251,14 @@ class ClusterDeployer():
 
         interface = interface[0]
 
+        bridge = "virbr0"
+        api_network = "eno1"
+
         if "master" not in interface:
-            print("No master set for interface eno1, setting it to virbr0")
-            lh.run(f"ip link set eno1 master virbr0")
-        if interface["master"] != "virbr0":
-            print("Incorrect master set for interface eno1")
+            print(f"No master set for interface {api_network}, setting it to {bridge}")
+            lh.run(f"ip link set {api_network} master {bridge}")
+        elif interface["master"] != bridge:
+            print(f"Incorrect master set for interface {api_network}")
             sys.exit(-1)
 
     def deploy(self):
