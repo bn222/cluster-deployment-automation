@@ -151,6 +151,27 @@ class RemoteHost():
     https://<ip>/redfish/v1/Systems/System.Embedded.1 (For Dell)
   Red Fish uses HTTP POST messages to trigger actions. Some requires
   data. However the Red Fish library takes care of this for you.
+
+  Red Fish heavily depends on iDRAC and IPMI working. For Dell servers:
+  Log into iDRAC, default user is "root" and default password is "calvin".
+   1) Try rebooting iDRAC
+    a) Go to "Maintenance" tab at the top
+    b) Go to the "Diagnostics" sub-tab below the "Maintenance" panel.
+    c) Press the "Reboot iDRAC"
+    d) Wait a while for iDRAC to come up.
+    e) Once the web interface is available, go back to the "Dashboard" tab.
+    f) Monitor the system to post after the "Dell" blue screen.
+   2) Try upgrading firmware
+    a) Go to "Maintenance" tab at the top
+    b) Go to the "System Update" sub-tab below the "Maintenance" panel.
+    c) Change the "Location Type" to "HTTP"
+    d) Under the "HTTP Server Settings", set the "HTTP Address" to be "downloads.dell.com".
+    e) Click "Check for Update".
+    f) Depending on the missing updates, select what is needed then press "Install and Reboot"
+    g) Wait a while for iDRAC to come up.
+    h) Once the web interface is available, go back to the "Dashboard" tab.
+    i) Monitor the system to post after the "Dell" blue screen.
+
   """
   @retry(stop=stop_after_attempt(10), wait=wait_fixed(60))
   def _boot_with_overrides(self, iso_path):
