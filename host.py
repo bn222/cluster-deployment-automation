@@ -152,7 +152,7 @@ class RemoteHost():
   Red Fish uses HTTP POST messages to trigger actions. Some requires
   data. However the Red Fish library takes care of this for you.
   """
-  @retry(stop=stop_after_attempt(10), wait=wait_fixed(10))
+  @retry(stop=stop_after_attempt(10), wait=wait_fixed(60))
   def _boot_with_overrides(self, iso_path):
     print(f"Trying to boot {self._bmc_url()}")
     red = self._redfish()
