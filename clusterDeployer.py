@@ -263,18 +263,31 @@ class ClusterDeployer():
             sys.exit(-1)
 
     def deploy(self):
-      if not self.args.onlypost:
-        if not self.args.skipmasters and self._cc["masters"]:
+      steps = self.args.steps.split(",")
+      if self._cc["masters"]:
+        if "pre" in steps:
           self._preconfig()
-          self.teardown()
-          self.create_cluster()
+        else:
+          print("Skipping pre configuration.")
+
+        self.teardown()
+        self.create_cluster()
+        if "masters" in steps:
           self.create_masters()
+        else:
+          print("Skipping master creation.")
 
         self.ensure_linked_to_bridge()
-        if self._cc["workers"]:
-          self.create_workers()
+        if "workers" in steps:
+          if self._cc["workers"]:
+            self.create_workers()
+        else:
+          print("Skipping worker creation.")
 
-      self._postconfig()
+      if "post" in steps:
+        self._postconfig()
+      else:
+        print("Skipping post configuration.")
 
     def client(self):
         if self._client is None:
