@@ -15,7 +15,54 @@ def ensure_fcos_exists(dst="/root/iso/fedora-coreos.iso"):
     builder = CoreosBuilder("/tmp/build")
     builder.build(dst)
 
+"""
+The purpose of coreos builder is to build an image with "kernel-modules-extra" which would contain
+the rshim module. The rshim module is important for communicating with the BlueField-2 DPU.
 
+Firstly 2 repositories are needed "coreos-assembler" and "fedora-coreos-config".
+
+In the working directory, we will construct the custom yaml containing the "kernel-modules-extra"
+package. This custom yaml file will be reference in the "fedora-coreos-base.yaml" file in the
+"include" section. This is currently below the "shared-el9.yaml" file. TODO: This would subject
+to change, we should find a way of adding custom yaml without knowing the layout of the
+"fedora-coreos-base.yaml" file.
+
+Afterwards, it is also required to add "kernel-modules-extra" with the correct version "evra" into
+the "manifest-lock.x86_64.json" file. We simply inherit the "evra" version from the "kernel" package
+for "kernel-modules-extra". Example:
+  "kernel": {
+      "evra": "6.1.8-200.fc37.x86_64"
+  },
+  ...
+  "kernel-modules-extra": {
+      "evra": "6.1.8-200.fc37.x86_64"
+  },
+
+Next we will run the core-assembler pod from "quay.io/coreos-assembler/coreos-assembler:latest"
+The explanation of the options used for podman is described here:
+https://github.com/coreos/coreos-assembler/blob/main/docs/building-fcos.md
+In the pod, we will init the git repo "https://github.com/coreos/fedora-coreos-config" that
+contains our explicit changes. Following the "building-fcos" guide, we will subsequently
+run "fetch" and "build".
+
+An ignition file must be created to give SSH access from the local host to the coreos image
+{
+  "ignition": {"version": "3.3.0"},
+  "passwd": {
+    "users": [{
+      "name": "core",
+      "sshAuthorizedKeys": ["ssh-rsa <your key>"]
+    }]
+  }
+}
+Documentation on this is available here: https://coreos.github.io/ignition/examples/#add-users
+
+The "coreos-installer" package provides coreos-installer which is used to embed the ignition file into
+the iso.
+  coreos-installer iso ignition embed -i <ignition file location> -o <final iso location> <original iso location>
+
+The "final iso location" is the image we will use to live boot our machines.
+"""
 class CoreosBuilder():
   def __init__(self, working_dir):
     self._workdir = working_dir
