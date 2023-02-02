@@ -84,6 +84,23 @@ class ClustersConfig():
             if not cc["version"].endswith("-multi"):
                 cc["version"] += "-multi"
 
+            if "hosts" not in cc:
+              cc["hosts"] = []
+
+            # creates hosts entries for each referenced node name
+            all_nodes = cc["masters"] + cc["workers"]
+            node_names = set(x["name"] for x in cc["hosts"])
+            for h in all_nodes:
+              if h["node"] not in node_names:
+                cc["hosts"].append({"name" : h["node"]})
+                node_names.add(h["node"])
+
+            # fill-in defaults value for required attributes on
+            # all hosts
+            for host_config in cc["hosts"]:
+              if "images_path" not in host_config:
+                host_config["images_path"] = f'/home/{cc["name"]}_guests_images'
+
     def _apply_jinja(self, contents):
         def worker_number(a):
             self._ensure_clusters_loaded()

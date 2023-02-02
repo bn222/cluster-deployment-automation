@@ -15,3 +15,7 @@ clusters:
       node: ""
       bmc_user: "required if physical or bf"
       bmc_password: "required if physical or bf"
+    # optionally describe additional node attributes
+    hosts:
+    - name: "A"
+      images_path: "/path/to/pool/directory"

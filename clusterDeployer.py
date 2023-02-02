@@ -28,12 +28,20 @@ from extraConfigOvnK import ExtraConfigOvnK
 import paramiko
 import common
 
-def setup_vms(masters, iso_path):
+def pool_initialized(lh, pool_name):
+  return lh.run(f"virsh pool-info {pool_name}").returncode == 0
+
+def setup_vms(masters, iso_path, images_path, pool_name):
   lh = host.LocalHost()
-  print(lh.run(f"virsh pool-define-as guest_images dir - - - - /guest_images"))
-  print(lh.run(f"mkdir -p /guest_images"))
-  print(lh.run(f"chmod a+rw /guest_images"))
-  print(lh.run(f"virsh pool-start guest_images"))
+
+  if not pool_initialized(lh, pool_name):
+    print(f"Initializing pool {pool_name}")
+    print(lh.run(f"virsh pool-define-as {pool_name} dir - - - - {images_path}"))
+    print(lh.run(f"mkdir -p {images_path}"))
+    print(lh.run(f"chmod a+rw {images_path}"))
+    print(lh.run(f"virsh pool-start {pool_name}"))
+  else:
+    print(f"Pool {pool_name} already initialized")
 
   pre = "virsh net-update default add ip-dhcp-host".split()
 
@@ -58,7 +66,7 @@ def setup_vms(masters, iso_path):
     CPU_CORE="8"
     RHCOS_ISO=iso_path
     network="default"
-    DISK_IMAGES="guest_images"
+    DISK_IMAGES=pool_name
 
     cmd = f"""
     virt-install
@@ -103,6 +111,12 @@ class ClusterDeployer():
       os.makedirs(self._iso_path, exist_ok=True)
       self._extra_config = {}
 
+    def images_path(self, name):
+      return common.first(lambda h: h["name"] == name, self._cc["hosts"])["images_path"]
+
+    def images_pool_name(self):
+      return self._cc["name"]+"_guest_images"
+
     def teardown(self):
       cluster_name = self._cc["name"]
       print(f"Tearing down {cluster_name}")
@@ -121,14 +135,18 @@ class ClusterDeployer():
       lh = host.LocalHost()
       for m in local_vms:
         assert(m["node"] == "localhost")
+        images_path = self.images_path("localhost")
         name = m["name"]
-        image = f"/guest_images/{name}.qcow2"
+        image = f"/{images_path}/{name}.qcow2"
         if os.path.exists(image):
           os.remove(image)
-        r = lh.run(f"virsh destroy {name}")
-        print(r.err if r.err else r.out)
-        r = lh.run(f"virsh undefine {name}")
-        print(r.err if r.err else r.out)
+
+        # destroy the VM only if that really exists
+        if lh.run(f"virsh desc {name}").returncode == 0:
+          r = lh.run(f"virsh destroy {name}")
+          print(r.err if r.err else r.out)
+          r = lh.run(f"virsh undefine {name}")
+          print(r.err if r.err else r.out)
 
       infra_name = f"{cluster_name}-x86"
       if infra_name in map(lambda x: x["name"], self._ai.list_infra_envs()):
@@ -183,6 +201,11 @@ class ClusterDeployer():
           f.write(json.dumps(filtered, indent=4))
         print(lh.run("virsh net-start default"))
         print(lh.run("systemctl restart libvirtd"))
+
+      pool_name = self.images_pool_name()
+      if pool_initialized(lh, pool_name):
+        print(lh.run(f"virsh pool-destroy {pool_name}"))
+        print(lh.run(f"virsh pool-undefine {pool_name}"))
 
       print(lh.run(f"ip link set eno1 nomaster"))
 
@@ -285,7 +308,10 @@ class ClusterDeployer():
             print("iso not ready, retrying...")
             time.sleep(1)
 
-        procs = setup_vms(self._cc["masters"], os.path.join(os.getcwd(), f"{infra_env}.iso"))
+        procs = setup_vms(self._cc["masters"],
+                          os.path.join(os.getcwd(), f"{infra_env}.iso"),
+                          self.images_path("localhost"),
+                          self.images_pool_name())
 
         print("Waiting for all hosts to be in \'known\' state")
 
@@ -402,7 +428,10 @@ class ClusterDeployer():
         infra_env = f"{cluster_name}-x86"
         vm = list(x for x in self._cc["workers"] if x["type"] == "vm")
         print(infra_env)
-        procs = setup_vms(vm, os.path.join(os.getcwd(), f"{infra_env}.iso"))
+        procs = setup_vms(vm,
+                          os.path.join(os.getcwd(), f"{infra_env}.iso"),
+                          self.images_path("localhost"),
+                          self.images_pool_name())
         print("Waiting for all hosts to be in \'known\' state")
         self._wait_known_state(e["name"] for e in vm)
 
