@@ -324,13 +324,13 @@ class ClusterDeployer():
 
         print(self._ai.info_iso(infra_env, {}))
 
+        print("Downloading iso (will retry if not ready)...")
         while True:
-          try:
-            self._ai.download_iso(infra_env, os.getcwd())
-            break
-          except:
-            print("iso not ready, retrying...")
-            time.sleep(1)
+            try:
+                self._ai.download_iso(infra_env, os.getcwd())
+                break
+            except Exception:
+                time.sleep(30)
 
         procs = setup_vms(self._cc["masters"],
                           os.path.join(os.getcwd(), f"{infra_env}.iso"),
