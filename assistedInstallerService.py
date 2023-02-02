@@ -1,20 +1,14 @@
 import subprocess
 from collections import namedtuple
 from requests import get as get_url
-import os, sys
+import os
+import sys
 from shutil import rmtree as rmdir
 import yaml
 import json
 import time
 import requests
 import host
-
-def run(cmd):
-  if not isinstance(cmd, list):
-    cmd = cmd.split()
-  Result = namedtuple("Result", "out err")
-  with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as proc:
-    return Result(proc.stdout.read().decode("utf-8"), proc.stderr.read().decode("utf-8"))
 
 class AssistedInstallerService():
   def __init__(self, ip, branch = "master"):
@@ -104,11 +98,11 @@ class AssistedInstallerService():
       return self._create_json_version(version, j["downloadURL"])
 
   def _start_pod(self, force) -> None:
-    result = run("podman pod ps --format json")
+    lh = host.LocalHost()
+    result = lh.run("podman pod ps --format json")
     if result.err:
       print("Error {result.err}")
       exit(1)
-    lh = host.LocalHost()
     name = "assisted-installer"
     for pod in json.loads(result.out):
         if pod["Name"] == name:
