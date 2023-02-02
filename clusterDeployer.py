@@ -198,7 +198,12 @@ class ClusterDeployer():
             vp = self.local_host_config()["virsh_pool"]
             vp.ensure_removed()
 
-        print(lh.run(f"ip link set eno1 nomaster"))
+        if self.need_api_network():
+            intif = self._validate_api_port(lh)
+            if not intif:
+                print("can't find network API port")
+            else:
+                print(lh.run(f"ip link set {intif} nomaster"))
 
     def _validate_external_port(self, lh) -> Optional[str]:
         # do automatic detection, if needed
@@ -213,6 +218,22 @@ class ClusterDeployer():
             print(f"Using {extif} as external port")
             return extif
         return None
+
+    def _validate_api_port(self, lh) -> Optional[str]:
+        if self._cc["network_api_port"]:
+            def carrier_no_addr(intf):
+                return not intf["addr_info"] and not "NO-CARRIER" in intf["flags"]
+
+            intif = common.first(carrier_no_addr, lh.ipa())
+            if not intif:
+                return False
+            self._cc["network_api_port"] = intif["ifname"]
+
+        intif = self._cc["network_api_port"]
+        if lh.port_exists(intif):
+            print(f"Using {intif} as network API port")
+            return intif
+        return False
 
     def _preconfig(self) -> None:
         for e in self._cc["preconfig"]:
@@ -242,21 +263,25 @@ class ClusterDeployer():
             print(f"running extra config {to_run['name']}")
             self._extra_config[to_run['name']].run(to_run)
 
+    def need_api_network(self):
+        return len(self._cc.local_vms()) != len(self._cc.all_nodes())
+
     def ensure_linked_to_bridge(self) -> None:
-        if len(self._cc.local_vms()) == len(self._cc.all_nodes()):
+        if not self.need_api_network():
             print("Only running local VMs (virbr0 not connected to externally)")
             return
-        print("link eno1 to virbr0")
+
+        api_network = self._cc["network_api_port"]
+        print(f"link {api_network} to virbr0")
 
         lh = host.LocalHost()
-        interface = list(filter(lambda x: x["ifname"] == "eno1", lh.ipa()))
+        interface = list(filter(lambda x: x["ifname"] == api_network, lh.all_ports()))
         if not interface:
-            print("Missing interface eno1")
+            print("Missing API network interface {api_network}")
+            sys.exit(-1)
 
         interface = interface[0]
-
         bridge = "virbr0"
-        api_network = "eno1"
 
         if "master" not in interface:
             print(f"No master set for interface {api_network}, setting it to {bridge}")
@@ -274,6 +299,9 @@ class ClusterDeployer():
             lh = host.LocalHost()
             if self.need_external_network() and not self._validate_external_port(lh):
                 print(f"Can't find a valid external port, config is {self._cc['external_port']}")
+                sys.exit(-1)
+            if self.need_api_network() and not self._validate_api_port(lh):
+                print("Can't find a valid network API port, config is {self._cc['network_api_port']}")
                 sys.exit(-1)
 
             if "pre" in self.args.steps:

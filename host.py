@@ -23,6 +23,9 @@ class Host():
     def ipr(self) -> dict:
         return json.loads(self.run("ip -json r").out)
 
+    def all_ports(self) -> dict:
+        return json.loads(self.run("ip -json link").out)
+
     def ip(self, port_name: str) -> str:
         return common.extract_ip(self.ipa(), port_name)
 

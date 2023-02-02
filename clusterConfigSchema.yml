@@ -4,6 +4,7 @@ clusters:
     api_ip: "..."
     ingress_ip: "..."
     external_port: "<auto / device name>"
+    network_api_port: "<auto / device name>"
     masters:
     - name: "A"
       type: "<vm / physical / bf>"
