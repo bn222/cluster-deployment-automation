@@ -144,6 +144,14 @@ class RemoteHost():
   def boot_iso_redfish(self, iso_path):
     self._boot_with_overrides(iso_path)
 
+  """
+  Red Fish is used to boot ISO images with virtual media.
+  Make sure redfish is enabled on your server. You can verify this by
+  visiting the BMC's web address:
+    https://<ip>/redfish/v1/Systems/System.Embedded.1 (For Dell)
+  Red Fish uses HTTP POST messages to trigger actions. Some requires
+  data. However the Red Fish library takes care of this for you.
+  """
   @retry(stop=stop_after_attempt(10), wait=wait_fixed(10))
   def _boot_with_overrides(self, iso_path):
     print(f"Trying to boot {self._bmc_url()}")

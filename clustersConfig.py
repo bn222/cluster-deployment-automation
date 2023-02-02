@@ -55,6 +55,10 @@ class ClustersConfig():
         self._clusters = None
 
         lh = host.LocalHost()
+        # Run the hostname command and only take the first part. For example
+        # "my-host.test.redhat.com" would return "my-host" here.
+        # This is only required if we are using the Google sheets integration
+        # to match the node name syntax in the spreadsheet.
         self._current_host = lh.run("hostname").out.strip().split(".")[0]
 
         if not path.exists(yamlPath):
@@ -68,6 +72,7 @@ class ClustersConfig():
             contents = self._apply_jinja(contents)
             self.fullConfig = safe_load(io.StringIO(contents))
 
+        # Some config may be left out from the yaml. Try to provide defaults.
         for cc in self.fullConfig["clusters"]:
             if "masters" not in cc:
                 cc["masters"] = []
