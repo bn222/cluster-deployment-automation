@@ -1,16 +1,12 @@
-import os, sys
+import os
+import sys
 import time
-import subprocess
-from collections import namedtuple
 from threading import Thread
 import json
 import xml.etree.ElementTree as et
-from shutil import rmtree as rmdir
 import shutil
 from concurrent.futures import ThreadPoolExecutor
-from extraConfigOvnK import ExtraConfigOvnK
 import host
-import io
 import yaml
 import secrets
 import re
