@@ -235,7 +235,19 @@ class ClusterDeployer():
         print(f"running extra config {to_run['name']}")
         self._extra_config[to_run['name']].run(to_run)
 
+    def local_vms(self):
+        def is_local_vm(x):
+            return x["node"] == "localhost" and x["type"] == "vm"
+        return [x for x in self.all_nodes() if is_local_vm(x)]
+
+    def all_nodes(self):
+        return self._cc["masters"] + self._cc["workers"]
+
     def ensure_linked_to_bridge(self):
+        if len(self.local_vms()) != len(self.all_nodes()):
+            return
+        print("link eno1 to virbr0")
+
         lh = host.LocalHost()
         interface = list(filter(lambda x: x["ifname"] == "eno1", lh.ipa()))
         if not interface:
@@ -347,9 +359,7 @@ class ClusterDeployer():
         self._ai.wait_cluster(cluster_name)
         for p in procs:
           p.join()
-        print("link eno1 to virbr0")
-        lh = host.LocalHost()
-        lh.run(f"ip link set eno1 master virbr0")
+        self.ensure_linked_to_bridge()
         print(f'downloading kubeconfig to {self._cc["kubeconfig"]}')
         self._ai.download_kubeconfig(self._cc["name"], os.path.dirname(self._cc["kubeconfig"]))
         self._update_etc_hosts()
