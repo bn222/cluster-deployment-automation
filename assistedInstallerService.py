@@ -9,6 +9,25 @@ import requests
 import host
 
 
+"""
+Assisted service is an utility to deploy clusters. The Git repository is
+available here: https://github.com/openshift/assisted-service
+
+We deploy the assisted service on the host with Podman. This is documented here:
+https://github.com/openshift/assisted-service/tree/master/deploy/podman
+
+There are 2 yaml files that are important: "configmap.yml" and "pod-persistent.yml".
+
+To set up the assisted service pod correctly, the "IMAGE_SERVICE_BASE_URL" and
+"SERVICE_BASE_URL" must point to the local host where we want to deploy from.
+
+Additionally some images are provided manually and some hardware limitations are
+overwritten. In the config map we append certain multi-arch releases such that
+we can deploy on both ARM and x86.
+
+The assisted installer pod would expose a web interface at "http://<host ip>:8080/clusters"
+that can be used to create and monitor clusters.
+"""
 class AssistedInstallerService():
     def __init__(self, ip, branch="master"):
         self._ip = ip
