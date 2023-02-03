@@ -20,7 +20,7 @@ def main():
   The usage details are here:
     https://aicli.readthedocs.io/en/latest/
   """
-  ai = AssistedClient(f"{args.url}:8090")
+  ai = AssistedClient(f"{args.url}:8090", quiet=True)
   cd = ClusterDeployer(cc, ai, args, args.secrets_path)
 
   if args.teardown:
