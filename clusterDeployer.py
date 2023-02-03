@@ -113,6 +113,34 @@ class ClusterDeployer():
     def images_pool_name(self):
       return self._cc["name"]+"_guest_images"
 
+    """
+    Using Aicli, we will find all the clusters installed on our host included in our configuration file.
+      E.g: aicli -U 0.0.0.0:8090 list cluster
+    Then delete the cluster, such that we are on a clean slate:
+      E.g. aicli -U 0.0.0.0:8090 delete cluster <cluster name>
+
+    Next we want to tear down any VMs we have created. By default the qcow
+    images are here: "/home/infracluster_guests_images/"
+    We delete these images. virsh will be pointing to this qcow file. You can
+    inspect this via: virsh dumpxml --domain <name of VM> | grep "source file"
+      E.g. <source file='/home/infracluster_guests_images/infracluster-master-1.qcow2' index='2'/>
+
+    We then delete the VMs using virsh using "virsh destroy" and "virsh undefine" commands.
+
+    By default virsh ships with the "default" network using the virtual bridge "virbr0". DHCP
+    entries for the VMs (by mac address) are added to the "default" network. We need to make sure
+    to remove them for cleanup.
+
+    Likewise we need to clean up the dnsmasq for the "virbr0" entries in this file:
+    "/var/lib/libvirt/dnsmasq/virbr0.status". This will ensure that the virtual bridge interface
+    does not have any lingering entries in its database. The "default" virsh network is then
+    destroyed and started.
+
+    Then we destroy the libvirt pool created to house our guest images.
+
+    Lastly we unlink the "eno1" interface from the virtual bridge "virtbr0". Currently "eno1" on hosts
+    is hardcoded to be the network hosting the API network.
+    """
     def teardown(self):
       cluster_name = self._cc["name"]
       print(f"Tearing down {cluster_name}")
