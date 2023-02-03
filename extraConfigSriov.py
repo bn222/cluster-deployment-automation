@@ -53,7 +53,7 @@ class ExtraConfigSriov:
 def main():
     args = parse_args()
     cc = ClustersConfig(args.config)
-    ec = ExtraConfigSriov(cc.fullConfig["clusters"][0])
+    ec = ExtraConfigSriov(cc)
     ec.run(None)
 
 

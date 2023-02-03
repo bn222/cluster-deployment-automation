@@ -118,7 +118,6 @@ class RemoteHost():
           self.ssh_connect_looped(self._username)
 
   def run2(self, cmd):
-    print("warning: using old run, use run2 instead")
     print(cmd)
     if not self.auto_reconnect:
       return self._read_output2(cmd)

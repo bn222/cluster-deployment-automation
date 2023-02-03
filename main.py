@@ -21,7 +21,7 @@ def main():
     https://aicli.readthedocs.io/en/latest/
   """
   ai = AssistedClient(f"{args.url}:8090")
-  cd = ClusterDeployer(cc.fullConfig["clusters"][0], ai, args, args.secrets_path)
+  cd = ClusterDeployer(cc, ai, args, args.secrets_path)
 
   if args.teardown:
     cd.teardown()

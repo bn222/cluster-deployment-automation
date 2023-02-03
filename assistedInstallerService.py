@@ -1,6 +1,5 @@
 from requests import get as get_url
 import os
-import sys
 from shutil import rmtree as rmdir
 import yaml
 import json
@@ -26,7 +25,8 @@ overwritten. In the config map we append certain multi-arch releases such that
 we can deploy on both ARM and x86.
 
 The assisted installer pod would expose a web interface at "http://<host ip>:8080/clusters"
-that can be used to create and monitor clusters.
+that can be used to create and monitor clusters. However, since we are deploying in a
+non-standard way, the web-ui can't be used.
 """
 class AssistedInstallerService():
     def __init__(self, ip, branch="master"):
@@ -37,11 +37,23 @@ class AssistedInstallerService():
         self.workdir = os.path.join(os.getcwd(), "build")
 
     def _configure(self) -> None:
-        print("creating working dirctory")
+        print("creating working directory")
         if os.path.exists(self.workdir):
             rmdir(self.workdir)
         os.mkdir(self.workdir)
+        with open(self._config_map_path(), 'w') as out_configmap:
+            yaml.dump(self._customized_configmap(), out_configmap, sort_keys=False)
 
+        with open(self._pod_persistent_path(), 'w') as out_pod:
+            yaml.dump(yaml.safe_load(self.podFile), out_pod, default_flow_style=False)
+
+    def _config_map_path(self):
+        return f'{self.workdir}/configmap.yml'
+
+    def _pod_persistent_path(self):
+        return f'{self.workdir}/pod-persistent.yml'
+
+    def _customized_configmap(self):
         y = yaml.safe_load(self.podConfig)
         y["data"]["IMAGE_SERVICE_BASE_URL"] = f"http://{self._ip}:8888"
         y["data"]["SERVICE_BASE_URL"] = f"http://{self._ip}:8090"
@@ -56,90 +68,64 @@ class AssistedInstallerService():
         y["data"]["HW_VALIDATOR_REQUIREMENTS"] = json.dumps(j)
 
         j = json.loads(y["data"]["RELEASE_IMAGES"])
-        to_add = {
-          'openshift_version': '4.12.0-multi',
-          'cpu_architecture': 'multi',
-          'cpu_architectures': ['x86_64', 'arm64', 'ppc64le', 's390x'],
-          'url': 'quay.io/openshift-release-dev/ocp-release:4.12.0-rc.6-multi',
-          'version': '4.12.0-multi'
-        }
-        j.append(to_add)
-        to_add = {
-          'openshift_version': '4.11.0-multi',
-          'cpu_architecture': 'multi',
-          'cpu_architectures': ['x86_64', 'arm64', 'ppc64le', 's390x'],
-          'url': 'quay.io/openshift-release-dev/ocp-release:4.11.0-multi',
-          'version': '4.11.0-multi'
-        }
-        j.append(to_add)
 
-        versions = (("4.13", "ec.2"),)
+        versions = (("4.11", ""), ("4.12", ""), ("4.13", "-ec.2"),)
         for v in versions:
-            if "ec" in v[1]:
-                to_add = self._create_ec_version(v)
-            elif "nightly" in v[1]:
+            if "nightly" in v[1]:
                 to_add = self._create_nightly_version(v)
             else:
-                print(f"unsupported version {v[1]}")
-                sys.exit(-1)
+                to_add = self._create_ec_version(v)
             j.append(to_add)
 
         y["data"]["RELEASE_IMAGES"] = json.dumps(j)
-
-        with open(f'{self.workdir}/configmap.yml', 'w') as out_configmap:
-            yaml.dump(y, out_configmap, sort_keys=False)
-
-        with open(f'{self.workdir}/pod-persistent.yml', 'w') as out_pod:
-            yaml.dump(yaml.safe_load(self.podFile), out_pod, default_flow_style=False)
+        return y
 
     def _create_ec_version(self, v):
         version, ec_version = v
-        version_string = f"{version}-{ec_version}"
-        url = f"quay.io/openshift-release-dev/ocp-release:{version}.0-{ec_version}-multi"
+        version_string = f"{version}{ec_version}"
+        url = f"quay.io/openshift-release-dev/ocp-release:{version}.0{ec_version}-multi"
         return self._create_json_version(version_string, url)
 
     def _create_json_version(self, version_string, url):
         return {
-          'openshift_version': version_string,
-          'cpu_architecture': 'multi',
-          'cpu_architectures': ['x86_64', 'arm64', 'ppc64le', 's390x'],
-          'url': url,
-          'version': version_string,
+            'openshift_version': version_string,
+            'cpu_architecture': 'multi',
+            'cpu_architectures': ['x86_64', 'arm64', 'ppc64le', 's390x'],
+            'url': url,
+            'version': version_string,
         }
 
     def _create_nightly_version(self, v):
         version, release_type = v
-        version_string = f"{version}-{release_type}"
+        version_string = f"{version}{release_type}"
         url = f"https://multi.ocp.releases.ci.openshift.org/api/v1/releasestream/{version}.0-0.{release_type}-multi/latest"
         response = requests.get(url)
         j = json.loads(response.content)
         return self._create_json_version(version_string, j["downloadURL"])
 
-    def _start_pod(self) -> None:
+    def _ensure_pod_started(self) -> None:
         lh = host.LocalHost()
         result = lh.run("podman pod ps --format json")
         if result.err:
             print("Error {result.err}")
             exit(1)
         name = "assisted-installer"
-        for pod in json.loads(result.out):
-            if pod["Name"] == name:
-                print(lh.run(f"podman pod stop {name}"))
-                print(lh.run(f"podman pod rm {name}"))
-                break
+        if name in map(lambda x: x["Name"], json.loads(result.out)):
+            print(f"{name} already running, stopping it before restarting")
+            lh.run(f"podman pod stop {name}")
+            lh.run(f"podman pod rm {name}")
+        else:
+            print(f"{name} not yet running")
+        lh.run(f"podman play kube --configmap {self._config_map_path()} {self._pod_persistent_path()}")
 
-        cfg_map_path = f"{self.workdir}/configmap.yml"
-        pod_path = f"{self.workdir}/pod-persistent.yml"
-        print(lh.run(f"podman play kube --configmap {cfg_map_path} {pod_path}"))
-
-    def waitForAPI(self) -> None:
+    def wait_for_api(self) -> None:
         print("Waiting for API to be ready...")
         response, count = 0, 0
+        url = f"http://{self._ip}:8090/api/assisted-install/v2/clusters"
         while response != 200:
             try:
-                url = f"http://{self._ip}:8090/api/assisted-install/v2/clusters"
                 response = get_url(url).status_code
-            except:
+            except Exception:
                 pass
             if count == 10:
                 print("Error: API is down")
@@ -149,5 +135,5 @@ class AssistedInstallerService():
 
     def start(self) -> None:
         self._configure()
-        self._start_pod()
-        self.waitForAPI()
+        self._ensure_pod_started()
+        self.wait_for_api()

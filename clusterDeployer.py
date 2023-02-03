@@ -154,10 +154,8 @@ class ClusterDeployer():
             print("failed to delete cluster, will retry..")
             time.sleep(1)
 
-      local_vms = [x for x in (self._cc["masters"] + self._cc["workers"]) if x["type"] == "vm"]
-
       lh = host.LocalHost()
-      for m in local_vms:
+      for m in self._cc.local_vms():
         assert(m["node"] == "localhost")
         images_path = self.images_path("localhost")
         name = m["name"]
@@ -183,12 +181,10 @@ class ClusterDeployer():
 
       xml_str = lh.run("virsh net-dumpxml default").out
       q = et.fromstring(xml_str)
-      all_nodes = self._cc["masters"] + self._cc["workers"]
-      all_local_vm = [x for x in all_nodes if x["node"] == "localhost" and x["type"] == "vm"]
       removed_macs = []
       for e in q[-1][0][1:]:
-        if (e.attrib["name"] in [x["name"] for x in all_local_vm] or
-            e.attrib["ip"] in [x["ip"] for x in all_local_vm]):
+        if (e.attrib["name"] in [x["name"] for x in self._cc.local_vms()] or
+            e.attrib["ip"] in [x["ip"] for x in self._cc.local_vms()]):
           mac = e.attrib["mac"]
           name = e.attrib["name"]
           ip = e.attrib["ip"]
@@ -203,9 +199,7 @@ class ClusterDeployer():
 
       if contents:
         j = json.loads(contents)
-        all_nodes = self._cc["masters"] + self._cc["workers"]
-        all_local_vm = [x for x in all_nodes if x["node"] == "localhost" and x["type"] == "vm"]
-        names = [x["name"] for x in all_local_vm]
+        names = [x["name"] for x in self._cc.local_vms()]
         print(f'Cleaning up {fn}')
         print(f'removing hosts with mac in {removed_macs} or name in {names}')
         filtered = []
@@ -259,16 +253,9 @@ class ClusterDeployer():
         print(f"running extra config {to_run['name']}")
         self._extra_config[to_run['name']].run(to_run)
 
-    def local_vms(self):
-        def is_local_vm(x):
-            return x["node"] == "localhost" and x["type"] == "vm"
-        return [x for x in self.all_nodes() if is_local_vm(x)]
-
-    def all_nodes(self):
-        return self._cc["masters"] + self._cc["workers"]
-
     def ensure_linked_to_bridge(self):
-        if len(self.local_vms()) != len(self.all_nodes()):
+        if len(self._cc.local_vms()) == len(self._cc.all_nodes()):
+            print("Only running local VMs (virbr0 not connected to externally)")
             return
         print("link eno1 to virbr0")
 
@@ -430,7 +417,6 @@ class ClusterDeployer():
 
     def create_workers(self):
       is_bf = (x["type"] == "bf" for x in self._cc["workers"])
-      is_physical = (x["type"] == "physical" for x in self._cc["workers"])
 
       nfs.export(self._iso_path)
       if any(is_bf):
@@ -439,7 +425,6 @@ class ClusterDeployer():
         else:
           self._create_bf_workers()
       else:
-        vms = (x for x in self._cc["workers"] if x["type"] == "vm")
         self._create_x86_workers()
 
       print("Setting password to for root to redhat")
@@ -728,6 +713,8 @@ class ClusterDeployer():
                 h = host.RemoteHost(ai_ip, None, None)
                 h.ssh_connect("core")
                 h.enable_autoreconnect()
+                print(f'connected to {e["name"]}, setting user:pw')
+                h.run("echo root:redhat | sudo chpasswd")
                 connections[e["name"]] = h
 
         # Workaround: Time is not set and consequently HTTPS doesn't work

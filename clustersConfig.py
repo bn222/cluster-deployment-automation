@@ -153,6 +153,21 @@ class ClustersConfig():
     def print(self) -> None:
         print(safe_dump(self.fullConfig))
 
+    def __getitem__(self, key):
+        return self.fullConfig["clusters"][0][key]
+
+    def __setitem__(self, key, value):
+        self.fullConfig["clusters"][0][key] = value
+
+    def all_nodes(self):
+        return self["masters"] + self["workers"]
+
+    def all_vms(self):
+        return [x for x in self.all_nodes() if x["type"] == "vm"]
+
+    def local_vms(self):
+        return [x for x in self.all_vms() if x["node"] == "localhost"]
+
 
 def main():
     pass
