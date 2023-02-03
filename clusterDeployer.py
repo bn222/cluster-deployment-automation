@@ -290,28 +290,27 @@ class ClusterDeployer():
             sys.exit(-1)
 
     def deploy(self):
-      steps = self.args.steps.split(",")
       if self._cc["masters"]:
-        if "pre" in steps:
+        if "pre" in self.args.steps:
           self._preconfig()
         else:
           print("Skipping pre configuration.")
 
         self.teardown()
         self.create_cluster()
-        if "masters" in steps:
+        if "masters" in self.args.steps:
           self.create_masters()
         else:
           print("Skipping master creation.")
 
         self.ensure_linked_to_bridge()
-        if "workers" in steps:
+        if "workers" in self.args.steps:
           if self._cc["workers"]:
             self.create_workers()
         else:
           print("Skipping worker creation.")
 
-      if "post" in steps:
+      if "post" in self.args.steps:
         self._postconfig()
       else:
         print("Skipping post configuration.")

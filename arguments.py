@@ -9,9 +9,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--assisted-installer-url', dest='url', default='192.168.122.1', action='store', type=str, help='If set to 0.0.0.0 (the default), Assisted Installer will be started locally')
     parser.add_argument('--secret', dest='secrets_path', default='', action='store', type=str, help='pull_secret.json path (default is in cwd)')
     steps = "pre,masters,workers,post"
-    parser.add_argument('-s', '--steps', dest='steps', type=str, default=steps, help=f'Comma-separated list of steps to run (by default: {steps}).')
+    parser.add_argument('-s', '--steps', dest='steps', type=str, default=steps, help=f'Comma-separated list of steps to run (by default: {steps})')
+    parser.add_argument('-d', '--skip-steps', dest='skip_steps', type=str, default="", help=f"CommComma-separated list of steps to skip")
 
     args = parser.parse_args()
+    args.steps = args.steps.split(",")
+    args.skip_steps = args.skip_steps.split(",")
+    args.steps = [x for x in args.steps if x not in args.skip_steps]
 
     if not args.secrets_path:
         args.secrets_path = os.path.join(os.getcwd(), "pull_secret.json")
