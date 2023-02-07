@@ -145,7 +145,6 @@ class ExtraConfigDpuInfra:
         print("Waiting for pod to be in running state")
         while True:
             pods = client._client.list_namespaced_pod("openshift-dpu-network-operator").items
-            print(f"Found {len(pods)}")
             if len(pods) == 1:
                 if pods[0].status.phase == "Running":
                     break
@@ -153,7 +152,7 @@ class ExtraConfigDpuInfra:
             elif len(pods) > 1:
                 print("unexpected number of pods")
                 sys.exit(-1)
-            time.sleep(1)
+            time.sleep(5)
 
         print("Creating OVNKubeConfig cr")
         client.oc("create -f manifests/infra/ovnkubeconfig.yaml")

@@ -413,7 +413,7 @@ class ClusterDeployer():
       while True:
         if self._check_known_state(names):
           break;
-        time.sleep(1)
+        time.sleep(5)
 
     def create_workers(self):
       is_bf = (x["type"] == "bf" for x in self._cc["workers"])
@@ -503,6 +503,7 @@ class ClusterDeployer():
       self.wait_for_workers()
 
     def _rename_workers(self, infra_env_name):
+      print(f"looking for workers with ip {[w['ip'] for w in self._cc['workers']]}")
       while True:
         renamed = self._try_rename_workers(infra_env_name)
         expected = len(self._cc["workers"])
@@ -511,16 +512,13 @@ class ClusterDeployer():
           break
         elif renamed:
           print(f"Found and renamed {renamed} workers, but waiting for {expected}, retrying")
-        time.sleep(1)
+        time.sleep(5)
 
     def _try_rename_workers(self, infra_env_name):
       infra_env_id = self._ai.get_infra_env_id(infra_env_name)
       renamed = 0
 
-      print(f"looking for workers with ip {[w['ip'] for w in self._cc['workers']]}")
-
       for w in self._cc["workers"]:
-        ip = w["ip"]
         for h in filter(lambda x: x["infra_env_id"] == infra_env_id, self._ai.list_hosts()):
           if not "inventory" in h:
             continue
