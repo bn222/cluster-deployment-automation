@@ -600,37 +600,6 @@ class ClusterDeployer():
           print("iso not ready, retrying ...")
           time.sleep(1)
 
-    def is_ready(self, node_name, kubeconfig):
-      lh = host.LocalHost()
-
-      if not os.path.exists(kubeconfig):
-        print(f"Missing kubeconfig at {kubeconfig}")
-        sys.exit(-1)
-
-      result = self.client().oc("get node -o yaml")
-      if result.err:
-        print(result.err)
-        sys.exit(-1)
-
-      y = yaml.safe_load(result.out)
-      for it in y["items"]:
-        if "metadata" not in it:
-          continue
-        if "name" not in it["metadata"]:
-          continue
-
-        if it["metadata"]["name"] != node_name:
-          continue
-
-        if "status" not in it:
-          continue
-        if "conditions" not in it["status"]:
-          continue
-        for e in it["status"]["conditions"]:
-          if e["type"] == "Ready":
-             return e["status"] == "True"
-      return False
-
     def _update_etc_hosts(self):
       cluster_name = self._cc["name"]
       api_name = f"api.{cluster_name}.redhat.com"
@@ -697,7 +666,7 @@ class ClusterDeployer():
       connections = {}
       while True:
         workers = [w["name"] for w in self._cc["workers"]]
-        if all(self.is_ready(w, self._cc["kubeconfig"]) for w in workers):
+        if all(self.client().is_ready(w) for w in workers):
           break
 
         self.client().approve_csr()
