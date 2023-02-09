@@ -6,7 +6,7 @@ import shutil
 import host
 
 
-def ensure_fcos_exists(dst="/root/iso/fedora-coreos.iso"):
+def ensure_fcos_exists(dst: str="/root/iso/fedora-coreos.iso") -> None:
   print("ensuring that fcos exists")
   if os.path.exists(dst):
     print(f"fcos found at {dst}, not rebuilding it")
@@ -64,10 +64,10 @@ the iso.
 The "final iso location" is the image we will use to live boot our machines.
 """
 class CoreosBuilder():
-  def __init__(self, working_dir):
+  def __init__(self, working_dir: str):
     self._workdir = working_dir
 
-  def build(self, dst):
+  def build(self, dst: str) -> None:
     fcos_dir = os.path.join(self._workdir, "fcos")
     lh = host.LocalHost()
 
@@ -141,13 +141,13 @@ class CoreosBuilder():
     print(lh.run(cmd))
     print(lh.run(f"chmod a+rw {dst}"))
 
-  def _find_iso(self, fcos_dir):
+  def _find_iso(self, fcos_dir: str) -> str:
     for root, _, files in os.walk(fcos_dir, topdown=False):
       for name in files:
         if name.endswith(".iso"):
           return os.path.join(root, name)
 
-  def _clone_if_not_exists(self, url):
+  def _clone_if_not_exists(self, url: str) -> str:
     dest = url.split("/")[-1]
     if dest.endswith(".git"):
       dest = dest[:-4]
@@ -160,7 +160,7 @@ class CoreosBuilder():
       Repo.clone_from(url, repo_dir)
     return repo_dir
 
-  def create_ignition(self, public_key_file = "/root/.ssh/id_rsa.pub"):
+  def create_ignition(self, public_key_file: str = "/root/.ssh/id_rsa.pub") -> str:
     with open(public_key_file, 'r') as f:
         key = " ".join(f.read().split(" ")[:-1])
     ign = {}

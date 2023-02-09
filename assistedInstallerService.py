@@ -7,7 +7,6 @@ import time
 import requests
 import host
 
-
 """
 Assisted service is an utility to deploy clusters. The Git repository is
 available here: https://github.com/openshift/assisted-service
@@ -29,7 +28,7 @@ that can be used to create and monitor clusters. However, since we are deploying
 non-standard way, the web-ui can't be used.
 """
 class AssistedInstallerService():
-    def __init__(self, ip, branch="master"):
+    def __init__(self, ip: str, branch: str="master"):
         self._ip = ip
         base_url = f"https://raw.githubusercontent.com/openshift/assisted-service/{branch}"
         self.podConfig = get_url(f"{base_url}/deploy/podman/configmap.yml").text
@@ -47,10 +46,10 @@ class AssistedInstallerService():
         with open(self._pod_persistent_path(), 'w') as out_pod:
             yaml.dump(yaml.safe_load(self.podFile), out_pod, default_flow_style=False)
 
-    def _config_map_path(self):
+    def _config_map_path(self) -> str:
         return f'{self.workdir}/configmap.yml'
 
-    def _pod_persistent_path(self):
+    def _pod_persistent_path(self) -> str:
         return f'{self.workdir}/pod-persistent.yml'
 
     def _customized_configmap(self):
@@ -80,13 +79,13 @@ class AssistedInstallerService():
         y["data"]["RELEASE_IMAGES"] = json.dumps(j)
         return y
 
-    def _create_ec_version(self, v):
+    def _create_ec_version(self, v: tuple) -> dict:
         version, ec_version = v
         version_string = f"{version}{ec_version}"
         url = f"quay.io/openshift-release-dev/ocp-release:{version}.0{ec_version}-multi"
         return self._create_json_version(version_string, url)
 
-    def _create_json_version(self, version_string, url):
+    def _create_json_version(self, version_string: str, url: str) -> dict:
         return {
             'openshift_version': version_string,
             'cpu_architecture': 'multi',
@@ -95,7 +94,7 @@ class AssistedInstallerService():
             'version': version_string,
         }
 
-    def _create_nightly_version(self, v):
+    def _create_nightly_version(self, v: tuple) -> dict:
         version, release_type = v
         version_string = f"{version}{release_type}"
         url = f"https://multi.ocp.releases.ci.openshift.org/api/v1/releasestream/{version}.0-0.{release_type}-multi/latest"

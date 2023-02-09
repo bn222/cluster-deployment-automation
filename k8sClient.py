@@ -9,7 +9,7 @@ oc_url = "https://mirror.openshift.com/pub/openshift-v4/clients/ocp/latest/"
 
 
 class K8sClient():
-    def __init__(self, kubeconfig):
+    def __init__(self, kubeconfig: str):
         self._kc = kubeconfig
         with open(kubeconfig) as f:
             c = yaml.safe_load(f)
@@ -17,18 +17,18 @@ class K8sClient():
         self._client = kubernetes.client.CoreV1Api(self._api_client)
         self.ensure_oc_binary()
 
-    def is_ready(self, name):
+    def is_ready(self, name: str) -> bool:
         for e in self._client.list_node().items:
             for con in e.status.conditions:
                 if con.type == "Ready":
                     if name == e.metadata.name:
                         return con.status == "True"
-        return None
+        return False
 
-    def get_nodes(self):
+    def get_nodes(self) -> str:
         return [e.metadata.name for e in self._client.list_node().items]
 
-    def wait_ready(self, name):
+    def wait_ready(self, name: str) -> None:
         print(f"waiting for {name} to be ready")
         while True:
             if self.is_ready(name):
@@ -37,24 +37,24 @@ class K8sClient():
                 time.sleep(1)
             self.approve_csr()
 
-    def approve_csr(self):
+    def approve_csr(self) -> None:
         certs_api = kubernetes.client.CertificatesV1Api(self._api_client)
         for e in certs_api.list_certificate_signing_request().items:
             if e.status.conditions is None:
                 self.oc(f"adm certificate approve {e.metadata.name}")
 
-    def get_ip(self, name):
+    def get_ip(self, name: str) -> str:
         for e in self._client.list_node().items:
             if name == e.metadata.name:
                 for addr in e.status.addresses:
                     if addr.type == "InternalIP":
                         return addr.address
 
-    def oc(self, cmd):
+    def oc(self, cmd: str) -> host.Result:
         lh = host.LocalHost()
         return lh.run(f"{self.oc_bin} {cmd} --kubeconfig {self._kc}")
 
-    def ensure_oc_binary(self):
+    def ensure_oc_binary(self) -> None:
         lh = host.LocalHost()
         assert os.path.exists("build")
         if not os.path.isfile(os.path.join(os.getcwd(), "build/oc")):
