@@ -76,16 +76,7 @@ class RemoteHost():
             print(f"connected to {self._hostname}")
             break
 
-    def _read_output(self, cmd):
-        ret = []
-        _, stdout, _ = self._host.exec_command(cmd)
-        for line in iter(stdout.readline, ""):
-            print(f"{self._hostname}: {line.strip()}")
-            ret += [line.strip()]
-
-        return ret
-
-    def _read_output2(self, cmd: str) -> Result:
+    def _read_output(self, cmd: str) -> Result:
         _, stdout, stderr = self._host.exec_command(cmd)
 
         out = []
@@ -103,30 +94,15 @@ class RemoteHost():
 
         return Result(out, err, exit_code)
 
-    def run(self, cmd):
-        print("warning: using old run, use run2 instead")
+    def run(self, cmd: str) -> Result:
         print(cmd)
         if not self.auto_reconnect:
             return self._read_output(cmd)
         else:
             while True:
                 try:
-                    print("running command", cmd)
-                    return self._read_output(cmd)
-                except Exception as e:
-                    print(e)
-                    print("Connection lost while running command, trying to reconnect")
-                    self.ssh_connect_looped(self._username)
-
-    def run2(self, cmd: str) -> Result:
-        print(cmd)
-        if not self.auto_reconnect:
-            return self._read_output2(cmd)
-        else:
-            while True:
-                try:
                     print(f"running command {cmd}")
-                    ret = self._read_output2(cmd)
+                    ret = self._read_output(cmd)
                     print(f"Finished running command {cmd}")
                     return ret
                 except Exception as e:
@@ -239,43 +215,43 @@ class RemoteHostWithBF2(RemoteHost):
         self._container_name = "bfb"
         print("starting container")
         cmd = f"sudo podman run --pull always --replace --pid host --network host --user 0 --name {self._container_name} -dit --privileged -v /dev:/dev quay.io/bnemeth/bf"
-        self.run2(cmd)
+        self.run(cmd)
 
     def bf_pxeboot(self, iso_name: str, nfs_server: str) -> Result:
         self.prep_container()
         print("mounting nfs inside container")
         cmd = "sudo killall python3"
-        self.run2(cmd)
+        self.run(cmd)
         print("starting pxe server and booting bf")
         cmd = f"sudo podman exec -it {self._container_name} /pxeboot {nfs_server}:/root/iso/{iso_name} -w {nfs_server}:/root/iso/id_rsa"
-        return self.run2(cmd)
+        return self.run(cmd)
 
     def bf_firmware_upgrade(self) -> None:
         self.prep_container()
         cmd = f"sudo podman exec {self._container_name} /fwup"
-        self.run2(cmd)
+        self.run(cmd)
 
     def bf_firmware_defaults(self) -> None:
         self.prep_container()
         cmd = f"sudo podman exec {self._container_name} /fwdefaults"
-        self.run2(cmd)
+        self.run(cmd)
 
     def bf_set_mode(self, mode: str) -> None:
         self.prep_container()
         cmd = f"sudo podman exec {self._container_name} /set_mode {mode}"
-        self.run2(cmd)
+        self.run(cmd)
 
     def bf_get_mode(self) -> None:
         self.prep_container()
         cmd = f"sudo podman exec {self._container_name} /get_mode"
-        self.run2(cmd)
+        self.run(cmd)
 
     def bf_firmware_version(self) -> None:
         self.prep_container()
         cmd = f"sudo podman exec {self._container_name} /fwversion"
-        self.run2(cmd)
+        self.run(cmd)
 
     def bf_load_bfb(self) -> None:
         self.prep_container()
         cmd = f"sudo podman exec {self._container_name} /bfb"
-        self.run2(cmd)
+        self.run(cmd)
