@@ -398,15 +398,19 @@ class ClusterDeployer():
           rhn = h["requested_hostname"]
           if rhn in status:
             status[rhn] = h["status"]
-        print(status)
         return all(v == "known" for v in status.values())
 
     def _wait_known_state(self, names, cb=lambda: None):
       print(f"Waiting for {names} to be in \'known\' state")
       status = {e: "" for e in names}
+      prev_str = ""
       while True:
         if self._check_known_state(status):
           break;
+        new_str = str(status)
+        if new_str != prev_str:
+            print(f"latest status: {new_str}")
+            prev_str = new_str
         cb()
         time.sleep(5)
 
@@ -582,15 +586,14 @@ class ClusterDeployer():
       self.wait_for_workers()
 
     def _download_iso(self, infra_env_name, iso_path):
+      print(f"Download iso from {infra_env_name} to {iso_path}, will retry until success")
       while True:
         try:
-          print(f"trying to download iso from {infra_env_name} to {iso_path}")
           self._ai.download_iso(infra_env_name, iso_path)
           print(f"iso for {infra_env_name} downloaded to {iso_path}")
           break
         except:
-          print("iso not ready, retrying ...")
-          time.sleep(1)
+          time.sleep(5)
 
     def _update_etc_hosts(self):
       cluster_name = self._cc["name"]
