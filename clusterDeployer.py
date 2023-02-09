@@ -357,8 +357,6 @@ class ClusterDeployer():
                 raise Exception("Can't install VMs")
         names = (e["name"] for e in self._cc["masters"])
         self._wait_known_state(names, cb)
-        print("Waiting for all hosts to be in \'known\' state")
-
         print(f"Starting cluster {cluster_name} (will retry until that succeeds)")
         tries = 0
         while True:
