@@ -23,21 +23,12 @@ from extraConfigDpuInfra import ExtraConfigDpuInfra
 from extraConfigOvnK import ExtraConfigOvnK
 import paramiko
 import common
+from virshPool import VirshPool
 
-def pool_initialized(lh, pool_name):
-  return lh.run(f"virsh pool-info {pool_name}").returncode == 0
 
-def setup_vms(masters, iso_path, images_path, pool_name):
+def setup_vms(masters, iso_path, virsh_pool):
   lh = host.LocalHost()
-
-  if not pool_initialized(lh, pool_name):
-    print(f"Initializing pool {pool_name}")
-    print(lh.run(f"virsh pool-define-as {pool_name} dir - - - - {images_path}"))
-    print(lh.run(f"mkdir -p {images_path}"))
-    print(lh.run(f"chmod a+rw {images_path}"))
-    print(lh.run(f"virsh pool-start {pool_name}"))
-  else:
-    print(f"Pool {pool_name} already initialized")
+  virsh_pool.ensure_initialized()
 
   pre = "virsh net-update default add ip-dhcp-host".split()
 
@@ -62,7 +53,6 @@ def setup_vms(masters, iso_path, images_path, pool_name):
     CPU_CORE="8"
     RHCOS_ISO=iso_path
     network="default"
-    DISK_IMAGES=pool_name
 
     cmd = f"""
     virt-install
@@ -75,7 +65,7 @@ def setup_vms(masters, iso_path, images_path, pool_name):
       --network=network:{network},mac={mac}
       --events on_reboot=restart
       --cdrom {RHCOS_ISO}
-      --disk pool={DISK_IMAGES},size={DISK_GB}
+      --disk pool={virsh_pool.name()},size={DISK_GB}
       --wait=-1
 """
     print(f"starting virsh {cmd}")
@@ -107,11 +97,17 @@ class ClusterDeployer():
       os.makedirs(self._iso_path, exist_ok=True)
       self._extra_config = {}
 
-    def images_path(self, name):
-      return common.first(lambda h: h["name"] == name, self._cc["hosts"])["images_path"]
+      pool_name = f"{self._cc['name']}_guest_images"
+      for e in self._cc["hosts"]:
+          if e["name"] == "localhost":
+              h = host.LocalHost()
+          else:
+              h = host.RemoteHost(e["name"])
 
-    def images_pool_name(self):
-      return self._cc["name"]+"_guest_images"
+          e["virsh_pool"] = VirshPool(h, pool_name, e["images_path"])
+
+    def local_host_config(self):
+        return next(e for e in self._cc["hosts"] if e["name"] == "localhost")
 
     """
     Using Aicli, we will find all the clusters installed on our host included in our configuration file.
@@ -157,7 +153,7 @@ class ClusterDeployer():
       lh = host.LocalHost()
       for m in self._cc.local_vms():
         assert(m["node"] == "localhost")
-        images_path = self.images_path("localhost")
+        images_path = self.local_host_config()["virsh_pool"].images_path()
         name = m["name"]
         image = f"/{images_path}/{name}.qcow2"
         if os.path.exists(image):
@@ -220,10 +216,8 @@ class ClusterDeployer():
         print(lh.run("virsh net-start default"))
         print(lh.run("systemctl restart libvirtd"))
 
-      pool_name = self.images_pool_name()
-      if pool_initialized(lh, pool_name):
-        print(lh.run(f"virsh pool-destroy {pool_name}"))
-        print(lh.run(f"virsh pool-undefine {pool_name}"))
+        vp = self.local_host_config()["virsh_pool"]
+        vp.ensure_removed()
 
       print(lh.run(f"ip link set eno1 nomaster"))
 
@@ -283,9 +277,9 @@ class ClusterDeployer():
         else:
           print("Skipping pre configuration.")
 
-        self.teardown()
-        self.create_cluster()
         if "masters" in self.args.steps:
+          self.teardown()
+          self.create_cluster()
           self.create_masters()
         else:
           print("Skipping master creation.")
@@ -348,8 +342,7 @@ class ClusterDeployer():
 
         procs = setup_vms(self._cc["masters"],
                           os.path.join(os.getcwd(), f"{infra_env}.iso"),
-                          self.images_path("localhost"),
-                          self.images_pool_name())
+                          self.local_host_config()["virsh_pool"])
 
 
         def cb():
@@ -462,8 +455,7 @@ class ClusterDeployer():
         print(infra_env)
         procs = setup_vms(vm,
                           os.path.join(os.getcwd(), f"{infra_env}.iso"),
-                          self.images_path("localhost"),
-                          self.images_pool_name())
+                          self.local_host_config()["virsh_pool"])
         self._wait_known_state(e["name"] for e in vm)
 
 
