@@ -35,6 +35,7 @@ class K8sClient():
                 break
             else:
                 time.sleep(1)
+            self.approve_csr()
 
     def approve_csr(self):
         certs_api = kubernetes.client.CertificatesV1Api(self._api_client)
