@@ -26,7 +26,7 @@ import common
 from virshPool import VirshPool
 
 
-def setup_vms(masters, iso_path, virsh_pool):
+def setup_vms(masters, iso_path, virsh_pool) -> list:
     lh = host.LocalHost()
     virsh_pool.ensure_initialized()
 
@@ -83,11 +83,11 @@ def setup_vms(masters, iso_path, virsh_pool):
 
     return virsh_procs
 
-def ip_in_subnet(addr, subnet):
+def ip_in_subnet(addr, subnet) -> bool:
     return ipaddress.ip_address(addr) in ipaddress.ip_network(subnet)
 
 class ClusterDeployer():
-    def __init__(self, cc, ai, args, secrets_path):
+    def __init__(self, cc, ai, args, secrets_path: str):
         self._client = None
         self.args = args
         self._cc = cc
@@ -137,7 +137,7 @@ class ClusterDeployer():
     Lastly we unlink the "eno1" interface from the virtual bridge "virtbr0". Currently "eno1" on hosts
     is hardcoded to be the network hosting the API network.
     """
-    def teardown(self):
+    def teardown(self) -> None:
         cluster_name = self._cc["name"]
         print(f"Tearing down {cluster_name}")
         if self._cc["name"] in map(lambda x: x["name"], self._ai.list_clusters()):
@@ -221,15 +221,15 @@ class ClusterDeployer():
 
         print(lh.run(f"ip link set eno1 nomaster"))
 
-    def _preconfig(self):
+    def _preconfig(self) -> None:
         for e in self._cc["preconfig"]:
             self._prepost_config(e)
 
-    def _postconfig(self):
+    def _postconfig(self) -> None:
         for e in self._cc["postconfig"]:
             self._prepost_config(e)
 
-    def _prepost_config(self, to_run):
+    def _prepost_config(self, to_run) -> None:
         if not to_run:
             return
 
@@ -247,7 +247,7 @@ class ClusterDeployer():
             print(f"running extra config {to_run['name']}")
             self._extra_config[to_run['name']].run(to_run)
 
-    def ensure_linked_to_bridge(self):
+    def ensure_linked_to_bridge(self) -> None:
         if len(self._cc.local_vms()) == len(self._cc.all_nodes()):
             print("Only running local VMs (virbr0 not connected to externally)")
             return
@@ -270,7 +270,7 @@ class ClusterDeployer():
             print(f"Incorrect master set for interface {api_network}")
             sys.exit(-1)
 
-    def deploy(self):
+    def deploy(self) -> None:
         if self._cc["masters"]:
             if "pre" in self.args.steps:
                 self._preconfig()
@@ -296,12 +296,12 @@ class ClusterDeployer():
         else:
             print("Skipping post configuration.")
 
-    def client(self):
+    def client(self) -> K8sClient:
         if self._client is None:
             self._client = K8sClient(self._cc["kubeconfig"])
         return self._client
 
-    def create_cluster(self):
+    def create_cluster(self) -> None:
         cluster_name = self._cc["name"]
         cfg = {}
         cfg["openshift_version"] = self._cc["version"]
@@ -319,7 +319,7 @@ class ClusterDeployer():
         print(cfg)
         self._ai.create_cluster(cluster_name, cfg)
 
-    def create_masters(self):
+    def create_masters(self) -> None:
         cluster_name = self._cc["name"]
         infra_env = f"{cluster_name}-x86"
         print(f"Creating infraenv {infra_env}")
@@ -377,21 +377,21 @@ class ClusterDeployer():
         self._ai.download_kubeconfig(self._cc["name"], os.path.dirname(self._cc["kubeconfig"]))
         self._update_etc_hosts()
 
-    def _get_ai_host(self, name):
+    def _get_ai_host(self, name: str):
         for h in filter(lambda x: "inventory" in x, self._ai.list_hosts()):
             rhn = h["requested_hostname"]
             if rhn == name:
                 return h
         return None
 
-    def _check_known_state(self, status):
+    def _check_known_state(self, status) -> bool:
         for h in filter(lambda x: "inventory" in x, self._ai.list_hosts()):
             rhn = h["requested_hostname"]
             if rhn in status:
                 status[rhn] = h["status"]
         return all(v == "known" for v in status.values())
 
-    def _wait_known_state(self, names, cb=lambda: None):
+    def _wait_known_state(self, names, cb=lambda: None) -> None:
         print(f"Waiting for {names} to be in \'known\' state")
         status = {e: "" for e in names}
         prev_str = ""
@@ -405,7 +405,7 @@ class ClusterDeployer():
             cb()
             time.sleep(5)
 
-    def create_workers(self):
+    def create_workers(self) -> None:
         is_bf = (x["type"] == "bf" for x in self._cc["workers"])
 
         nfs.export(self._iso_path)
@@ -425,11 +425,11 @@ class ClusterDeployer():
             rh.ssh_connect("core")
             rh.run("echo root:redhat | sudo chpasswd")
 
-    def _allow_add_workers(self, cluster_name):
+    def _allow_add_workers(self, cluster_name: str) -> None:
         uuid = self._ai.info_cluster(cluster_name).to_dict()["id"]
         requests.post(f"http://{self._ai.url}/api/assisted-install/v2/clusters/{uuid}/actions/allow-add-workers")
 
-    def _create_physical_x86_workers(self):
+    def _create_physical_x86_workers(self) -> None:
         def boot_helper(worker, iso):
             return self.boot_iso_x86(worker, iso)
 
@@ -448,7 +448,7 @@ class ClusterDeployer():
         for w in workers:
             w["ip"] = socket.gethostbyname(w["node"])
 
-    def _create_vm_x86_workers(self):
+    def _create_vm_x86_workers(self) -> None:
         cluster_name = self._cc["name"]
         infra_env = f"{cluster_name}-x86"
         vm = list(x for x in self._cc["workers"] if x["type"] == "vm")
@@ -459,7 +459,7 @@ class ClusterDeployer():
         self._wait_known_state(e["name"] for e in vm)
 
 
-    def _create_x86_workers(self):
+    def _create_x86_workers(self) -> None:
         print("Setting up x86 workers")
         cluster_name = self._cc["name"]
         infra_env_name = f"{cluster_name}-x86"
@@ -489,7 +489,7 @@ class ClusterDeployer():
         print("waiting for workers to be ready")
         self.wait_for_workers()
 
-    def _rename_workers(self, infra_env_name):
+    def _rename_workers(self, infra_env_name: str) -> None:
         print(f"looking for workers with ip {[w['ip'] for w in self._cc['workers']]}")
         while True:
             renamed = self._try_rename_workers(infra_env_name)
@@ -501,7 +501,7 @@ class ClusterDeployer():
                 print(f"Found and renamed {renamed} workers, but waiting for {expected}, retrying")
                 time.sleep(5)
 
-    def _try_rename_workers(self, infra_env_name):
+    def _try_rename_workers(self, infra_env_name: str) -> int:
         infra_env_id = self._ai.get_infra_env_id(infra_env_name)
         renamed = 0
 
@@ -520,7 +520,7 @@ class ClusterDeployer():
                     renamed += 1
         return renamed
 
-    def boot_iso_x86(self, worker, iso):
+    def boot_iso_x86(self, worker: dict, iso: str) -> None:
         host_name = worker["node"]
         print(f"trying to boot {host_name}")
 
@@ -534,7 +534,7 @@ class ClusterDeployer():
         print("connected")
         print(h.run("hostname"))
 
-    def _create_bf_workers(self):
+    def _create_bf_workers(self) -> None:
         cluster_name = self._cc["name"]
         infra_env_name = f"{cluster_name}-arm"
 
@@ -575,7 +575,7 @@ class ClusterDeployer():
         self._ai.start_infraenv(infra_env_name)
         self.wait_for_workers()
 
-    def _download_iso(self, infra_env_name, iso_path):
+    def _download_iso(self, infra_env_name: str, iso_path: str) -> None:
         print(f"Download iso from {infra_env_name} to {iso_path}, will retry until success")
         while True:
             try:
@@ -585,7 +585,7 @@ class ClusterDeployer():
             except:
                 time.sleep(5)
 
-    def _update_etc_hosts(self):
+    def _update_etc_hosts(self) -> None:
         cluster_name = self._cc["name"]
         api_name = f"api.{cluster_name}.redhat.com"
         api_ip = self._cc["api_ip"]
@@ -601,7 +601,7 @@ class ClusterDeployer():
             with open("/etc/hosts", "a") as f:
                 f.write(f"{api_ip} {api_name}\n")
 
-    def boot_iso_bf(self, worker, iso):
+    def boot_iso_bf(self, worker: dict, iso: str) -> str:
         lh = host.LocalHost()
         nfs_server = common.extract_ip(lh.run("ip -json a").out, "eno3")
 
@@ -643,7 +643,7 @@ class ClusterDeployer():
             sys.exit(-1)
         return ip
 
-    def wait_for_workers(self):
+    def wait_for_workers(self) -> None:
         print(f'waiting for {self._cc["workers"]} workers')
         lh = host.LocalHost()
         bf_workers = list(filter(lambda x: x["type"] == "bf", self._cc["workers"]))
@@ -695,7 +695,7 @@ class ClusterDeployer():
 
             time.sleep(10)
 
-    def _get_ai_ip(self, name):
+    def _get_ai_ip(self, name: str):
         ai_host = self._get_ai_host(name)
         if ai_host:
             inventory = json.loads(ai_host["inventory"])
