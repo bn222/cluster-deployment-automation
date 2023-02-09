@@ -22,7 +22,8 @@ class LocalHost():
             cmd = shlex.split(cmd)
         if env is None:
             env = os.environ.copy()
-        with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env) as proc:
+        pipe = subprocess.PIPE
+        with subprocess.Popen(cmd, stdout=pipe, stderr=pipe, env=env) as proc:
             out = proc.stdout.read().decode("utf-8")
             err = proc.stderr.read().decode("utf-8")
             proc.communicate()
@@ -124,8 +125,10 @@ class RemoteHost():
         else:
             while True:
                 try:
-                    print("running command", cmd)
-                    return self._read_output2(cmd)
+                    print(f"running command {cmd}")
+                    ret = self._read_output2(cmd)
+                    print(f"Finished running command {cmd}")
+                    return ret
                 except Exception as e:
                     print(e)
                     print("Connection lost while running command, trying to reconnect")
