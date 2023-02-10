@@ -28,7 +28,7 @@ class ExtraConfigBFB:
         coreosBuilder.ensure_fcos_exists()
         print("Loading BF-2 with BFB image on all workers")
         lh = host.LocalHost()
-        nfs_server = common.extract_ip(lh.run("ip -json a").out, "eno3")
+        nfs_server = lh.ip(self._cc["external_port"])
         iso_url = f"{nfs_server}:/root/iso/fedora-coreos.iso"
 
         def helper(e) -> None:

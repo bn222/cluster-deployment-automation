@@ -5,6 +5,7 @@ import json
 import xml.etree.ElementTree as et
 import shutil
 from concurrent.futures import ThreadPoolExecutor
+from typing import Optional
 import host
 import secrets
 import re
@@ -199,6 +200,20 @@ class ClusterDeployer():
 
         print(lh.run(f"ip link set eno1 nomaster"))
 
+    def _validate_external_port(self, lh) -> Optional[str]:
+        # do automatic detection, if needed
+        if self._cc["external_port"] == "auto":
+            self._cc["external_port"] = lh.port_from_route("default")
+            if not self._cc["external_port"]:
+                 return None
+
+        # check that the interface really exists
+        extif = self._cc["external_port"]
+        if lh.port_exists(extif):
+            print(f"Using {extif} as external port")
+            return extif
+        return None
+
     def _preconfig(self) -> None:
         for e in self._cc["preconfig"]:
             self._prepost_config(e)
@@ -250,8 +265,17 @@ class ClusterDeployer():
             print(f"Incorrect master set for interface {api_network}")
             sys.exit(-1)
 
+    def need_external_network(self) -> bool:
+        return ("workers" in self.args.steps) and \
+               (len(self._cc["workers"]) > len(self._cc.worker_vms()))
+
     def deploy(self) -> None:
         if self._cc["masters"]:
+            lh = host.LocalHost()
+            if self.need_external_network() and not self._validate_external_port(lh):
+                print(f"Can't find a valid external port, config is {self._cc['external_port']}")
+                sys.exit(-1)
+
             if "pre" in self.args.steps:
                 self._preconfig()
             else:
@@ -480,7 +504,7 @@ class ClusterDeployer():
         print(f"trying to boot {host_name}")
 
         lh = host.LocalHost()
-        nfs_server = common.extract_ip(lh.run("ip -json a").out, "eno3")
+        nfs_server = lh.ip(self._cc["external_port"])
 
         h = host.RemoteHostWithBF2(host_name, worker["bmc_user"], worker["bmc_password"])
 
@@ -582,7 +606,7 @@ class ClusterDeployer():
 
     def boot_iso_bf(self, worker: dict, iso: str) -> str:
         lh = host.LocalHost()
-        nfs_server = common.extract_ip(lh.run("ip -json a").out, "eno3")
+        nfs_server = lh.ip(self._cc["external_port"])
 
         host_name = worker["node"]
         print(f"Preparing BF on host {host_name}")
@@ -612,10 +636,10 @@ class ClusterDeployer():
         else:
             print(f"succesfully ran pxeboot on bf {host_name}")
 
-        ipa_json = output.out.strip().split("\n")[-1].strip()
+        ipa = jason.loads(output.out.strip().split("\n")[-1].strip())
         bf_interface = "enp3s0f0"
         try:
-            ip = common.extract_ip(ipa_json, bf_interface)
+            ip = common.extract_ip(ipa, bf_interface)
             print(ip)
         except Exception:
             ip = None

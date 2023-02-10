@@ -11,6 +11,7 @@ import json
 import shlex
 import sys
 from typing import Optional
+import common
 
 Result = namedtuple("Result", "out err returncode")
 
@@ -19,6 +20,17 @@ class Host():
     def ipa(self) -> dict:
         return json.loads(self.run("ip -json a").out)
 
+    def ipr(self) -> dict:
+        return json.loads(self.run("ip -json r").out)
+
+    def ip(self, port_name: str) -> str:
+        return common.extract_ip(self.ipa(), port_name)
+
+    def port_from_route(self, route: str) -> str:
+        return common.extract_port(self.ipr(), route)
+
+    def port_exists(self, port_name: str) -> bool:
+        return self.run(f"ip link show {port_name}").returncode == 0
 
 class LocalHost(Host):
     def __init__(self):
