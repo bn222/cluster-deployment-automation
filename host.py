@@ -201,7 +201,10 @@ class RemoteHost():
     def os_release(self) -> dict:
         d = {}
         for e in self.run("cat /etc/os-release").out:
-            k, v = e.split("=")
+            e = e.split("=", maxsplit=1)
+            if len(e) != 2:
+                continue
+            k, v = e
             v = v.strip("\"'")
             d[k] = v
         return d
