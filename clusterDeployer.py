@@ -676,16 +676,16 @@ class ClusterDeployer():
                 h.run(f"sudo date -s '{d}'")
 
                 # Workaround: images might become corrupt for an unknown reason. In that case, remove it to allow retries
-                out = "".join(h.run("sudo podman images"))
+                out = "".join(h.run("sudo podman images").out)
                 e = re.search(r".*Top layer (\w+) of image (\w+) not found in layer tree. The storage may be corrupted, consider running", out)
                 if e:
                     print(f'Removing corrupt image from worker {w["name"]}')
                     print(h.run(f"sudo podman rmi {e.group(2)}"))
                 try:
-                    out = "".join(h.run("sudo podman images --format json"))
+                    out = "".join(h.run("sudo podman images --format json").out)
                     podman_images = json.loads(out)
                     for image in podman_images:
-                        inspect_output = "".join(h.run(f"sudo podman image inspect {image['Id']}"))
+                        inspect_output = "".join(h.run(f"sudo podman image inspect {image['Id']}").out)
                         if "A storage corruption might have occurred" in inspect_output:
                             print("Corrupt image found")
                             h.run(f"sudo podman rmi {image['id']}")

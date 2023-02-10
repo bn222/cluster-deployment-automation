@@ -22,7 +22,7 @@ def install_remotelyh(ip, links):
     rh.enable_autoreconnect()
 
     want = "4.18.0-372.35.1.el8_6.mr3440_221116_1544.aarch64"
-    uname = "".join(rh.run("uname -a"))
+    uname = "".join(rh.run("uname -a").out)
     if want in uname:
         print(f"kernel already installed on {ip}, skipping")
         return True
@@ -44,7 +44,7 @@ def install_remotelyh(ip, links):
     cmd = f"sudo rpm-ostree override replace {wd}/*.rpm"
     print(cmd)
     while True:
-        ret = rh.run(cmd)
+        ret = rh.run(cmd).out
         if ret and ret[-1] == 'Run "systemctl reboot" to start a reboot':
             break
         else:
@@ -54,7 +54,7 @@ def install_remotelyh(ip, links):
     rh.run("sudo systemctl reboot")
     time.sleep(10)
     rh.ssh_connect("core")
-    result = rh.run("uname -a")
+    result = rh.run("uname -a").out
     uname = "".join(result)
     return want in uname
 
