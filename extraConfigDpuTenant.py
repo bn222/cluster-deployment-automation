@@ -61,7 +61,7 @@ class ExtraConfigDpuTenant:
             rh = host.RemoteHost(tclient.get_ip(e['name']))
             rh.ssh_connect("core")
             # workaround for https://issues.redhat.com/browse/NHE-335
-            print(rh.run2("sudo ovs-vsctl del-port br-int ovn-k8s-mp0"))
+            print(rh.run("sudo ovs-vsctl del-port br-int ovn-k8s-mp0"))
 
         print("Final infrastructure cluster configuration")
         iclient = K8sClient("/root/kubeconfig.infracluster")
@@ -72,7 +72,7 @@ class ExtraConfigDpuTenant:
             rh = host.RemoteHost(ip)
             rh.ssh_connect("core")
             cmd = f"echo \'{self._cc['api_ip']} api.{self._cc['name']}.redhat.com\' | sudo tee -a /etc/hosts"
-            print(rh.run2(cmd))
+            print(rh.run(cmd))
         print(iclient.oc(f"create secret generic tenant-cluster-1-kubeconf --from-file=config={tclient._kc}"))
 
         contents = open("manifests/tenant/envoverrides.yaml").read()

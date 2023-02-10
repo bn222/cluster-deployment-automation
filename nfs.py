@@ -4,7 +4,7 @@ import host
 NFS is needed in many cases to network mount the folder that contains
 ISO files such that Red Fish Virtual Media managers can load the image.
 """
-def export(path):
+def export(path: str) -> None:
     exports = "/etc/exports"
     with open(exports, "r") as f:
         contents = f.read()

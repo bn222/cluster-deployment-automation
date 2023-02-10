@@ -17,13 +17,13 @@ logging.basicConfig(level=logging.INFO,
 
 
 class ClusterInfo:
-    def __init__(self, name):
+    def __init__(self, name: str):
         self.name = name
         self.provision_host = ""
         self.workers = []
 
 
-def read_sheet():
+def read_sheet() -> list:
     print("Downloading sheet from Google")
     scopes = [
         'https://www.googleapis.com/auth/spreadsheets',
@@ -51,7 +51,7 @@ def read_sheet():
     return ret
 
 class ClustersConfig():
-    def __init__(self, yamlPath):
+    def __init__(self, yamlPath: str):
         self._clusters = None
 
         lh = host.LocalHost()
@@ -106,7 +106,7 @@ class ClustersConfig():
               if "images_path" not in host_config:
                 host_config["images_path"] = f'/home/{cc["name"]}_guests_images'
 
-    def _apply_jinja(self, contents):
+    def _apply_jinja(self, contents: str) -> str:
         def worker_number(a):
             self._ensure_clusters_loaded()
             name = self._clusters[self._current_host].workers[a]
@@ -128,7 +128,7 @@ class ClustersConfig():
         t = template.render(**kwargs)
         return t
 
-    def _ensure_clusters_loaded(self):
+    def _ensure_clusters_loaded(self) -> None:
         if self._clusters is not None:
             return
         self._clusters = []
@@ -156,16 +156,16 @@ class ClustersConfig():
     def __getitem__(self, key):
         return self.fullConfig["clusters"][0][key]
 
-    def __setitem__(self, key, value):
+    def __setitem__(self, key, value) -> None:
         self.fullConfig["clusters"][0][key] = value
 
-    def all_nodes(self):
+    def all_nodes(self) -> list:
         return self["masters"] + self["workers"]
 
-    def all_vms(self):
+    def all_vms(self) -> list:
         return [x for x in self.all_nodes() if x["type"] == "vm"]
 
-    def local_vms(self):
+    def local_vms(self) -> list:
         return [x for x in self.all_vms() if x["node"] == "localhost"]
 
 

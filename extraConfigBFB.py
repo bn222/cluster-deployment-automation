@@ -24,14 +24,14 @@ class ExtraConfigBFB:
     def __init__(self, cc):
         self._cc = cc
 
-    def run(self, _):
+    def run(self, _) -> None:
         coreosBuilder.ensure_fcos_exists()
         print("Loading BF-2 with BFB image on all workers")
         lh = host.LocalHost()
         nfs_server = common.extract_ip(lh.run("ip -json a").out, "eno3")
         iso_url = f"{nfs_server}:/root/iso/fedora-coreos.iso"
 
-        def helper(e):
+        def helper(e) -> None:
             h = host.RemoteHostWithBF2(e["node"], e["bmc_user"], e["bmc_password"])
             h.boot_iso_redfish(iso_url)
             h.ssh_connect("core")
@@ -61,7 +61,7 @@ class ExtraConfigSwitchNicMode:
     def __init__(self, cc):
         self._cc = cc
 
-    def run(self, _):
+    def run(self, _) -> None:
         client = K8sClient(self._cc["kubeconfig"])
 
         ec = ExtraConfigSriov(self._cc)
