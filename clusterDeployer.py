@@ -30,14 +30,14 @@ def setup_vms(masters, iso_path, virsh_pool) -> list:
     lh = host.LocalHost()
     virsh_pool.ensure_initialized()
 
-    pre = "virsh net-update default add ip-dhcp-host".split()
+    pre = "virsh net-update default add ip-dhcp-host"
 
     virsh_procs = []
     for e in masters:
         name = e["name"]
         ip = e["ip"]
         mac = "52:54:"+":".join(re.findall("..", secrets.token_hex()[:8]))
-        cmd = pre + [f"<host mac='{mac}' name='{name}' ip='{ip}'/>", "--live", "--config"]
+        cmd = f"{pre} \"<host mac='{mac}' name='{name}' ip='{ip}'/>\"  --live --config"
         print("Creating static DHCP entry")
         ret = lh.run(cmd)
         if ret.err:
@@ -184,8 +184,8 @@ class ClusterDeployer():
                 mac = e.attrib["mac"]
                 name = e.attrib["name"]
                 ip = e.attrib["ip"]
-                pre = "virsh net-update default delete ip-dhcp-host".split()
-                cmd = pre + [f"<host mac='{mac}' name='{name}' ip='{ip}'/>", "--live", "--config"]
+                pre = "virsh net-update default delete ip-dhcp-host"
+                cmd = f"{pre} \"<host mac='{mac}' name='{name}' ip='{ip}'/>\" --live --config"
                 print(lh.run(cmd))
                 removed_macs.append(mac)
 
