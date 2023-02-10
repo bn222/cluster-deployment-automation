@@ -17,13 +17,10 @@ class LocalHost():
     def __init__(self):
         pass
 
-    def run(self, cmd: str, env: dict=None) -> Result:
-        if not isinstance(cmd, list):
-            cmd = shlex.split(cmd)
-        if env is None:
-            env = os.environ.copy()
+    def run(self, cmd: str, env: dict = os.environ.copy()) -> Result:
+        args = shlex.split(cmd)
         pipe = subprocess.PIPE
-        with subprocess.Popen(cmd, stdout=pipe, stderr=pipe, env=env) as proc:
+        with subprocess.Popen(args, stdout=pipe, stderr=pipe, env=env) as proc:
             out = proc.stdout.read().decode("utf-8")
             err = proc.stderr.read().decode("utf-8")
             proc.communicate()
