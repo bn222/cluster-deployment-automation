@@ -6,6 +6,7 @@ import time
 from clustersConfig import ClustersConfig
 from arguments import parse_args
 import shutil
+import jinja2
 
 
 class ExtraConfigSriov:
@@ -48,12 +49,32 @@ class ExtraConfigSriov:
         client = K8sClient(self._cc["kubeconfig"])
         client.oc("create -f manifests/nicmode/pool.yaml")
 
+        pfNamesAll = []
         for e in self._cc["workers"]:
             name = e["name"]
             print(client.oc(f'label node {name} --overwrite=true feature.node.kubernetes.io/network-sriov.capable=true'))
+            # Find out what the PF attached to br-ex is (uplink port). We only do HWOL on uplink ports.
+            ip = client.get_ip(name)
+            rh = host.RemoteHost(ip)
+            rh.ssh_connect("core")
+            result = rh.run("cat /var/lib/ovnk/iface_default_hint").out
+            print(f"Found PF Name {result} on node {name}")
+            if result not in pfNamesAll:
+                pfNamesAll.append(result)
+
+        # Just in case we don't get any PFs
+        if not pfNamesAll:
+            pfNamesAll.append("ens1f0")
+
+        with open('./manifests/nicmode/sriov-node-policy.yaml.j2') as f:
+            j2_template = jinja2.Template(f.read())
+            rendered = j2_template.render(pfNamesAll=pfNamesAll)
+            print(rendered)
+            with open("/tmp/sriov-node-policy.yaml", "w") as outFile:
+                outFile.write(rendered)
 
         print(client.oc("create -f manifests/nicmode/sriov-pool-config.yaml"))
-        print(client.oc("create -f manifests/nicmode/sriov-node-policy.yaml"))
+        print(client.oc("create -f /tmp/sriov-node-policy.yaml"))
         print(client.oc("create -f manifests/nicmode/nad.yaml"))
         time.sleep(60)
         print(client.oc("wait mcp sriov --for condition=updated --timeout=50m"))

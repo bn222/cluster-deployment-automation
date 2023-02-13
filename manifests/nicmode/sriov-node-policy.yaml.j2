@@ -8,9 +8,11 @@ spec:
   eSwitchMode: "switchdev"
   nicSelector:
     pfNames:
-    - ens1f0
+      {%- for line in pfNamesAll %}
+        - {{ line -}}
+      {% endfor %}
   nodeSelector:
     feature.node.kubernetes.io/network-sriov.capable: "true"
-  numVfs: 6
+  numVfs: 12
   priority: 5
   resourceName: mlxnics
