@@ -31,6 +31,14 @@ class ExtraConfigSriov:
         # cleanup first, to make this script idempotent
         print("running make undeploy")
         print(lh.run("make undeploy", env))
+
+        # Workaround PSA issues. https://issues.redhat.com/browse/OCPBUGS-1005
+        client.oc("create namespace openshift-sriov-network-operator")
+        client.oc("label ns --overwrite openshift-sriov-network-operator "
+                  "pod-security.kubernetes.io/enforce=privileged "
+                  "pod-security.kubernetes.io/enforce-version=v1.24 "
+                  "security.openshift.io/scc.podSecurityLabelSync=false")
+
         print("running make deploy-setup")
         print(lh.run("make deploy-setup", env))
         time.sleep(60)
