@@ -13,7 +13,12 @@ import shlex
 Result = namedtuple("Result", "out err returncode")
 
 
-class LocalHost():
+class Host():
+    def ipa(self) -> dict:
+        return json.loads(self.run("ip -json a").out)
+
+
+class LocalHost(Host):
     def __init__(self):
         pass
 
@@ -31,11 +36,8 @@ class LocalHost():
         with open(fn, "w") as f:
             f.write(contents)
 
-    def ipa(self) -> dict:
-        return json.loads(self.run("ip -json a").out)
 
-
-class RemoteHost():
+class RemoteHost(Host):
     def __init__(self, hostname: str, bmc_user: str=None, bmc_password: str=None):
         self._hostname = hostname
         self._bmc_user = bmc_user
