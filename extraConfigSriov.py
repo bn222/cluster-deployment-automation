@@ -45,7 +45,11 @@ class ExtraConfigSriov:
         time.sleep(60)
         os.chdir(cur_dir)
 
-    def enable_offload(self):
+class ExtraConfigSriovOvSHWOL:
+    def __init__(self, cc):
+        self._cc = cc
+
+    def run(self, _) -> None:
         client = K8sClient(self._cc["kubeconfig"])
         client.oc("create -f manifests/nicmode/pool.yaml")
 

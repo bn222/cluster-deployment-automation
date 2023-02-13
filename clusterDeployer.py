@@ -18,6 +18,7 @@ from git import Repo
 import coreosBuilder
 import ipaddress
 from extraConfigBFB import ExtraConfigBFB, ExtraConfigSwitchNicMode
+from extraConfigSriov import ExtraConfigSriov, ExtraConfigSriovOvSHWOL
 from extraConfigDpuTenant import ExtraConfigDpuTenant
 from extraConfigDpuInfra import ExtraConfigDpuInfra
 from extraConfigOvnK import ExtraConfigOvnK
@@ -236,6 +237,8 @@ class ClusterDeployer():
         if not self._extra_config:
             self._extra_config["bf_bfb_image"] = ExtraConfigBFB(self._cc)
             self._extra_config["switch_to_nic_mode"] = ExtraConfigSwitchNicMode(self._cc)
+            self._extra_config["sriov_network_operator"] = ExtraConfigSriov(self._cc)
+            self._extra_config["sriov_ovs_hwol"] = ExtraConfigSriovOvSHWOL(self._cc)
             self._extra_config["dpu_infra"] = ExtraConfigDpuInfra(self._cc)
             self._extra_config["dpu_tenant"] = ExtraConfigDpuTenant(self._cc)
             self._extra_config["ovnk8s"] = ExtraConfigOvnK(self._cc)
