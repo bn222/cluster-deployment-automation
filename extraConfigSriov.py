@@ -38,17 +38,17 @@ class ExtraConfigSriov:
 
     def enable_offload(self):
         client = K8sClient(self._cc["kubeconfig"])
-        client.oc("create -f manifests/nicmode/mcp-offloading.yaml")
+        client.oc("create -f manifests/nicmode/pool.yaml")
 
         for e in self._cc["workers"]:
-            print(client.oc(f'label node {e["name"]} node-role.kubernetes.io/mcp-offloading='))
-            print(client.oc(f'label node {e["name"]} feature.node.kubernetes.io/network-sriov.capable=true'))
+            name = e["name"]
+            print(client.oc(f'label node {name} --overwrite=true feature.node.kubernetes.io/network-sriov.capable=true'))
 
         print(client.oc("create -f manifests/nicmode/sriov-pool-config.yaml"))
         print(client.oc("create -f manifests/nicmode/sriov-node-policy.yaml"))
         print(client.oc("create -f manifests/nicmode/nad.yaml"))
         time.sleep(60)
-        print(client.oc("wait mcp mcp-offloading --for condition=updated --timeout=50m"))
+        print(client.oc("wait mcp sriov --for condition=updated --timeout=50m"))
 
 def main():
     args = parse_args()
