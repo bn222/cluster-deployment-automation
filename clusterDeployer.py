@@ -1,13 +1,11 @@
 import os
 import sys
 import time
-from threading import Thread
 import json
 import xml.etree.ElementTree as et
 import shutil
 from concurrent.futures import ThreadPoolExecutor
 import host
-import yaml
 import secrets
 import re
 from k8sClient import K8sClient
@@ -26,62 +24,57 @@ import common
 from virshPool import VirshPool
 
 
-def setup_vms(masters, iso_path, virsh_pool) -> list:
-    lh = host.LocalHost()
+def setup_vm(h: host.LocalHost, virsh_pool: VirshPool, cfg: dict, iso_path: str):
+    print("Creating static DHCP entry")
+    name = cfg["name"]
+    ip = cfg["ip"]
+    mac = "52:54:"+":".join(re.findall("..", secrets.token_hex()[:8]))
+    host_xml = f"<host mac='{mac}' name='{name}' ip='{ip}'/>"
+    cmd = f"virsh net-update default add ip-dhcp-host \"{host_xml}\" --live --config"
+    ret = h.run(cmd)
+    if ret.err:
+        print(cmd)
+        print(ret.err)
+        sys.exit(-1)
+    else:
+        print(ret.out)
+
+    OS_VARIANT = "rhel8.5"
+    RAM_MB = 32784
+    DISK_GB = 64
+    CPU_CORE = 8
+    network = "default"
+
+    cmd = f"""
+    virt-install
+        --connect qemu:///system
+        -n {name}
+        -r {RAM_MB}
+        --vcpus {CPU_CORE}
+        --os-variant={OS_VARIANT}
+        --import
+        --network=network:{network},mac={mac}
+        --events on_reboot=restart
+        --cdrom {iso_path}
+        --disk pool={virsh_pool.name()},size={DISK_GB}
+        --wait=-1
+    """
+    print(f"starting virsh {cmd}")
+    ret = h.run(cmd)
+    print(f"Finished running {cmd} with result {ret}")
+    time.sleep(3)
+    return ret
+
+
+def setup_all_vms(h: host.LocalHost, vms, iso_path, virsh_pool) -> list:
     virsh_pool.ensure_initialized()
 
-    pre = "virsh net-update default add ip-dhcp-host"
+    executor = ThreadPoolExecutor(max_workers=len(vms))
+    futures = []
+    for e in vms:
+        futures.append(executor.submit(setup_vm, h, virsh_pool, e, iso_path))
 
-    virsh_procs = []
-    for e in masters:
-        name = e["name"]
-        ip = e["ip"]
-        mac = "52:54:"+":".join(re.findall("..", secrets.token_hex()[:8]))
-        cmd = f"{pre} \"<host mac='{mac}' name='{name}' ip='{ip}'/>\"  --live --config"
-        print("Creating static DHCP entry")
-        ret = lh.run(cmd)
-        if ret.err:
-            print(cmd)
-            print(ret.err)
-            sys.exit(-1)
-        else:
-            print(ret.out)
-
-        OS_VARIANT="rhel8.5"
-        RAM_MB="32784"
-        DISK_GB="64"
-        CPU_CORE="8"
-        RHCOS_ISO=iso_path
-        network="default"
-
-        cmd = f"""
-        virt-install
-            --connect qemu:///system
-            -n {name}
-            -r {RAM_MB}
-            --vcpus {CPU_CORE}
-            --os-variant={OS_VARIANT}
-            --import
-            --network=network:{network},mac={mac}
-            --events on_reboot=restart
-            --cdrom {RHCOS_ISO}
-            --disk pool={virsh_pool.name()},size={DISK_GB}
-            --wait=-1
-        """
-        print(f"starting virsh {cmd}")
-
-        def run(cmd):
-            print(f"Running {cmd} in a thread")
-            ret = lh.run(cmd)
-            print(f"Finished running {cmd} with result {ret}")
-            return ret
-
-        t1 = Thread(target=run, args=(cmd,))
-        t1.start()
-        virsh_procs.append(t1)
-        time.sleep(3)
-
-    return virsh_procs
+    return futures
 
 def ip_in_subnet(addr, subnet) -> bool:
     return ipaddress.ip_address(addr) in ipaddress.ip_network(subnet)
@@ -340,13 +333,13 @@ class ClusterDeployer():
             except Exception:
                 time.sleep(30)
 
-        procs = setup_vms(self._cc["masters"],
-                          os.path.join(os.getcwd(), f"{infra_env}.iso"),
-                          self.local_host_config()["virsh_pool"])
-
+        lh = host.LocalHost()
+        futures = setup_all_vms(lh, self._cc["masters"],
+                                os.path.join(os.getcwd(), f"{infra_env}.iso"),
+                                self.local_host_config()["virsh_pool"])
 
         def cb():
-            if any(not p.is_alive() for p in procs):
+            if any(p.done() for p in futures):
                 raise Exception("Can't install VMs")
         names = (e["name"] for e in self._cc["masters"])
         self._wait_known_state(names, cb)
@@ -370,8 +363,8 @@ class ClusterDeployer():
         print(f"Took {tries} tries to start cluster {cluster_name}")
 
         self._ai.wait_cluster(cluster_name)
-        for p in procs:
-            p.join()
+        for p in futures:
+            p.result()
         self.ensure_linked_to_bridge()
         print(f'downloading kubeconfig to {self._cc["kubeconfig"]}')
         self._ai.download_kubeconfig(self._cc["name"], os.path.dirname(self._cc["kubeconfig"]))
@@ -453,9 +446,10 @@ class ClusterDeployer():
         infra_env = f"{cluster_name}-x86"
         vm = list(x for x in self._cc["workers"] if x["type"] == "vm")
         print(infra_env)
-        procs = setup_vms(vm,
-                          os.path.join(os.getcwd(), f"{infra_env}.iso"),
-                          self.local_host_config()["virsh_pool"])
+        lh = host.LocalHost()
+        futures = setup_all_vms(lh, vm,
+                                os.path.join(os.getcwd(), f"{infra_env}.iso"),
+                                self.local_host_config()["virsh_pool"])
         self._wait_known_state(e["name"] for e in vm)
 
 
