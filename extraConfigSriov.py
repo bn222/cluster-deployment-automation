@@ -16,13 +16,13 @@ class ExtraConfigSriov:
         client = K8sClient(self._cc["kubeconfig"])
         lh = host.LocalHost()
         repo_dir = "/root/sriov-network-operator"
-        url = "https://github.com/openshift/sriov-network-operator.git"
+        url = "https://github.com/bn222/sriov-network-operator"
 
         if os.path.exists(repo_dir):
             shutil.rmtree(repo_dir)
 
         print(f"Cloning repo to {repo_dir}")
-        Repo.clone_from(url, repo_dir)
+        Repo.clone_from(url, repo_dir, branch='master')
 
         cur_dir = os.getcwd()
         os.chdir(repo_dir)
