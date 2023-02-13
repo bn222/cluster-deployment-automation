@@ -396,12 +396,12 @@ class ClusterDeployer():
         status = {e: "" for e in names}
         prev_str = ""
         while True:
-            if self._check_known_state(status):
-                break;
             new_str = str(status)
             if new_str != prev_str:
                 print(f"latest status: {new_str}")
                 prev_str = new_str
+            if self._check_known_state(status):
+                break
             cb()
             time.sleep(5)
 
