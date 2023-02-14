@@ -99,6 +99,10 @@ class ClusterDeployer():
 
             e["virsh_pool"] = VirshPool(h, pool_name, e["images_path"])
 
+        self._futures = {}
+        for e in self._cc["nodes"]:
+            e["node"]
+
     def local_host_config(self):
         return next(e for e in self._cc["hosts"] if e["name"] == "localhost")
 
@@ -607,6 +611,7 @@ class ClusterDeployer():
             try:
                 h.ssh_connect("core")
                 d = h.os_release()
+                print(d)
                 skip_boot = d["NAME"] == 'Fedora Linux' and d['VARIANT'] == 'CoreOS'
             except paramiko.ssh_exception.AuthenticationException as e:
                 print("Authentication failed, will not be able to skip boot")
@@ -657,7 +662,6 @@ class ClusterDeployer():
                         continue
                     h = host.RemoteHost(ai_ip, None, None)
                     h.ssh_connect("core")
-                    h.enable_autoreconnect()
                     print(f'connected to {e["name"]}, setting user:pw')
                     h.run("echo root:redhat | sudo chpasswd")
                     connections[e["name"]] = h

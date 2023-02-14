@@ -78,11 +78,11 @@ class RemoteHost(Host):
         out = []
         for line in iter(stdout.readline, ""):
             print(f"{self._hostname}: {line.strip()}")
-            out += line
+            out.append(line)
 
         err = []
         for line in iter(stderr.readline, ""):
-            err += line
+            err.append(line)
 
         exit_code = stdout.channel.recv_exit_status()
         out = "".join(out)
