@@ -44,7 +44,7 @@ def install_remotelyh(ip, links):
     cmd = f"sudo rpm-ostree override replace {wd}/*.rpm"
     print(cmd)
     while True:
-        ret = rh.run(cmd).out
+        ret = rh.run(cmd).out.strip().split("\n")
         if ret and ret[-1] == 'Run "systemctl reboot" to start a reboot':
             break
         else:
