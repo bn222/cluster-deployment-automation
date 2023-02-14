@@ -71,9 +71,7 @@ class ExtraConfigSwitchNicMode:
 
         # label nodes
         for e in self._cc["workers"]:
-            name = e["name"]
-            print(client.oc(f"label node {name} machineconfiguration.openshift.io/role=sriov"))
-            print(client.oc(f"label node {name} node-role.kubernetes.io/sriov="))
+            print(client.oc(f'label node {e["name"]} --overwrite=true feature.node.kubernetes.io/network-sriov.capable=true'))
 
         client.oc("delete -f manifests/nicmode/switch.yaml")
         client.oc("create -f manifests/nicmode/switch.yaml")

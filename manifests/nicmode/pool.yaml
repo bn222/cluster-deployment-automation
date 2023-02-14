@@ -8,5 +8,4 @@ spec:
       - {key: machineconfiguration.openshift.io/role, operator: In, values: [worker,sriov]}
   nodeSelector:
     matchLabels:
-            node-role.kubernetes.io/sriov: ""
-
+      feature.node.kubernetes.io/network-sriov.capable: "true"
