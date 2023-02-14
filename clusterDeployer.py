@@ -101,8 +101,6 @@ class ClusterDeployer():
             e["virsh_pool"] = VirshPool(h, pool_name, e["images_path"])
 
         self._futures = {}
-        for e in self._cc["nodes"]:
-            e["node"]
 
     def local_host_config(self):
         return next(e for e in self._cc["hosts"] if e["name"] == "localhost")
