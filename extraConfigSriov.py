@@ -61,7 +61,7 @@ class ExtraConfigSriovOvSHWOL:
             ip = client.get_ip(name)
             rh = host.RemoteHost(ip)
             rh.ssh_connect("core")
-            result = rh.run("cat /var/lib/ovnk/iface_default_hint").out
+            result = rh.run("cat /var/lib/ovnk/iface_default_hint").out.strip()
             print(f"Found PF Name {result} on node {name}")
             if result not in pfNamesAll:
                 pfNamesAll.append(result)
