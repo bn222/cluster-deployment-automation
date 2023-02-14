@@ -44,9 +44,6 @@ class RemoteHost(Host):
         self._bmc_password = bmc_password
         self.auto_reconnect = False
 
-    def enable_autoreconnect(self) -> None:
-        self.auto_reconnect = True
-
     def ssh_connect(self, username: str, id_rsa_path: str=None) -> None:
         if id_rsa_path is None:
             id_rsa_path = "/root/.ssh/id_rsa"
@@ -94,20 +91,14 @@ class RemoteHost(Host):
         return Result(out, err, exit_code)
 
     def run(self, cmd: str) -> Result:
-        print(cmd)
-        if not self.auto_reconnect:
-            return self._read_output(cmd)
-        else:
-            while True:
-                try:
-                    print(f"running command {cmd}")
-                    ret = self._read_output(cmd)
-                    print(f"Finished running command {cmd}")
-                    return ret
-                except Exception as e:
-                    print(e)
-                    print("Connection lost while running command, trying to reconnect")
-                    self.ssh_connect_looped(self._username)
+        while True:
+            try:
+                print(f"running command {cmd}")
+                return self._read_output(cmd)
+            except Exception as e:
+                print(e)
+                print("Connection lost while running command {cmd}, reconnecting...")
+                self.ssh_connect_looped(self._username)
 
     def close(self) -> None:
         self._host.close()

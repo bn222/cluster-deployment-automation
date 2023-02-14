@@ -17,9 +17,9 @@ def install_remotely(ip, links):
 def install_remotelyh(ip, links):
     print(f"connecting to {ip}")
     rh = host.RemoteHost(ip)
+    # Eventhough a buggy kernel can cause connections to drop,
+    # disconnects are handled seamlessly
     rh.ssh_connect("core")
-    # Buggy kernel causes connections to drop, restart connection on disconnect
-    rh.enable_autoreconnect()
 
     want = "4.18.0-372.35.1.el8_6.mr3440_221116_1544.aarch64"
     uname = "".join(rh.run("uname -a").out)
