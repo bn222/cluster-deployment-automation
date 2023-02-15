@@ -93,7 +93,7 @@ def run_dpu_network_operator_git(lh, kc):
         print(f"Repo exists at {repo_dir}, deleting it")
         shutil.rmtree(repo_dir)
     print(f"Cloning repo to {repo_dir}")
-    Repo.clone_from(url, repo_dir, branch='wip')
+    Repo.clone_from(url, repo_dir, branch='master')
 
     cur_dir = os.getcwd()
     os.chdir(repo_dir)
