@@ -375,31 +375,25 @@ class ClusterDeployer():
         self._ai.download_kubeconfig(self._cc["name"], os.path.dirname(self._cc["kubeconfig"]))
         self._update_etc_hosts()
 
-    def _get_ai_host(self, name: str):
+    def _get_ai_host(self, name: str) -> str | None:
         for h in filter(lambda x: "inventory" in x, self._ai.list_hosts()):
             rhn = h["requested_hostname"]
             if rhn == name:
                 return h
         return None
 
-    def _check_known_state(self, status) -> bool:
-        for h in filter(lambda x: "inventory" in x, self._ai.list_hosts()):
-            rhn = h["requested_hostname"]
-            if rhn in status:
-                status[rhn] = h["status"]
-        return all(v == "known" for v in status.values())
+    def _get_status(self, name: str) -> str | None:
+        h = self._get_ai_host(name)
+        return h["status"] if h is not None else None
 
     def _wait_known_state(self, names, cb=lambda: None) -> None:
         print(f"Waiting for {names} to be in \'known\' state")
-        status = {e: "" for e in names}
-        prev_str = ""
-        while True:
-            new_str = str(status)
-            if new_str != prev_str:
-                print(f"latest status: {new_str}")
-                prev_str = new_str
-            if self._check_known_state(status):
-                break
+        status = {n: "" for n in names}
+        while not all(v == "known" for v in status.values()):
+            new_status = {n: self._get_status(n) for n in names}
+            if new_status != status:
+                print(f"latest status: {new_status}")
+                status = new_status
             cb()
             time.sleep(5)
 
