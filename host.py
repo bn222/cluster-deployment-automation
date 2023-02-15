@@ -224,7 +224,7 @@ class RemoteHostWithBF2(RemoteHost):
         cmd = "sudo killall python3"
         self.run(cmd)
         print("starting pxe server and booting bf")
-        cmd = f"sudo podman exec -it {self._container_name} /pxeboot {nfs_server}:/root/iso/{iso_name} -w {nfs_server}:/root/iso/id_rsa"
+        cmd = f"sudo podman exec -it {self._container_name} /pxeboot {nfs_server}:/root/iso/{iso_name} -w {nfs_server}:/root/iso/ssh_priv_key"
         return self.run(cmd)
 
     def bf_firmware_upgrade(self) -> None:

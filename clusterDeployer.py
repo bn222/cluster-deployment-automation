@@ -21,6 +21,7 @@ from extraConfigOvnK import ExtraConfigOvnK
 import paramiko
 import common
 from virshPool import VirshPool
+import glob
 
 
 def setup_vm(h: host.LocalHost, virsh_pool: VirshPool, cfg: dict, iso_path: str):
@@ -505,9 +506,10 @@ class ClusterDeployer():
 
         self._download_iso(infra_env_name, self._iso_path)
 
-        id_rsa_file = "/root/.ssh/id_rsa"
+        ssh_priv_key_path = self._get_discovery_ign_ssh_priv_key(infra_env_name)
+
         coreosBuilder.ensure_fcos_exists()
-        shutil.copyfile(id_rsa_file, os.path.join(self._iso_path, "id_rsa"))
+        shutil.copyfile(ssh_priv_key_path, os.path.join(self._iso_path, "ssh_priv_key"))
 
         def boot_iso_bf_helper(worker, iso):
             return self.boot_iso_bf(worker, iso)
@@ -538,6 +540,29 @@ class ClusterDeployer():
                 break
             except Exception:
                 time.sleep(5)
+
+    def _download_discovery_ignition(self, infra_env_name: str, path: str) -> None:
+        self._ai.download_discovery_ignition(infra_env_name, path)
+
+    def _get_discovery_ign_ssh_priv_key(self, infra_env_name: str) -> str:
+        self._download_discovery_ignition(infra_env_name, "/tmp")
+
+        # In a provisioning system where there could be multiple keys, it is not guaranteed that
+        # AI will use id_rsa. Thus we need to properly extract the key from the discovery ignition.
+        ssh_priv_key = "/root/.ssh/id_rsa"
+        with open(os.path.join("/tmp", f"discovery.ign.{infra_env_name}")) as f:
+            j = json.load(f)
+        ssh_pub_key = j["passwd"]["users"][0]["sshAuthorizedKeys"][0]
+        # It seems that if you have both rsa and ed25519, AI will prefer to use ed25519.
+        print(f"The SSH key that the discovery ISO will use is: {ssh_pub_key}")
+        for file in glob.glob("/root/.ssh/*.pub"):
+            with open(file, 'r') as f:
+                key = " ".join(f.read().split(" ")[:-1])
+                if key.split()[0] == ssh_pub_key.split()[0]:
+                    print(f"Found matching public key at {file}")
+                    ssh_priv_key = os.path.splitext(file)[0]
+                    print(f"Found matching private key at {ssh_priv_key}")
+        return ssh_priv_key
 
     def _update_etc_hosts(self) -> None:
         cluster_name = self._cc["name"]

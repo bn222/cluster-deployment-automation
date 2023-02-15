@@ -5,6 +5,8 @@ from git import Repo
 import shutil
 import host
 from typing import Optional
+import glob
+
 
 def ensure_fcos_exists(dst: str="/root/iso/fedora-coreos.iso") -> None:
     print("ensuring that fcos exists")
@@ -161,13 +163,17 @@ class CoreosBuilder():
             Repo.clone_from(url, repo_dir)
         return repo_dir
 
-    def create_ignition(self, public_key_file: str = "/root/.ssh/id_rsa.pub") -> str:
-        with open(public_key_file, 'r') as f:
-            key = " ".join(f.read().split(" ")[:-1])
+    def create_ignition(self, public_key_dir: str = "/root/.ssh/") -> str:
         ign = {}
 
         ign["ignition"] = {"version" : "3.3.0"}
-        ign["passwd"] = {"users" : [{"name" : "core", "sshAuthorizedKeys" : [key]}]}
+        ign["passwd"] = {"users" : [{"name" : "core", "sshAuthorizedKeys" : []}]}
+        idx = 0
+        for file in glob.glob(f"{public_key_dir}/*.pub"):
+            with open(file, 'r') as f:
+                key = " ".join(f.read().split(" ")[:-1])
+                ign["passwd"]["users"][0]["sshAuthorizedKeys"].append(key)
+                idx += 1
         return json.dumps(ign)
 
 
