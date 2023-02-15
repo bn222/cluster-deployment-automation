@@ -375,14 +375,22 @@ class ClusterDeployer():
         self._ai.download_kubeconfig(self._cc["name"], os.path.dirname(self._cc["kubeconfig"]))
         self._update_etc_hosts()
 
-    def _get_ai_host(self, name: str) -> str | None:
+    def _get_ai_host(self, name: str):
         for h in filter(lambda x: "inventory" in x, self._ai.list_hosts()):
             rhn = h["requested_hostname"]
             if rhn == name:
                 return h
         return None
 
-    def _get_status(self, name: str) -> str | None:
+    def _print_logs(self, name):
+        ip = self._get_ai_ip(name)
+        if ip is None:
+            return
+        rh = host.RemoteHost(ip)
+        print(f"Gathering logs from {name}")
+        print(rh.run("sudo journalctl TAG=agent --no-pager").out)
+
+    def _get_status(self, name: str):
         h = self._get_ai_host(name)
         return h["status"] if h is not None else None
 
@@ -394,6 +402,11 @@ class ClusterDeployer():
             if new_status != status:
                 print(f"latest status: {new_status}")
                 status = new_status
+            if any(v == "error" for v in status.values()):
+                for e in names:
+                    self._print_logs(e)
+                print("Error encountered in one of the nodes, quitting...")
+                sys.exit(-1)
             cb()
             time.sleep(5)
 
