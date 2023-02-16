@@ -205,7 +205,7 @@ class RemoteHost(Host):
 
 class RemoteHostWithBF2(RemoteHost):
     def prep_container(self) -> None:
-        self._container_name = "bfb"
+        self._container_name = "bf"
         print("starting container")
         cmd = f"sudo podman run --pull always --replace --pid host --network host --user 0 --name {self._container_name} -dit --privileged -v /dev:/dev quay.io/bnemeth/bf"
         self.run(cmd)
