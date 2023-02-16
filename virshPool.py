@@ -29,7 +29,7 @@ class VirshPool:
             self.remove()
 
     def initialize(self) -> None:
-        print(f"Initializing pool {self._name}")
+        print(f"Initializing pool {self._name} at {self._images_path}")
         print(self._host.run(f"virsh pool-define-as {self._name} dir - - - - {self._images_path}"))
         print(self._host.run(f"mkdir -p {self._images_path}"))
         print(self._host.run(f"chmod a+rw {self._images_path}"))
