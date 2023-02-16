@@ -15,6 +15,7 @@ class AssistedClientAutomation(AssistedClient):
         return any(name == x["name"] for x in self.list_clusters())
 
     def ensure_cluster_deleted(self, name: str):
+        print(f"Ensuring that cluster {name} is not present")
         while self.cluster_exists(name):
             try:
                 self.delete_cluster(name)

@@ -58,7 +58,6 @@ def setup_vm(h: host.LocalHost, virsh_pool: VirshPool, cfg: dict, iso_path: str)
         --disk pool={virsh_pool.name()},size={DISK_GB}
         --wait=-1
     """
-    print(f"starting virsh {cmd}")
     ret = h.run(cmd)
     print(f"Finished running {cmd} with result {ret}")
     time.sleep(3)
@@ -71,6 +70,7 @@ def setup_all_vms(h: host.LocalHost, vms, iso_path, virsh_pool) -> list:
     executor = ThreadPoolExecutor(max_workers=len(vms))
     futures = []
     for e in vms:
+        print(f"starting vm {e}")
         futures.append(executor.submit(setup_vm, h, virsh_pool, e, iso_path))
 
     return futures
