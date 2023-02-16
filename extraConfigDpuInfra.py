@@ -183,5 +183,9 @@ class ExtraConfigDpuInfra:
                     rh.run("sudo systemctl restart ovs-configuration")
 
 
+def main():
+    pass
+
+
 if __name__ == "__main__":
     main()

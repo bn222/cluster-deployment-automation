@@ -1,6 +1,5 @@
 from assistedInstaller import AssistedClientAutomation
 from assistedInstallerService import AssistedInstallerService
-from ailib import AssistedClient
 from clustersConfig import ClustersConfig
 from clusterDeployer import ClusterDeployer
 from arguments import parse_args
