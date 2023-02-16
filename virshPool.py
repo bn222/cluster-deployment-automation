@@ -4,13 +4,13 @@ class VirshPool:
         self._name = name
         self._images_path = images_path
 
-    def name(self) -> None:
+    def name(self) -> str:
         return self._name
 
-    def images_path(self) -> None:
+    def images_path(self) -> str:
         return self._images_path
 
-    def initialized(self) -> None:
+    def initialized(self) -> bool:
         cmd = f"virsh pool-info {self._name}"
         return self._host.run(cmd).returncode == 0
 
