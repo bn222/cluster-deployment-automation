@@ -12,9 +12,7 @@ from k8sClient import K8sClient
 import nfs
 import requests
 import socket
-from git import Repo
 import coreosBuilder
-import ipaddress
 from extraConfigBFB import ExtraConfigBFB, ExtraConfigSwitchNicMode
 from extraConfigSriov import ExtraConfigSriov, ExtraConfigSriovOvSHWOL
 from extraConfigDpuTenant import ExtraConfigDpuTenant
@@ -77,9 +75,6 @@ def setup_all_vms(h: host.LocalHost, vms, iso_path, virsh_pool) -> list:
 
     return futures
 
-def ip_in_subnet(addr, subnet) -> bool:
-    return ipaddress.ip_address(addr) in ipaddress.ip_network(subnet)
-
 class ClusterDeployer():
     def __init__(self, cc, ai, args, secrets_path: str):
         self._client = None
@@ -136,15 +131,7 @@ class ClusterDeployer():
     def teardown(self) -> None:
         cluster_name = self._cc["name"]
         print(f"Tearing down {cluster_name}")
-        if self._cc["name"] in map(lambda x: x["name"], self._ai.list_clusters()):
-            print("cluster found, deleting it")
-            while True:
-                try:
-                    self._ai.delete_cluster(cluster_name)
-                    break
-                except:
-                    print("failed to delete cluster, will retry..")
-                    time.sleep(1)
+        self._ai.ensure_cluster_deleted(self._cc["name"])
 
         lh = host.LocalHost()
         for m in self._cc.local_vms():
@@ -162,14 +149,8 @@ class ClusterDeployer():
                 r = lh.run(f"virsh undefine {name}")
                 print(r.err if r.err else r.out)
 
-        infra_name = f"{cluster_name}-x86"
-        if infra_name in map(lambda x: x["name"], self._ai.list_infra_envs()):
-            self._ai.delete_infra_env(infra_name)
-
-        infra_name = f"{cluster_name}-arm"
-        if (any(x["type"] == "bf" for x in self._cc["workers"]) and
-            infra_name in map(lambda x: x["name"], self._ai.list_infra_envs())):
-            self._ai.delete_infra_env(infra_name)
+        self._ai.ensure_infraenv_deleted(f"{cluster_name}-x86")
+        self._ai.ensure_infraenv_deleted(f"{cluster_name}-arm")
 
         xml_str = lh.run("virsh net-dumpxml default").out
         q = et.fromstring(xml_str)
@@ -327,16 +308,7 @@ class ClusterDeployer():
         cfg["pull_secret"] = self._secrets_path
         cfg["cpu_architecture"] = "x86_64"
         self._ai.create_infra_env(infra_env, cfg)
-
-        print(self._ai.info_iso(infra_env, {}))
-
-        print("Downloading iso (will retry if not ready)...")
-        while True:
-            try:
-                self._ai.download_iso(infra_env, os.getcwd())
-                break
-            except Exception:
-                time.sleep(30)
+        self._ai.download_iso_with_retry(infra_env)
 
         lh = host.LocalHost()
         futures = setup_all_vms(lh, self._cc["masters"],
@@ -348,24 +320,7 @@ class ClusterDeployer():
                 raise Exception("Can't install VMs")
         names = (e["name"] for e in self._cc["masters"])
         self._wait_known_state(names, cb)
-        print(f"Starting cluster {cluster_name} (will retry until that succeeds)")
-        tries = 0
-        while True:
-            try:
-                tries += 1
-                self._ai.start_cluster(cluster_name)
-            except Exception:
-                pass
-
-            cluster = list(filter(lambda e: e["name"] == cluster_name, self._ai.list_clusters()))
-            status = cluster[0]["status"]
-
-            if status == "installing":
-                print(f"Cluster {cluster_name} is in state installing")
-                break
-            else:
-                time.sleep(10)
-        print(f"Took {tries} tries to start cluster {cluster_name}")
+        self._ai.start_until_success(cluster_name)
 
         self._ai.wait_cluster(cluster_name)
         for p in futures:
@@ -375,15 +330,8 @@ class ClusterDeployer():
         self._ai.download_kubeconfig(self._cc["name"], os.path.dirname(self._cc["kubeconfig"]))
         self._update_etc_hosts()
 
-    def _get_ai_host(self, name: str):
-        for h in filter(lambda x: "inventory" in x, self._ai.list_hosts()):
-            rhn = h["requested_hostname"]
-            if rhn == name:
-                return h
-        return None
-
     def _print_logs(self, name):
-        ip = self._get_ai_ip(name)
+        ip = self._ai.get_ai_ip(name)
         if ip is None:
             return
         rh = host.RemoteHost(ip)
@@ -391,10 +339,11 @@ class ClusterDeployer():
         print(rh.run("sudo journalctl TAG=agent --no-pager").out)
 
     def _get_status(self, name: str):
-        h = self._get_ai_host(name)
+        h = self._ai.get_ai_host(name)
         return h["status"] if h is not None else None
 
     def _wait_known_state(self, names, cb=lambda: None) -> None:
+        names = list(names)
         print(f"Waiting for {names} to be in \'known\' state")
         status = {n: "" for n in names}
         while not all(v == "known" for v in status.values()):
@@ -424,7 +373,7 @@ class ClusterDeployer():
 
         print("Setting password to for root to redhat")
         for w in self._cc["workers"]:
-            ai_ip = self._get_ai_ip(w["name"])
+            ai_ip = self._ai.get_ai_ip(w["name"])
             assert ai_ip is not None
             rh = host.RemoteHost(ai_ip)
             rh.ssh_connect("core")
@@ -665,7 +614,7 @@ class ClusterDeployer():
             d = lh.run("date").out.strip()
             if len(connections) != len(bf_workers):
                 for e in filter(lambda x: x["name"] not in connections, bf_workers):
-                    ai_ip = self._get_ai_ip(e["name"])
+                    ai_ip = self._ai.get_ai_ip(e["name"])
                     if ai_ip is None:
                         continue
                     h = host.RemoteHost(ai_ip, None, None)
@@ -700,18 +649,3 @@ class ClusterDeployer():
                     pass
 
             time.sleep(10)
-
-    def _get_ai_ip(self, name: str):
-        ai_host = self._get_ai_host(name)
-        if ai_host:
-            inventory = json.loads(ai_host["inventory"])
-            routes = inventory["routes"]
-
-            default_nics = [x['interface'] for x in routes if x['destination'] == '0.0.0.0']
-            for default_nic in default_nics:
-                nic_info = next(nic for nic in inventory.get('interfaces') if nic["name"] == default_nic)
-                addr = nic_info['ipv4_addresses'][0].split('/')[0]
-                if ip_in_subnet(addr, "192.168.122.0/24"):
-                    return addr
-        return None
-

@@ -2,6 +2,10 @@ from ailib import AssistedClient
 import time
 import os
 import json
+import ipaddress
+
+def ip_in_subnet(addr, subnet) -> bool:
+    return ipaddress.ip_address(addr) in ipaddress.ip_network(subnet)
 
 class AssistedClientAutomation(AssistedClient):
     def __init__(self, url):
@@ -21,7 +25,7 @@ class AssistedClientAutomation(AssistedClient):
 
     def ensure_infraenv_deleted(self, name: str):
         if name in map(lambda x: x["name"], self.list_infra_envs()):
-            self.delete_infra_env(infra_name)
+            self.delete_infra_env(name)
 
     def download_iso_with_retry(self, infra_env: str):
         print(self.info_iso(infra_env, {}))
@@ -53,29 +57,15 @@ class AssistedClientAutomation(AssistedClient):
                 time.sleep(10)
         print(f"Took {tries} tries to start cluster {cluster_name}")
 
-    def _get_ai_host(self, name: str):
+    def get_ai_host(self, name: str):
         for h in filter(lambda x: "inventory" in x, self.list_hosts()):
             rhn = h["requested_hostname"]
             if rhn == name:
                 return h
         return None
 
-    def _get_ai_ip(self, name: str):
-        ai_host = self._get_ai_host(name)
-        if ai_host:
-            inventory = json.loads(ai_host["inventory"])
-            routes = inventory["routes"]
-
-            default_nics = [x['interface'] for x in routes if x['destination'] == '0.0.0.0']
-            for default_nic in default_nics:
-                nic_info = next(nic for nic in inventory.get('interfaces') if nic["name"] == default_nic)
-                addr = nic_info['ipv4_addresses'][0].split('/')[0]
-                if ip_in_subnet(addr, "192.168.122.0/24"):
-                    return addr
-        return None
-
-    def _get_ai_ip(self, name: str):
-        ai_host = self._get_ai_host(name)
+    def get_ai_ip(self, name: str):
+        ai_host = self.get_ai_host(name)
         if ai_host:
             inventory = json.loads(ai_host["inventory"])
             routes = inventory["routes"]

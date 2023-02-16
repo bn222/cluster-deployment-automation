@@ -1,3 +1,4 @@
+from assistedInstaller import AssistedClientAutomation
 from assistedInstallerService import AssistedInstallerService
 from ailib import AssistedClient
 from clustersConfig import ClustersConfig
@@ -20,7 +21,7 @@ def main():
     The usage details are here:
         https://aicli.readthedocs.io/en/latest/
     """
-    ai = AssistedClient(f"{args.url}:8090", quiet=True)
+    ai = AssistedClientAutomation(f"{args.url}:8090")
     cd = ClusterDeployer(cc, ai, args, args.secrets_path)
 
     if args.teardown:
