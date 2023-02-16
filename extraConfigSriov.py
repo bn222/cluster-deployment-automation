@@ -7,6 +7,7 @@ from clustersConfig import ClustersConfig
 from arguments import parse_args
 import shutil
 import jinja2
+import sys
 
 
 class ExtraConfigSriov:
@@ -59,6 +60,8 @@ class ExtraConfigSriovOvSHWOL:
             print(client.oc(f'label node {name} --overwrite=true feature.node.kubernetes.io/network-sriov.capable=true'))
             # Find out what the PF attached to br-ex is (uplink port). We only do HWOL on uplink ports.
             ip = client.get_ip(name)
+            if ip is None:
+                sys.exit(-1)
             rh = host.RemoteHost(ip)
             rh.ssh_connect("core")
             result = rh.run("cat /var/lib/ovnk/iface_default_hint").out.strip()

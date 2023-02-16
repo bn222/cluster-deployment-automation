@@ -25,7 +25,7 @@ class K8sClient():
                         return con.status == "True"
         return False
 
-    def get_nodes(self) -> str:
+    def get_nodes(self) -> list[str]:
         return [e.metadata.name for e in self._client.list_node().items]
 
     def wait_ready(self, name: str) -> None:
@@ -43,12 +43,13 @@ class K8sClient():
             if e.status.conditions is None:
                 self.oc(f"adm certificate approve {e.metadata.name}")
 
-    def get_ip(self, name: str) -> str:
+    def get_ip(self, name: str) -> str | None:
         for e in self._client.list_node().items:
             if name == e.metadata.name:
                 for addr in e.status.addresses:
                     if addr.type == "InternalIP":
                         return addr.address
+        return None
 
     def oc(self, cmd: str) -> host.Result:
         lh = host.LocalHost()

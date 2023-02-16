@@ -141,11 +141,12 @@ class CoreosBuilder():
         print(lh.run(cmd))
         print(lh.run(f"chmod a+rw {dst}"))
 
-    def _find_iso(self, fcos_dir: str) -> str:
+    def _find_iso(self, fcos_dir: str) -> str | None:
         for root, _, files in os.walk(fcos_dir, topdown=False):
             for name in files:
                 if name.endswith(".iso"):
                     return os.path.join(root, name)
+        return None
 
     def _clone_if_not_exists(self, url: str) -> str:
         dest = url.split("/")[-1]

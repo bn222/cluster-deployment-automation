@@ -9,6 +9,7 @@ import os
 import time
 import json
 import shlex
+import sys
 
 Result = namedtuple("Result", "out err returncode")
 
@@ -26,6 +27,12 @@ class LocalHost(Host):
         args = shlex.split(cmd)
         pipe = subprocess.PIPE
         with subprocess.Popen(args, stdout=pipe, stderr=pipe, env=env) as proc:
+            if proc.stdout is None:
+                print("Can't find stdout")
+                sys.exit(-1)
+            if proc.stderr is None:
+                print("Can't find stderr")
+                sys.exit(-1)
             out = proc.stdout.read().decode("utf-8")
             err = proc.stderr.read().decode("utf-8")
             proc.communicate()
@@ -38,13 +45,13 @@ class LocalHost(Host):
 
 
 class RemoteHost(Host):
-    def __init__(self, hostname: str, bmc_user: str=None, bmc_password: str=None):
+    def __init__(self, hostname: str, bmc_user: str | None = None, bmc_password: str | None = None):
         self._hostname = hostname
         self._bmc_user = bmc_user
         self._bmc_password = bmc_password
         self.auto_reconnect = False
 
-    def ssh_connect(self, username: str, id_rsa_path: str=None) -> None:
+    def ssh_connect(self, username: str, id_rsa_path: str | None = None) -> None:
         if id_rsa_path is None:
             id_rsa_path = "/root/.ssh/id_rsa"
         with open(id_rsa_path, "r") as f:

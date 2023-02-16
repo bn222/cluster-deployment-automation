@@ -413,7 +413,6 @@ class ClusterDeployer():
                                 self.local_host_config()["virsh_pool"])
         self._wait_known_state(e["name"] for e in vm)
 
-
     def _create_x86_workers(self) -> None:
         print("Setting up x86 workers")
         cluster_name = self._cc["name"]
@@ -430,7 +429,7 @@ class ClusterDeployer():
             print(f"Creating infraenv {infra_env_name}")
             self._ai.create_infra_env(infra_env_name, cfg)
 
-        os.makedirs(self._iso_path, exist_ok = True)
+        os.makedirs(self._iso_path, exist_ok=True)
         self._download_iso(infra_env_name, self._iso_path)
 
         self._create_physical_x86_workers()
@@ -462,7 +461,7 @@ class ClusterDeployer():
 
         for w in self._cc["workers"]:
             for h in filter(lambda x: x["infra_env_id"] == infra_env_id, self._ai.list_hosts()):
-                if not "inventory" in h:
+                if "inventory" not in h:
                     continue
                 nics = json.loads(h["inventory"]).get("interfaces")
                 addresses = sum((nic["ipv4_addresses"] for nic in nics), [])
@@ -470,7 +469,7 @@ class ClusterDeployer():
 
                 if w["ip"] in addresses:
                     name = w["name"]
-                    self._ai.update_host(h["id"], {"name" : name})
+                    self._ai.update_host(h["id"], {"name": name})
                     print(f"renamed {name}")
                     renamed += 1
         return renamed
@@ -537,7 +536,7 @@ class ClusterDeployer():
                 self._ai.download_iso(infra_env_name, iso_path)
                 print(f"iso for {infra_env_name} downloaded to {iso_path}")
                 break
-            except:
+            except Exception:
                 time.sleep(5)
 
     def _update_etc_hosts(self) -> None:
@@ -593,7 +592,7 @@ class ClusterDeployer():
         try:
             ip = common.extract_ip(ipa_json, bf_interface)
             print(ip)
-        except:
+        except Exception:
             ip = None
             print(f"Failed to find ip on {bf_interface}, output was {ipa_json}")
             sys.exit(-1)
