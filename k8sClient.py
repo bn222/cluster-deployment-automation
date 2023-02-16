@@ -4,6 +4,8 @@ import time
 import host
 import os
 import requests
+from typing import List
+from typing import Optional
 
 oc_url = "https://mirror.openshift.com/pub/openshift-v4/clients/ocp/latest/"
 
@@ -25,7 +27,7 @@ class K8sClient():
                         return con.status == "True"
         return False
 
-    def get_nodes(self) -> list[str]:
+    def get_nodes(self) -> List[str]:
         return [e.metadata.name for e in self._client.list_node().items]
 
     def wait_ready(self, name: str) -> None:
@@ -43,7 +45,7 @@ class K8sClient():
             if e.status.conditions is None:
                 self.oc(f"adm certificate approve {e.metadata.name}")
 
-    def get_ip(self, name: str) -> str | None:
+    def get_ip(self, name: str) -> Optional[str]:
         for e in self._client.list_node().items:
             if name == e.metadata.name:
                 for addr in e.status.addresses:

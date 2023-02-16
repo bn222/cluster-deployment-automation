@@ -10,6 +10,7 @@ import time
 import json
 import shlex
 import sys
+from typing import Optional
 
 Result = namedtuple("Result", "out err returncode")
 
@@ -45,13 +46,13 @@ class LocalHost(Host):
 
 
 class RemoteHost(Host):
-    def __init__(self, hostname: str, bmc_user: str | None = None, bmc_password: str | None = None):
+    def __init__(self, hostname: str, bmc_user: Optional[str] = None, bmc_password: Optional[str] = None):
         self._hostname = hostname
         self._bmc_user = bmc_user
         self._bmc_password = bmc_password
         self.auto_reconnect = False
 
-    def ssh_connect(self, username: str, id_rsa_path: str | None = None) -> None:
+    def ssh_connect(self, username: str, id_rsa_path: Optional[str] = None) -> None:
         if id_rsa_path is None:
             id_rsa_path = "/root/.ssh/id_rsa"
         with open(id_rsa_path, "r") as f:

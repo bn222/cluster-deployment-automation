@@ -4,7 +4,7 @@ import json
 from git import Repo
 import shutil
 import host
-
+from typing import Optional
 
 def ensure_fcos_exists(dst: str="/root/iso/fedora-coreos.iso") -> None:
     print("ensuring that fcos exists")
@@ -141,7 +141,7 @@ class CoreosBuilder():
         print(lh.run(cmd))
         print(lh.run(f"chmod a+rw {dst}"))
 
-    def _find_iso(self, fcos_dir: str) -> str | None:
+    def _find_iso(self, fcos_dir: str) -> Optional[str]:
         for root, _, files in os.walk(fcos_dir, topdown=False):
             for name in files:
                 if name.endswith(".iso"):
