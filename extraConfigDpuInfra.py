@@ -22,8 +22,7 @@ def install_remotelyh(ip, links):
     rh.ssh_connect("core")
 
     want = "4.18.0-372.35.1.el8_6.mr3440_221116_1544.aarch64"
-    uname = "".join(rh.run("uname -a").out)
-    if want in uname:
+    if want in rh.run("uname -a").out:
         print(f"kernel already installed on {ip}, skipping")
         return True
     else:
@@ -54,9 +53,7 @@ def install_remotelyh(ip, links):
     rh.run("sudo systemctl reboot")
     time.sleep(10)
     rh.ssh_connect("core")
-    result = rh.run("uname -a").out
-    uname = "".join(result)
-    return want in uname
+    return want in rh.run("uname -a").out
 
 def install_custom_kernel(ips):
     print(f"Installing custom kernel on {ips}")
@@ -179,8 +176,8 @@ class ExtraConfigDpuInfra:
                 ip = client.get_ip(b)
                 rh = host.RemoteHost(ip)
                 rh.ssh_connect("core")
-                result = "".join(rh.run("sudo ovs-vsctl show"))
-                good[b] = "enp3s0f0nc1pf0" in result
+                result = rh.run("sudo ovs-vsctl show")
+                good[b] = "enp3s0f0nc1pf0" in result.out
                 if not good[b]:
                     print(f"Applying workaround (NHE-325) to {b}")
                     rh.run("sudo systemctl restart ovs-configuration")
