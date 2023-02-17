@@ -65,6 +65,9 @@ def setup_vm(h: host.LocalHost, virsh_pool: VirshPool, cfg: dict, iso_path: str)
 
 
 def setup_all_vms(h: host.LocalHost, vms, iso_path, virsh_pool) -> list:
+    if not vms:
+        return []
+
     virsh_pool.ensure_initialized()
 
     executor = ThreadPoolExecutor(max_workers=len(vms))
@@ -635,7 +638,6 @@ class ClusterDeployer():
 
             self.client().approve_csr()
 
-            d = lh.run("date").out.strip()
             if len(connections) != len(bf_workers):
                 for e in filter(lambda x: x["name"] not in connections, bf_workers):
                     ai_ip = self._ai.get_ai_ip(e["name"])
@@ -652,7 +654,7 @@ class ClusterDeployer():
                 if w["name"] not in connections:
                     continue
                 h = connections[w["name"]]
-                h.run(f"sudo date -s '{d}'")
+                host.sync_time(lh, h)
 
                 # Workaround: images might become corrupt for an unknown reason. In that case, remove it to allow retries
                 out = "".join(h.run("sudo podman images").out)

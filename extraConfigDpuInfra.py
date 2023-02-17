@@ -119,20 +119,35 @@ class ExtraConfigDpuInfra:
     def __init__(self, cc):
         self._cc = cc
 
-    def run(self, cfg):
+    def run(self, _):
         kc = "/root/kubeconfig.infracluster"
         client = K8sClient(kc)
         lh = host.LocalHost()
 
         bf_names = [x["name"] for x in self._cc["workers"] if x["type"] == "bf"]
         ips = [client.get_ip(e) for e in bf_names]
-        for bf in bf_names:
-            client.wait_ready(bf)
+
+        for bf, ip in zip(bf_names, ips):
+            if ip is None:
+                sys.exit(-1)
+            rh = host.RemoteHost(ip)
+            rh.ssh_connect("core")
+
+            def cb():
+                host.sync_time(lh, rh)
+            client.wait_ready(bf, cb)
 
         # workaround, this will reboot the BF
         install_custom_kernel(ips)
-        for bf in bf_names:
-            client.wait_ready(bf)
+        for bf, ip in zip(bf_names, ips):
+            if ip is None:
+                sys.exit(-1)
+            rh = host.RemoteHost(ip)
+            rh.ssh_connect("core")
+
+            def cb():
+                host.sync_time(lh, rh)
+            client.wait_ready(bf, cb)
 
         lh.run("dnf install -y golang")
 

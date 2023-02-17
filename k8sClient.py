@@ -30,13 +30,15 @@ class K8sClient():
     def get_nodes(self) -> List[str]:
         return [e.metadata.name for e in self._client.list_node().items]
 
-    def wait_ready(self, name: str) -> None:
+    def wait_ready(self, name: str, cb) -> None:
         print(f"waiting for {name} to be ready")
         while True:
             if self.is_ready(name):
                 break
             else:
                 time.sleep(1)
+            if cb:
+                cb()
             self.approve_csr()
 
     def approve_csr(self) -> None:

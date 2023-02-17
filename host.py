@@ -12,8 +12,13 @@ import shlex
 import sys
 from typing import Optional
 
+
 Result = namedtuple("Result", "out err returncode")
 
+
+def sync_time(src, dst):
+    date = src.run("date").out.strip()
+    return dst.run(f"sudo date -s \"{date}\"")
 
 class Host():
     def ipa(self) -> dict:
