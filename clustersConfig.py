@@ -10,6 +10,7 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import host
 import re
+from typing import List
 
 logging.basicConfig(level=logging.INFO,
         format='%(asctime)s %(levelname)s: %(message)s', datefmt='%H:%M:%S'
@@ -20,7 +21,7 @@ class ClusterInfo:
     def __init__(self, name: str):
         self.name = name
         self.provision_host = ""
-        self.workers = []
+        self.workers = []  # type: List[str]
 
 
 def read_sheet() -> list:
