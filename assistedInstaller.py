@@ -25,7 +25,7 @@ class AssistedClientAutomation(AssistedClient):
             time.sleep(5)
 
     def ensure_infraenv_created(self, name: str, cfg):
-        if name in map(lambda x: x["name"], self.list_infra_envs()):
+        if name not in map(lambda x: x["name"], self.list_infra_envs()):
             print(f"Creating infraenv {name}")
             self.create_infra_env(name, cfg)
 
