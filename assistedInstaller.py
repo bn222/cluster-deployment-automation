@@ -24,6 +24,12 @@ class AssistedClientAutomation(AssistedClient):
                 pass
             time.sleep(5)
 
+    def ensure_infraenv_created(self, name: str, cfg):
+        if name in map(lambda x: x["name"], self.list_infra_envs()):
+            print(f"Creating infraenv {name}")
+            self.create_infra_env(name, cfg)
+
+
     def ensure_infraenv_deleted(self, name: str):
         if name in map(lambda x: x["name"], self.list_infra_envs()):
             self.delete_infra_env(name)

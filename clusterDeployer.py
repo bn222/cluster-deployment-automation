@@ -311,7 +311,7 @@ class ClusterDeployer():
         cfg["cluster"] = cluster_name
         cfg["pull_secret"] = self._secrets_path
         cfg["cpu_architecture"] = "x86_64"
-        self._ai.create_infra_env(infra_env, cfg)
+        self._ai.ensure_infraenv_created(infra_env, cfg)
         self._ai.download_iso_with_retry(infra_env)
 
         lh = host.LocalHost()
@@ -429,9 +429,7 @@ class ClusterDeployer():
         cfg["pull_secret"] = self._secrets_path
         cfg["cpu_architecture"] = "x86_64"
 
-        if all(map(lambda x: x["name"] != infra_env_name, self._ai.list_infra_envs())):
-            print(f"Creating infraenv {infra_env_name}")
-            self._ai.create_infra_env(infra_env_name, cfg)
+        self._ai.ensure_infraenv_created(infra_env_name, cfg)
 
         os.makedirs(self._iso_path, exist_ok=True)
         self._download_iso(infra_env_name, self._iso_path)
@@ -503,9 +501,7 @@ class ClusterDeployer():
         cfg["pull_secret"] = self._secrets_path
         cfg["cpu_architecture"] = "arm64"
 
-        if all(map(lambda x: x["name"] != infra_env_name, self._ai.list_infra_envs())):
-            print(f"Creating infraenv {infra_env_name}")
-            self._ai.create_infra_env(infra_env_name, cfg)
+        self._ai.ensure_infraenv_created(infra_env_name)
 
         self._download_iso(infra_env_name, self._iso_path)
 
