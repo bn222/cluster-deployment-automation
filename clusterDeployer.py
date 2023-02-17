@@ -305,7 +305,7 @@ class ClusterDeployer():
     def create_masters(self) -> None:
         cluster_name = self._cc["name"]
         infra_env = f"{cluster_name}-x86"
-        print(f"Creating infraenv {infra_env}")
+        print(f"Ensuring infraenv {infra_env} exists.")
 
         cfg = {}
         cfg["cluster"] = cluster_name
