@@ -89,6 +89,10 @@ class ClustersConfig():
                 cc["version"] = "4.12.0-multi"
             if not cc["version"].endswith("-multi"):
                 cc["version"] += "-multi"
+            if "external_port" not in cc:
+                cc["external_port"] = "auto"
+            if "network_api_port" not in cc:
+                cc["network_api_port"] = "auto"
 
             if "hosts" not in cc:
               cc["hosts"] = []
@@ -165,6 +169,9 @@ class ClustersConfig():
 
     def all_vms(self) -> list:
         return [x for x in self.all_nodes() if x["type"] == "vm"]
+
+    def worker_vms(self) -> list:
+        return [x for x in self["workers"] if x ["type"] == "vm"]
 
     def local_vms(self) -> list:
         return [x for x in self.all_vms() if x["node"] == "localhost"]
