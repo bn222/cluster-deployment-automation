@@ -4,6 +4,7 @@ import os
 import host
 import time
 from extraConfigSriov import ExtraConfigSriov
+from extraConfigSriov import ExtraConfigSriovOvSHWOL
 
 class ExtraConfigDpuTenant:
     def __init__(self, cc):
@@ -91,6 +92,9 @@ class ExtraConfigDpuTenant:
         iclient.oc("patch --type merge -p {\"spec\":{\"kubeConfigFile\":\"tenant-cluster-1-kubeconf\"}} OVNKubeConfig ovnkubeconfig-sample")
         print("Creating network attachement definition")
         tclient.oc("create -f manifests/tenant/nad.yaml")
+
+        ec = ExtraConfigSriovOvSHWOL(self._cc)
+        ec.ensure_pci_realloc(tclient, "dpu-host")
 
 
 def main():
