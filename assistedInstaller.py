@@ -3,6 +3,7 @@ import time
 import os
 import json
 import ipaddress
+import requests
 
 def ip_in_subnet(addr, subnet) -> bool:
     return ipaddress.ip_address(addr) in ipaddress.ip_network(subnet)
@@ -85,3 +86,6 @@ class AssistedClientAutomation(AssistedClient):
                     return addr
         return None
 
+    def allow_add_workers(self, cluster_name: str) -> None:
+        uuid = self.info_cluster(cluster_name).to_dict()["id"]
+        requests.post(f"http://{self.url}/api/assisted-install/v2/clusters/{uuid}/actions/allow-add-workers")

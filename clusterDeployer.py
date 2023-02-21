@@ -437,10 +437,6 @@ class ClusterDeployer():
             rh.ssh_connect("core")
             rh.run("echo root:redhat | sudo chpasswd")
 
-    def _allow_add_workers(self, cluster_name: str) -> None:
-        uuid = self._ai.info_cluster(cluster_name).to_dict()["id"]
-        requests.post(f"http://{self._ai.url}/api/assisted-install/v2/clusters/{uuid}/actions/allow-add-workers")
-
     def _create_physical_x86_workers(self) -> None:
         def boot_helper(worker, iso):
             return self.boot_iso_x86(worker, iso)
@@ -476,7 +472,7 @@ class ClusterDeployer():
         cluster_name = self._cc["name"]
         infra_env_name = f"{cluster_name}-x86"
 
-        self._allow_add_workers(cluster_name)
+        self._ai.allow_add_workers(cluster_name)
 
         cfg = {}
         cfg["cluster"] = cluster_name
@@ -548,7 +544,7 @@ class ClusterDeployer():
         cluster_name = self._cc["name"]
         infra_env_name = f"{cluster_name}-arm"
 
-        self._allow_add_workers(cluster_name)
+        self._ai.allow_add_workers(cluster_name)
 
         cfg = {}
         cfg["cluster"] = cluster_name
@@ -598,7 +594,7 @@ class ClusterDeployer():
         self._ai.download_discovery_ignition(infra_env_name, path)
 
     def _get_discovery_ign_ssh_priv_key(self, infra_env_name: str) -> str:
-        self._download_discovery_ignition(infra_env_name, "/tmp")
+        self._ai._download_discovery_ignition(infra_env_name, "/tmp")
 
         # In a provisioning system where there could be multiple keys, it is not guaranteed that
         # AI will use id_rsa. Thus we need to properly extract the key from the discovery ignition.
