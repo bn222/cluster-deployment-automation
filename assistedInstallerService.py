@@ -68,7 +68,7 @@ class AssistedInstallerService():
 
         j = json.loads(y["data"]["RELEASE_IMAGES"])
 
-        versions = (("4.11", ""), ("4.12", ""), ("4.13", "-ec.2"),)
+        versions = (("4.11", ""), ("4.12", ""), ("4.13", "-ec.3"),)
         for v in versions:
             if "nightly" in v[1]:
                 to_add = self._create_nightly_version(v)
