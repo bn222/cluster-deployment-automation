@@ -553,7 +553,7 @@ class ClusterDeployer():
         cfg["pull_secret"] = self._secrets_path
         cfg["cpu_architecture"] = "arm64"
 
-        self._ai.ensure_infraenv_created(infra_env_name)
+        self._ai.ensure_infraenv_created(infra_env_name, cfg)
 
         self._download_iso(infra_env_name, self._iso_path)
 
