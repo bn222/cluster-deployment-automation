@@ -73,6 +73,7 @@ class ExtraConfigDpuTenant:
             rh.ssh_connect("core")
             cmd = f"echo \'{self._cc['api_ip']} api.{self._cc['name']}.redhat.com\' | sudo tee -a /etc/hosts"
             print(rh.run(cmd))
+        iclient.oc(f"project tenantcluster-dpu")
         print(iclient.oc(f"create secret generic tenant-cluster-1-kubeconf --from-file=config={tclient._kc}"))
 
         contents = open("manifests/tenant/envoverrides.yaml").read()

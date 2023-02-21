@@ -166,6 +166,9 @@ class ExtraConfigDpuInfra:
                 sys.exit(-1)
             time.sleep(5)
 
+        print("Creating namespace for tenant")
+        client.oc("create -f manifests/infra/tenantcluster-dpu.yaml")
+
         print("Creating OVNKubeConfig cr")
         client.oc("create -f manifests/infra/ovnkubeconfig.yaml")
 
