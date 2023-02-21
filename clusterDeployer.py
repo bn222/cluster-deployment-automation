@@ -229,14 +229,14 @@ class ClusterDeployer():
 
             intif = common.first(carrier_no_addr, lh.ipa())
             if not intif:
-                return False
+                return None
             self._cc["network_api_port"] = intif["ifname"]
 
         intif = self._cc["network_api_port"]
         if lh.port_exists(intif):
             print(f"Using {intif} as network API port")
             return intif
-        return False
+        return None
 
     def _preconfig(self) -> None:
         for e in self._cc["preconfig"]:
@@ -663,14 +663,14 @@ class ClusterDeployer():
         else:
             print(f"succesfully ran pxeboot on bf {host_name}")
 
-        ipa = jason.loads(output.out.strip().split("\n")[-1].strip())
+        ipa = json.loads(output.out.strip().split("\n")[-1].strip())
         bf_interface = "enp3s0f0"
         try:
             ip = common.extract_ip(ipa, bf_interface)
             print(ip)
         except Exception:
             ip = None
-            print(f"Failed to find ip on {bf_interface}, output was {ipa_json}")
+            print(f"Failed to find ip on {bf_interface}, output was {ipa}")
             sys.exit(-1)
         return ip
 
