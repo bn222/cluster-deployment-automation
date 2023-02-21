@@ -590,11 +590,8 @@ class ClusterDeployer():
             except Exception:
                 time.sleep(5)
 
-    def _download_discovery_ignition(self, infra_env_name: str, path: str) -> None:
-        self._ai.download_discovery_ignition(infra_env_name, path)
-
     def _get_discovery_ign_ssh_priv_key(self, infra_env_name: str) -> str:
-        self._ai._download_discovery_ignition(infra_env_name, "/tmp")
+        self._ai.download_discovery_ignition(infra_env_name, "/tmp")
 
         # In a provisioning system where there could be multiple keys, it is not guaranteed that
         # AI will use id_rsa. Thus we need to properly extract the key from the discovery ignition.
