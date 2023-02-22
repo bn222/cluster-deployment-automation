@@ -50,6 +50,35 @@ class ExtraConfigSriovOvSHWOL:
     def __init__(self, cc):
         self._cc = cc
 
+    def need_pci_realloc(self, client: K8sClient) -> bool:
+        for e in self._cc["workers"]:
+            ip = client.get_ip(e['name'])
+            if ip is None:
+                sys.exit(-1)
+            rh = host.RemoteHost(ip)
+            rh.ssh_connect("core")
+            if "switchdev-configuration-before-nm.service" in rh.run("systemctl list-units --state=failed --plain --no-legend").out:
+                print(f"switchdev-configuration is failing in {e['name']}, additional machine configuration is required")
+                return True
+        return False
+
+    def enable_pci_realloc(self, client: K8sClient, mcp_name: str) -> None:
+        print("Applying pci-realloc machine config")
+        with open('./manifests/nicmode/pci-realloc.yaml.j2') as f:
+            j2_template = jinja2.Template(f.read())
+        rendered = j2_template.render(MCPName=mcp_name)
+        print(rendered)
+        with open("/tmp/pci-realloc.yaml", "w") as outFile:
+            outFile.write(rendered)
+        client.oc("create -f /tmp/pci-realloc.yaml")
+        print("Waiting for mcp")
+        time.sleep(60)
+        client.oc(f"wait mcp {mcp_name} --for condition=updated --timeout=50m")
+
+    def ensure_pci_realloc(self, client: K8sClient, mcp_name: str) -> None:
+        if self.need_pci_realloc(client):
+            self.enable_pci_realloc(client, mcp_name)
+
     def run(self, _) -> None:
         client = K8sClient(self._cc["kubeconfig"])
         client.oc("create -f manifests/nicmode/pool.yaml")
@@ -85,6 +114,9 @@ class ExtraConfigSriovOvSHWOL:
         print(client.oc("create -f manifests/nicmode/nad.yaml"))
         time.sleep(60)
         print(client.oc("wait mcp sriov --for condition=updated --timeout=50m"))
+
+        self.ensure_pci_realloc(client, "sriov")
+
 
 def main():
     args = parse_args()

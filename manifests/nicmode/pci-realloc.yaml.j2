@@ -1,0 +1,12 @@
+apiVersion: machineconfiguration.openshift.io/v1
+kind: MachineConfig
+metadata:
+  labels:
+    machineconfiguration.openshift.io/role: {{MCPName}}
+  name: 99-pci-realloc-workers
+spec:
+  config:
+    ignition:
+      version: 3.2.0
+  kernelArguments:
+      - pci=realloc
