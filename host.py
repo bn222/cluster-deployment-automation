@@ -6,6 +6,7 @@ import subprocess
 from collections import namedtuple
 import io
 import os
+import re
 import time
 import json
 import shlex
@@ -22,6 +23,10 @@ def sync_time(src, dst):
     return dst.run(f"sudo date -s \"{date}\"")
 
 class Host():
+    def vm_is_running(self, name: str) -> bool:
+        ret = self.run(f"virsh dominfo {name}")
+        return not ret.returncode and re.search("State:.*running", ret.out)
+
     def ipa(self) -> dict:
         return json.loads(self.run("ip -json a").out)
 

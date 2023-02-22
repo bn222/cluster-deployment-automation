@@ -76,7 +76,9 @@ def setup_all_vms(h: host.LocalHost, vms, iso_path, virsh_pool) -> list:
     for e in vms:
         print(f"starting vm {e}")
         futures.append(executor.submit(setup_vm, h, virsh_pool, e, iso_path))
-        time.sleep(5)
+
+        while not h.vm_is_running(e["name"]) and not futures[-1].done():
+            time.sleep(1)
 
     return futures
 
