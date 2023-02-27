@@ -10,7 +10,7 @@ def main():
 
     if args.url == "192.168.122.1":
         ais = AssistedInstallerService(args.url)
-        ais.start()
+        ais.start(cc["version"])
     else:
         print(f"Will use Assisted Installer running at {args.url}")
 

@@ -10,7 +10,7 @@ def ip_in_subnet(addr, subnet) -> bool:
 
 class AssistedClientAutomation(AssistedClient):
     def __init__(self, url):
-        super().__init__(url, quiet=True)
+        super().__init__(url, quiet=True, debug=False)
 
     def cluster_exists(self, name: str) -> bool:
         return any(name == x["name"] for x in self.list_clusters())

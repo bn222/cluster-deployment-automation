@@ -6,6 +6,7 @@ import json
 import time
 import requests
 import host
+import sys
 
 """
 Assisted service is an utility to deploy clusters. The Git repository is
@@ -35,13 +36,13 @@ class AssistedInstallerService():
         self.podFile = get_url(f"{base_url}/deploy/podman/pod-persistent.yml").text
         self.workdir = os.path.join(os.getcwd(), "build")
 
-    def _configure(self) -> None:
+    def _configure(self, version) -> None:
         print("creating working directory")
         if os.path.exists(self.workdir):
             rmdir(self.workdir)
         os.mkdir(self.workdir)
         with open(self._config_map_path(), 'w') as out_configmap:
-            yaml.dump(self._customized_configmap(), out_configmap, sort_keys=False)
+            yaml.dump(self._customized_configmap(version), out_configmap, sort_keys=False)
 
         with open(self._pod_persistent_path(), 'w') as out_pod:
             yaml.dump(yaml.safe_load(self.podFile), out_pod, default_flow_style=False)
@@ -52,7 +53,7 @@ class AssistedInstallerService():
     def _pod_persistent_path(self) -> str:
         return f'{self.workdir}/pod-persistent.yml'
 
-    def _customized_configmap(self):
+    def _customized_configmap(self, version):
         y = yaml.safe_load(self.podConfig)
         y["data"]["IMAGE_SERVICE_BASE_URL"] = f"http://{self._ip}:8888"
         y["data"]["SERVICE_BASE_URL"] = f"http://{self._ip}:8090"
@@ -66,41 +67,43 @@ class AssistedInstallerService():
         j[0]["sno"]["disk_size_gb"] = 8
         y["data"]["HW_VALIDATOR_REQUIREMENTS"] = json.dumps(j)
 
-        j = json.loads(y["data"]["RELEASE_IMAGES"])
+        # Don't reuse json.loads(y["data"]["RELEASE_IMAGES"]). It seems
+        # that AI doesn't allow to use similar versions (like both -ec.3
+        # and nightly) in the same config. For that reason, pass in the
+        # version, and instantiate AI _only_ with one version, i.e. the 
+        # version we will be using.
 
-        versions = (("4.11", ""), ("4.12", ""), ("4.13", "-ec.3"),)
-        for v in versions:
-            if "nightly" in v[1]:
-                to_add = self._create_nightly_version(v)
-            else:
-                to_add = self._create_ec_version(v)
-            j.append(to_add)
+        all_versions = []
+        all_versions += [{"openshift_version": "4.12-multi", "version": "4.12.0"}]
+        all_versions += [{"openshift_version": "4.12-multi", "version": "4.12.5"}]
+        all_versions += [{"openshift_version": "4.13-multi", "version": "4.13.0-ec.3"}]
+        all_versions += [{"openshift_version": "4.13-multi", "version": "4.13.0-nightly"}]
+        for e in all_versions:
+            e["cpu_architecture"] = "multi"
+            e["support_level"] = "beta"
+            e["cpu_architectures"] = ["x86_64", "arm64", "ppc64le", "s390x"]
+            e["url"] = self.get_pullspec(e["version"])
+
+        j = [e for e in all_versions if e["version"] == version]
 
         y["data"]["RELEASE_IMAGES"] = json.dumps(j)
         return y
 
-    def _create_ec_version(self, v: tuple) -> dict:
-        version, ec_version = v
-        version_string = f"{version}{ec_version}"
-        url = f"quay.io/openshift-release-dev/ocp-release:{version}.0{ec_version}-multi"
-        return self._create_json_version(version_string, url)
+    def get_pullspec(self, version) -> str:
+        if "nightly" in version:
+            return self.get_nightly_pullspec(version)
+        else:
+            return self.get_ec_pullspec(version)
 
-    def _create_json_version(self, version_string: str, url: str) -> dict:
-        return {
-            'openshift_version': version_string,
-            'cpu_architecture': 'multi',
-            'cpu_architectures': ['x86_64', 'arm64', 'ppc64le', 's390x'],
-            'url': url,
-            'version': version_string,
-        }
-
-    def _create_nightly_version(self, v: tuple) -> dict:
-        version, release_type = v
-        version_string = f"{version}{release_type}"
-        url = f"https://multi.ocp.releases.ci.openshift.org/api/v1/releasestream/{version}.0-0.{release_type}-multi/latest"
+    def get_nightly_pullspec(self, version) -> str:
+        version = version.rstrip("-nightly")
+        url = f'https://multi.ocp.releases.ci.openshift.org/api/v1/releasestream/{version}-0.nightly-multi/latest'
         response = requests.get(url)
         j = json.loads(response.content)
-        return self._create_json_version(version_string, j["downloadURL"])
+        return j["pullSpec"]
+
+    def get_ec_pullspec(self, version) -> str:
+        return f"quay.io/openshift-release-dev/ocp-release:{version}-multi"
 
     def _ensure_pod_started(self) -> None:
         lh = host.LocalHost()
@@ -115,7 +118,10 @@ class AssistedInstallerService():
             lh.run(f"podman pod rm {name}")
         else:
             print(f"{name} not yet running")
-        lh.run(f"podman play kube --configmap {self._config_map_path()} {self._pod_persistent_path()}")
+        r = lh.run(f"podman play kube --configmap {self._config_map_path()} {self._pod_persistent_path()}")
+        if r.returncode != 0:
+            print(r)
+            sys.exit(-1)
 
     def wait_for_api(self) -> None:
         print("Waiting for API to be ready...")
@@ -132,7 +138,7 @@ class AssistedInstallerService():
             count += 1
             time.sleep(2)
 
-    def start(self) -> None:
-        self._configure()
+    def start(self, version) -> None:
+        self._configure(version)
         self._ensure_pod_started()
         self.wait_for_api()

@@ -87,8 +87,6 @@ class ClustersConfig():
                 cc["postconfig"] = ""
             if "version" not in cc:
                 cc["version"] = "4.12.0-multi"
-            if not cc["version"].endswith("-multi"):
-                cc["version"] += "-multi"
             if "external_port" not in cc:
                 cc["external_port"] = "auto"
             if "network_api_port" not in cc:

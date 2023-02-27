@@ -365,6 +365,7 @@ class ClusterDeployer():
         cfg["cluster"] = cluster_name
         cfg["pull_secret"] = self._secrets_path
         cfg["cpu_architecture"] = "x86_64"
+        cfg["openshift_version"] = self._cc["version"]
         self._ai.ensure_infraenv_created(infra_env, cfg)
         self._ai.download_iso_with_retry(infra_env)
 
@@ -478,6 +479,7 @@ class ClusterDeployer():
         cfg["cluster"] = cluster_name
         cfg["pull_secret"] = self._secrets_path
         cfg["cpu_architecture"] = "x86_64"
+        cfg["openshift_version"] = self._cc["version"]
 
         self._ai.ensure_infraenv_created(infra_env_name, cfg)
 
@@ -550,6 +552,7 @@ class ClusterDeployer():
         cfg["cluster"] = cluster_name
         cfg["pull_secret"] = self._secrets_path
         cfg["cpu_architecture"] = "arm64"
+        cfg["openshift_version"] = self._cc["version"]
 
         self._ai.ensure_infraenv_created(infra_env_name, cfg)
 
