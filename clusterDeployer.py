@@ -379,8 +379,9 @@ class ClusterDeployer():
                                 self.local_host_config()["virsh_pool"])
 
         def cb():
-            if any(p.done() for p in futures):
-                raise Exception("Can't install VMs")
+            finished = [p for p in futures if p.done()]
+            if finished:
+                raise Exception(f"Can't install VMs {finished[0].result()}")
         names = (e["name"] for e in self._cc["masters"])
         self._wait_known_state(names, cb)
         self._ai.start_until_success(cluster_name)
