@@ -303,6 +303,7 @@ class ClusterDeployer():
                (len(self._cc["workers"]) > len(self._cc.worker_vms()))
 
     def deploy(self) -> None:
+        nfs.export(self._iso_path)
         if self._cc["masters"]:
             lh = host.LocalHost()
             if self.need_external_network() and not self._validate_external_port(lh):
@@ -424,7 +425,6 @@ class ClusterDeployer():
     def create_workers(self) -> None:
         is_bf = (x["type"] == "bf" for x in self._cc["workers"])
 
-        nfs.export(self._iso_path)
         if any(is_bf):
             if not all(is_bf):
                 print("Not yet supported to have mixed BF and non-bf workers")
