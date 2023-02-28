@@ -13,9 +13,11 @@ ed25519 instead.
 ssh-keygen -t ed25519 -a 64 -N '' -f ~/.ssh/id_ed25519
 ```
 
-## Install required software
+## Install required software and Python packages by starting a Python virtual environment
 ```
-dnf install -y libvirt podman qemu virt-install 
+python -m venv ocp-venv
+source ocp-venv/bin/activate
+./dependencies.sh
 systemctl enable libvirtd
 ```
 
@@ -25,11 +27,10 @@ sed -e 's/#\(user\|group\) = ".*"$/\1 = "root"/' -i /etc/libvirt/qemu.conf
 systemctl restart libvirtd
 ```
 
-## Install required Python packages (in a virtualenv)
+## Activate and deactivate Python virtual environment
 ```
-python -m venv ocp-venv
 source ocp-venv/bin/activate
-pip install -r requirements.txt
+...
 deactivate
 ```
 
