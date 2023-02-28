@@ -101,6 +101,7 @@ class RemoteHost(Host):
                 raise e
             except Exception as e:
                 print(type(e))
+                time.sleep(10)
                 continue
             print(f"connected to {self._hostname}")
             break
