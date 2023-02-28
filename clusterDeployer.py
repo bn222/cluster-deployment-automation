@@ -26,11 +26,11 @@ import glob
 
 
 def setup_vm(h: host.LocalHost, virsh_pool: VirshPool, cfg: dict, iso_path: str):
-    print("Creating static DHCP entry")
     name = cfg["name"]
     ip = cfg["ip"]
     mac = "52:54:"+":".join(re.findall("..", secrets.token_hex()[:8]))
     host_xml = f"<host mac='{mac}' name='{name}' ip='{ip}'/>"
+    print(f"Creating static DHCP entry for VM {name}")
     cmd = f"virsh net-update default add ip-dhcp-host \"{host_xml}\" --live --config"
     ret = h.run(cmd)
     if ret.err:
@@ -60,8 +60,12 @@ def setup_vm(h: host.LocalHost, virsh_pool: VirshPool, cfg: dict, iso_path: str)
         --disk pool={virsh_pool.name()},size={DISK_GB}
         --wait=-1
     """
+    print(f"Starting VM {name}")
     ret = h.run(cmd)
-    print(f"Finished running {cmd} with result {ret}")
+    if ret.returncode != 0:
+        print(f"Finished starting VM {name}, cmd = {cmd}, err=  error {ret}")
+    else:
+        print(f"Finished starting VM {name} without any errors")
     return ret
 
 
@@ -74,7 +78,6 @@ def setup_all_vms(h: host.LocalHost, vms, iso_path, virsh_pool) -> list:
     executor = ThreadPoolExecutor(max_workers=len(vms))
     futures = []
     for e in vms:
-        print(f"starting vm {e}")
         futures.append(executor.submit(setup_vm, h, virsh_pool, e, iso_path))
 
         while not h.vm_is_running(e["name"]) and not futures[-1].done():
