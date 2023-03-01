@@ -21,6 +21,7 @@ class ClusterInfo:
     def __init__(self, name: str):
         self.name = name
         self.provision_host = ""
+        self.network_api_port = ""
         self.workers = []  # type: List[str]
 
 
@@ -89,8 +90,10 @@ class ClustersConfig():
                 cc["version"] = "4.12.0-multi"
             if "external_port" not in cc:
                 cc["external_port"] = "auto"
-            if "network_api_port" not in cc:
+            if "network_api_port" not in cc or cc["network_api_port"] == "auto":
                 cc["network_api_port"] = "auto"
+                if self._clusters[self._current_host].network_api_port:
+                    cc["network_api_port"] = self._clusters[self._current_host].network_api_port
 
             if "hosts" not in cc:
               cc["hosts"] = []
@@ -149,6 +152,7 @@ class ClustersConfig():
                 continue
             if e[7] == "yes":
                 cluster.provision_host = e[0]
+                cluster.network_api_port = e[3]
             elif e[7] == "no":
                 cluster.workers.append(e[0])
         self._clusters = {x.provision_host : x for x in self._clusters}
