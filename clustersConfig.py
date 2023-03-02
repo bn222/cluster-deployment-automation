@@ -86,7 +86,7 @@ class ClustersConfig():
             if "postconfig" not in cc:
                 cc["postconfig"] = ""
             if "version" not in cc:
-                cc["version"] = "4.12.0-multi"
+                cc["version"] = "4.13.0-ec.3"
             if "external_port" not in cc:
                 cc["external_port"] = "auto"
             if "network_api_port" not in cc:
