@@ -41,6 +41,7 @@ def read_sheet() -> list:
             cred_path = e
     if cred_path is None:
         print("Missing credentials.json while using templated config file")
+        sys.exit(-1)
     credentials = ServiceAccountCredentials.from_json_keyfile_name(cred_path, scopes)
     file = gspread.authorize(credentials)
     sheet = file.open("ANL lab HW enablement clusters and connections")
@@ -90,10 +91,8 @@ class ClustersConfig():
                 cc["version"] = "4.13.0-ec.3"
             if "external_port" not in cc:
                 cc["external_port"] = "auto"
-            if "network_api_port" not in cc or cc["network_api_port"] == "auto":
+            if "network_api_port" not in cc:
                 cc["network_api_port"] = "auto"
-                if self._clusters[self._current_host].network_api_port:
-                    cc["network_api_port"] = self._clusters[self._current_host].network_api_port
 
             if "hosts" not in cc:
               cc["hosts"] = []
@@ -122,11 +121,16 @@ class ClustersConfig():
             self._ensure_clusters_loaded()
             return self._clusters[self._current_host].workers[a]
 
+        def api_network():
+            self._ensure_clusters_loaded()
+            return self._clusters[self._current_host].network_api_port
+
         format_string = contents
 
         template = jinja2.Template(format_string)
         template.globals['worker_number'] = worker_number
         template.globals['worker_name'] = worker_name
+        template.globals['api_network'] = api_network
 
         kwargs = {}
         kwargs["cluster_name"] = self.fullConfig["clusters"][0]["name"]
