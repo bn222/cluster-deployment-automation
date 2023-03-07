@@ -42,7 +42,7 @@ def setup_vm(h: host.LocalHost, virsh_pool: VirshPool, cfg: dict, iso_path: str)
 
     OS_VARIANT = "rhel8.5"
     RAM_MB = 32784
-    DISK_GB = 64
+    DISK_GB = 48
     CPU_CORE = 8
     network = "default"
 
@@ -57,7 +57,7 @@ def setup_vm(h: host.LocalHost, virsh_pool: VirshPool, cfg: dict, iso_path: str)
         --network=network:{network},mac={mac}
         --events on_reboot=restart
         --cdrom {iso_path}
-        --disk pool={virsh_pool.name()},size={DISK_GB}
+        --disk pool={virsh_pool.name()},size={DISK_GB},sparse=false
         --wait=-1
     """
     print(f"Starting VM {name}")
