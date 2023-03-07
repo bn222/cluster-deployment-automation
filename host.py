@@ -79,7 +79,7 @@ class RemoteHost(Host):
 
     def ssh_connect(self, username: str, id_rsa_path: Optional[str] = None) -> None:
         if id_rsa_path is None:
-            id_rsa_path = "/root/.ssh/id_rsa"
+            id_rsa_path = os.path.join(os.environ["HOME"], ".ssh/id_rsa")
         with open(id_rsa_path, "r") as f:
             self._id_rsa = f.read().strip()
         print(f"waiting for {self._hostname} to respond to ping")

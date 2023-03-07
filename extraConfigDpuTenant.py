@@ -89,7 +89,8 @@ class ExtraConfigDpuTenant:
         open("/tmp/envoverrides.yaml", "w").write(contents)
 
         iclient.oc("create -f /tmp/envoverrides.yaml")
-        iclient.oc("patch --type merge -p {\"spec\":{\"kubeConfigFile\":\"tenant-cluster-1-kubeconf\"}} OVNKubeConfig ovnkubeconfig-sample -n tenantcluster-dpu")
+        r = iclient.oc("patch --type merge -p {\"spec\":{\"kubeConfigFile\":\"tenant-cluster-1-kubeconf\"}} OVNKubeConfig ovnkubeconfig-sample -n tenantcluster-dpu")
+        print(r)
         print("Creating network attachement definition")
         tclient.oc("create -f manifests/tenant/nad.yaml")
 
