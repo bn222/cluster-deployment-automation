@@ -2,10 +2,12 @@ from k8sClient import K8sClient
 import os
 import host
 import time
+from common_patches import apply_common_pathches
 from extraConfigSriov import ExtraConfigSriov
 from extraConfigSriov import ExtraConfigSriovOvSHWOL
 import sys
 import jinja2
+
 
 class ExtraConfigDpuTenant:
     def __init__(self, cc):
@@ -14,6 +16,8 @@ class ExtraConfigDpuTenant:
     def run(self, cfg):
         print("Running post config step")
         tclient = K8sClient("/root/kubeconfig.tenantcluster")
+        create_nm_operator(tclient)
+        apply_common_pathches(tclient)
         print("Apply DPU tenant mc")
         tclient.oc("create -f manifests/tenant/dputenantmachineconfig.yaml")
         time.sleep(60)
@@ -105,12 +109,6 @@ class ExtraConfigDpuTenant:
         iclient = K8sClient("/root/kubeconfig.infracluster")
 
         # https://issues.redhat.com/browse/NHE-334
-        for e in iclient.get_nodes():
-            ip = iclient.get_ip(e)
-            rh = host.RemoteHost(ip)
-            rh.ssh_connect("core")
-            cmd = f"echo \'{self._cc['api_ip']} api.{self._cc['name']}.redhat.com\' | sudo tee -a /etc/hosts"
-            print(rh.run(cmd))
         iclient.oc(f"project tenantcluster-dpu")
         print(iclient.oc(f"create secret generic tenant-cluster-1-kubeconf --from-file=config={tclient._kc}"))
 
@@ -126,13 +124,19 @@ class ExtraConfigDpuTenant:
         open("/tmp/envoverrides.yaml", "w").write(contents)
 
         iclient.oc("create -f /tmp/envoverrides.yaml")
-        r = iclient.oc("patch --type merge -p {\"spec\":{\"kubeConfigFile\":\"tenant-cluster-1-kubeconf\"}} OVNKubeConfig ovnkubeconfig-sample -n tenantcluster-dpu")
+        r = iclient.oc(
+            "patch --type merge -p {\"spec\":{\"kubeConfigFile\":\"tenant-cluster-1-kubeconf\"}} OVNKubeConfig ovnkubeconfig-sample -n tenantcluster-dpu")
         print(r)
         print("Creating network attachement definition")
         tclient.oc("create -f manifests/tenant/nad.yaml")
 
         ec = ExtraConfigSriovOvSHWOL(self._cc)
         ec.ensure_pci_realloc(tclient, "dpu-host")
+
+
+def create_nm_operator(client: K8sClient):
+    print("Apply NMO subscription")
+    client.oc("create -f manifests/tenant/nmo-subscription.yaml")
 
 
 def main():
