@@ -124,9 +124,9 @@ class AssistedInstallerService():
             sys.exit(-1)
 
     def wait_for_api(self) -> None:
-        print("Waiting for API to be ready...")
-        response, count = 0, 0
         url = f"http://{self._ip}:8090/api/assisted-install/v2/clusters"
+        response, count = 0, 0
+        print(f"Waiting for API to be ready at {url}...")
         while response != 200:
             try:
                 response = get_url(url).status_code
