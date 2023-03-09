@@ -118,13 +118,21 @@ class CoreosBuilder():
                quay.io/coreos-assembler/coreos-assembler:latest
         """
 
-        print("running commands locally")
-        print(lh.run(cmd + " init /git"))
-        print(lh.run(cmd + " fetch"))
-        print(lh.run(cmd + " build"))
-        print(lh.run(cmd + " buildextend-metal"))
-        print(lh.run(cmd + " buildextend-metal4k"))
-        print(lh.run(cmd + " buildextend-live"))
+        def run_die(cmd):
+            r = lh.run(cmd)
+            if r.returncode != 0:
+                print("Building CoreOS failed while running:")
+                print(cmd)
+                print("output was:")
+                print(r)
+                sys.exit(-1)
+
+        run_die(cmd + " init /git")
+        run_die(cmd + " fetch")
+        run_die(cmd + " build")
+        run_die(cmd + " buildextend-metal")
+        run_die(cmd + " buildextend-metal4k")
+        run_die(cmd + " buildextend-live")
 
         embed_src = self._find_iso(fcos_dir)
         if embed_src is None:
