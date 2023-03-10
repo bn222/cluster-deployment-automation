@@ -310,7 +310,7 @@ class ClusterDeployer():
                 print(f"Can't find a valid external port, config is {self._cc['external_port']}")
                 sys.exit(-1)
             if self.need_api_network() and not self._validate_api_port(lh):
-                print("Can't find a valid network API port, config is {self._cc['network_api_port']}")
+                print(f"Can't find a valid network API port, config is {self._cc['network_api_port']}")
                 sys.exit(-1)
 
             if "pre" in self.args.steps:

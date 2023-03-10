@@ -69,6 +69,10 @@ class LocalHost(Host):
         with open(fn, "w") as f:
             f.write(contents)
 
+    def read_file(self, file_name: str) -> str:
+        with open(file_name) as f:
+            return f.read()
+
 
 class RemoteHost(Host):
     def __init__(self, hostname: str, bmc_user: Optional[str] = None, bmc_password: Optional[str] = None):
@@ -244,13 +248,13 @@ class RemoteHostWithBF2(RemoteHost):
         cmd = f"sudo podman run --pull always --replace --pid host --network host --user 0 --name {self._container_name} -dit --privileged -v /dev:/dev quay.io/bnemeth/bf"
         self.run(cmd)
 
-    def bf_pxeboot(self, iso_name: str, nfs_server: str) -> Result:
+    def bf_pxeboot(self, nfs_iso: str, nfs_key: str) -> Result:
         self.prep_container()
         print("mounting nfs inside container")
         cmd = "sudo killall python3"
         self.run(cmd)
         print("starting pxe server and booting bf")
-        cmd = f"sudo podman exec -it {self._container_name} /pxeboot {nfs_server}:/root/iso/{iso_name} -w {nfs_server}:/root/iso/ssh_priv_key"
+        cmd = f"sudo podman exec -it {self._container_name} /pxeboot {nfs_iso} -w {nfs_key}"
         return self.run(cmd)
 
     def bf_firmware_upgrade(self) -> None:
