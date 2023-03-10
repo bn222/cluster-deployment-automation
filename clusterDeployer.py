@@ -502,6 +502,34 @@ class ClusterDeployer():
         self.wait_for_workers()
 
     def _rename_workers(self, infra_env_name: str) -> None:
+        print("Waiting for connectivity to all workers")
+        hosts = []
+        for w in self._cc["workers"]:
+            rh = host.RemoteHost(w['ip'])
+            rh.ssh_connect("core")
+            hosts.append(rh)
+        print("Connectivity established to all workers, now checking that they have an IP in 192.168.122/24")
+
+        def addresses(h):
+            ret = []
+            for e in h.ipa():
+                if "addr_info" not in e:
+                    continue
+                for k in e["addr_info"]:
+                    ret.append(k["local"])
+            return ret
+
+        subnet = "192.168.122.0/24"
+
+        def addr_ok(a):
+            return common.ip_in_subnet(a, subnet)
+
+        for w, h in zip(self._cc["workers"], hosts):
+            if all(not addr_ok(a) for a in addresses(h)):
+                print(f'Worker {w["name"]} doesn\'t have an IP in {subnet}.')
+                sys.exit(-1)
+
+        print("Connectivity established to all workers, renaming them in Assited installer")
         print(f"looking for workers with ip {[w['ip'] for w in self._cc['workers']]}")
         while True:
             renamed = self._try_rename_workers(infra_env_name)
