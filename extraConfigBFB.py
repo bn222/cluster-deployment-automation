@@ -3,6 +3,7 @@ import coreosBuilder
 from concurrent.futures import ThreadPoolExecutor
 import common
 from k8sClient import K8sClient
+from nfs import NFS
 from extraConfigSriov import ExtraConfigSriov
 import time
 
@@ -28,8 +29,8 @@ class ExtraConfigBFB:
         coreosBuilder.ensure_fcos_exists()
         print("Loading BF-2 with BFB image on all workers")
         lh = host.LocalHost()
-        nfs_server = lh.ip(self._cc["external_port"])
-        iso_url = f"{nfs_server}:/root/iso/fedora-coreos.iso"
+        nfs = NFS(lh, self._cc["external_port"])
+        iso_url = nfs.host_file("/root/iso/fedora-coreos.iso")
 
         def helper(e) -> None:
             h = host.RemoteHostWithBF2(e["node"], e["bmc_user"], e["bmc_password"])

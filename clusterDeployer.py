@@ -10,7 +10,7 @@ import host
 import secrets
 import re
 from k8sClient import K8sClient
-import nfs
+from nfs import NFS
 import requests
 import socket
 import coreosBuilder
@@ -303,7 +303,6 @@ class ClusterDeployer():
                (len(self._cc["workers"]) > len(self._cc.worker_vms()))
 
     def deploy(self) -> None:
-        nfs.export(self._iso_path)
         if self._cc["masters"]:
             lh = host.LocalHost()
             if self.need_external_network() and not self._validate_external_port(lh):
@@ -565,11 +564,12 @@ class ClusterDeployer():
         print(f"trying to boot {host_name}")
 
         lh = host.LocalHost()
-        nfs_server = lh.ip(self._cc["external_port"])
+        nfs = NFS(lh, self._cc["external_port"])
 
         h = host.RemoteHostWithBF2(host_name, worker["bmc_user"], worker["bmc_password"])
 
-        h.boot_iso_redfish(f"{nfs_server}:/root/iso/{iso}")
+        iso = nfs.host_file(f"/root/iso/{iso}")
+        h.boot_iso_redfish(iso)
         h.ssh_connect("core")
         print("connected")
         print(h.run("hostname"))
@@ -663,7 +663,7 @@ class ClusterDeployer():
 
     def boot_iso_bf(self, worker: dict, iso: str) -> str:
         lh = host.LocalHost()
-        nfs_server = lh.ip(self._cc["external_port"])
+        nfs = NFS(lh, self._cc["external_port"])
 
         host_name = worker["node"]
         print(f"Preparing BF on host {host_name}")
@@ -681,11 +681,14 @@ class ClusterDeployer():
         if skip_boot:
             print(f"Skipping booting {host_name}, already booted with FCOS")
         else:
-            h.boot_iso_redfish(f"{nfs_server}:/root/iso/fedora-coreos.iso")
+            nfs_file = nfs.host_file("/root/iso/fedora-coreos.iso")
+            h.boot_iso_redfish(nfs_file)
             time.sleep(10)
             h.ssh_connect("core")
 
-        output = h.bf_pxeboot(iso, nfs_server)
+        nfs_iso = nfs.host_file(f"/root/iso/{iso}")
+        nfs_key = nfs.host_file("/root/iso/ssh_priv_key")
+        output = h.bf_pxeboot(nfs_iso, nfs_key)
         print(output)
         if output.returncode:
             print(f"Failed to run pxeboot on bf {host_name}")

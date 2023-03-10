@@ -55,7 +55,7 @@ def read_sheet() -> list:
 
 class ClustersConfig():
     def __init__(self, yamlPath: str):
-        self._clusters = None
+        self._clusters = []
 
         lh = host.LocalHost()
         # Run the hostname command and only take the first part. For example
@@ -139,9 +139,8 @@ class ClustersConfig():
         return t
 
     def _ensure_clusters_loaded(self) -> None:
-        if self._clusters is not None:
+        if self._clusters:
             return
-        self._clusters = []
 
         cluster = None
         print("loading cluster information")
