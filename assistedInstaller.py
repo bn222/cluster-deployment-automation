@@ -4,9 +4,7 @@ import os
 import json
 import ipaddress
 import requests
-
-def ip_in_subnet(addr, subnet) -> bool:
-    return ipaddress.ip_address(addr) in ipaddress.ip_network(subnet)
+import common
 
 class AssistedClientAutomation(AssistedClient):
     def __init__(self, url):
@@ -82,7 +80,7 @@ class AssistedClientAutomation(AssistedClient):
             for default_nic in default_nics:
                 nic_info = next(nic for nic in inventory.get('interfaces') if nic["name"] == default_nic)
                 addr = nic_info['ipv4_addresses'][0].split('/')[0]
-                if ip_in_subnet(addr, "192.168.122.0/24"):
+                if common.ip_in_subnet(addr, "192.168.122.0/24"):
                     return addr
         return None
 
