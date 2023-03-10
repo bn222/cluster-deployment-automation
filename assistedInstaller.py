@@ -43,7 +43,24 @@ class AssistedClientAutomation(AssistedClient):
             except Exception:
                 time.sleep(30)
 
+    def wait_cluster_ready(self, cluster_name: str):
+        print("Waiting for cluster state to be ready")
+        cur_state = None
+        while True:
+            new_state = self.cluster_state(cluster_name)
+            if new_state != cur_state:
+                print(f"Cluster state schanged to {new_state}")
+            cur_state = new_state
+            if cur_state == "ready":
+                break
+            time.sleep(10)
+
+    def cluster_state(self, cluster_name: str):
+        cluster = list(filter(lambda e: e["name"] == cluster_name, self.list_clusters()))
+        return cluster[0]["status"]
+
     def start_until_success(self, cluster_name: str):
+        self.wait_cluster_ready(cluster_name)
         print(f"Starting cluster {cluster_name} (will retry until success)")
         tries = 0
         while True:
