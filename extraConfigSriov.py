@@ -94,13 +94,25 @@ class ExtraConfigSriovOvSHWOL:
             rh = host.RemoteHost(ip)
             rh.ssh_connect("core")
             result = rh.run("cat /var/lib/ovnk/iface_default_hint").out.strip()
-            print(f"Found PF Name {result} on node {name}")
-            if result not in pfNamesAll:
+            if result:
+                print(f"Found PF Name {result} on node {name}")
+            else:
+                print(f"Cannot find PF Name on node {name} using hint")
+                interface_list = rh.run("sudo ovs-vsctl list-ifaces br-ex").out.strip().split("\n")
+                result = [x for x in interface_list if "patch" not in x]
+                result = result[0]
+                if result:
+                    print(f"Found PF Name {result} on node {name}")
+                else:
+                    print(f"Cannot find PF Name on node {name} using ovs-vsctl")
+            if result and result not in pfNamesAll:
                 pfNamesAll.append(result)
 
         # Just in case we don't get any PFs
         if not pfNamesAll:
-            pfNamesAll.append("ens1f0")
+            fallback = "ens1f0"
+            pfNamesAll.append(fallback)
+            print(f"PF Name is not found on any nodes... adding {fallback} as fallback.")
 
         with open('./manifests/nicmode/sriov-node-policy.yaml.j2') as f:
             j2_template = jinja2.Template(f.read())
