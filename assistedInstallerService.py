@@ -124,6 +124,11 @@ class AssistedInstallerService():
             sys.exit(-1)
 
     def wait_for_api(self) -> None:
+        lh = host.LocalHost()
+        if "virbr0" not in lh.all_ports():
+            print("Can't find virbr0. Make sure that libvirtd is running.")
+            sys.exit(-1)
+
         url = f"http://{self._ip}:8090/api/assisted-install/v2/clusters"
         response, count = 0, 0
         print(f"Waiting for API to be ready at {url}...")
