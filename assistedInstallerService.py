@@ -125,7 +125,9 @@ class AssistedInstallerService():
 
     def wait_for_api(self) -> None:
         lh = host.LocalHost()
-        if "virbr0" not in lh.all_ports():
+        virbr0_present= list(filter(lambda x: x["ifname"] == "virbr0", lh.all_ports()))
+
+        if not virbr0_present:
             print("Can't find virbr0. Make sure that libvirtd is running.")
             sys.exit(-1)
 
