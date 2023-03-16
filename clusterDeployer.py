@@ -648,7 +648,7 @@ class ClusterDeployer():
     def _update_etc_hosts(self) -> None:
         cluster_name = self._cc["name"]
         api_name = f"api.{cluster_name}.redhat.com"
-        api_ip = self._cc["api_ip"]
+        api_ip = self._ai.info_cluster(cluster_name).api_vip
         found = False
         etchost = ""
         with open("/etc/hosts", "r") as f:
