@@ -6,6 +6,7 @@ from k8sClient import K8sClient
 from nfs import NFS
 from extraConfigSriov import ExtraConfigSriov
 import time
+import sys
 
 """
 The "ExtraConfigBFB" is used to put the BF2 in a known good state. This is achieved by
@@ -34,19 +35,20 @@ class ExtraConfigBFB:
 
         def helper(e) -> None:
             h = host.RemoteHostWithBF2(e["node"], e["bmc_user"], e["bmc_password"])
+
+            def check(result: host.Result):
+                if result.returncode != 0:
+                    print(result)
+                    sys.exit(-1)
+
             h.boot_iso_redfish(iso_url)
             h.ssh_connect("core")
-            h.prep_container()
-            print("updating firmware")
-            h.bf_firmware_upgrade()
-            print("setting firmware config to defaults")
-            h.bf_firmware_defaults()
+            check(h.bf_firmware_upgrade())
+            check(h.bf_firmware_defaults())
             h.cold_boot()
             h.boot_iso_redfish(iso_url)
             h.ssh_connect("core")
-            h.prep_container()
-            print("loading bfb image")
-            h.bf_load_bfb()
+            check(h.bf_load_bfb())
 
         executor = ThreadPoolExecutor(max_workers=len(self._cc["workers"]))
         futures = []

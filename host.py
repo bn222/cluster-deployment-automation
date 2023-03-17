@@ -242,47 +242,40 @@ class RemoteHost(Host):
 
 
 class RemoteHostWithBF2(RemoteHost):
-    def prep_container(self) -> None:
-        self._container_name = "bf"
+    def run_in_container(self, cmd: str, interactive: bool = False) -> Result:
+        name = "bf"
         print("starting container")
-        cmd = f"sudo podman run --pull always --replace --pid host --network host --user 0 --name {self._container_name} -dit --privileged -v /dev:/dev quay.io/bnemeth/bf"
-        self.run(cmd)
+        setup = f"sudo podman run --pull always --replace --pid host --network host --user 0 --name {name} -dit --privileged -v /dev:/dev quay.io/bnemeth/bf"
+        r = self.run(setup)
+        if r.returncode != 0:
+            return r
+        it = "-it" if interactive else ""
+        return self.run(f"sudo podman exec {it} {name} {cmd}")
 
     def bf_pxeboot(self, nfs_iso: str, nfs_key: str) -> Result:
-        self.prep_container()
-        print("mounting nfs inside container")
         cmd = "sudo killall python3"
         self.run(cmd)
         print("starting pxe server and booting bf")
-        cmd = f"sudo podman exec -it {self._container_name} /pxeboot {nfs_iso} -w {nfs_key}"
-        return self.run(cmd)
+        cmd = f"/pxeboot {nfs_iso} -w {nfs_key}"
+        return self.run_in_container(cmd, True)
 
-    def bf_firmware_upgrade(self) -> None:
-        self.prep_container()
-        cmd = f"sudo podman exec {self._container_name} /fwup"
-        self.run(cmd)
+    def bf_firmware_upgrade(self) -> Result:
+        print("Upgrading firmware")
+        return self.run_in_container("/fwup")
 
-    def bf_firmware_defaults(self) -> None:
-        self.prep_container()
-        cmd = f"sudo podman exec {self._container_name} /fwdefaults"
-        self.run(cmd)
+    def bf_firmware_defaults(self) -> Result:
+        print("Setting firmware config to defaults")
+        return self.run_in_container("/fwdefaults")
 
-    def bf_set_mode(self, mode: str) -> None:
-        self.prep_container()
-        cmd = f"sudo podman exec {self._container_name} /set_mode {mode}"
-        self.run(cmd)
+    def bf_set_mode(self, mode: str) -> Result:
+        return self.run_in_container(f"/set_mode {mode}")
 
-    def bf_get_mode(self) -> None:
-        self.prep_container()
-        cmd = f"sudo podman exec {self._container_name} /get_mode"
-        self.run(cmd)
+    def bf_get_mode(self) -> Result:
+        return self.run_in_container("/getmode")
 
-    def bf_firmware_version(self) -> None:
-        self.prep_container()
-        cmd = f"sudo podman exec {self._container_name} /fwversion"
-        self.run(cmd)
+    def bf_firmware_version(self) -> Result:
+        return self.run_in_container("fwversion")
 
-    def bf_load_bfb(self) -> None:
-        self.prep_container()
-        cmd = f"sudo podman exec {self._container_name} /bfb"
-        self.run(cmd)
+    def bf_load_bfb(self) -> Result:
+        print("Loading BFB image")
+        return self.run_in_container("/bfb")
