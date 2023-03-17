@@ -158,6 +158,7 @@ class ClustersConfig():
                 cluster.network_api_port = e[3]
             elif e[7] == "no":
                 cluster.workers.append(e[0])
+        self._clusters.append(cluster)
         self._clusters = {x.provision_host : x for x in self._clusters}
 
     def print(self) -> None:
