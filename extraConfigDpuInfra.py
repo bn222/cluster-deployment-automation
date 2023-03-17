@@ -40,15 +40,21 @@ def install_remotelyh(ip, links):
 
     print("result:", rh.run("sudo rpm-ostree"))
 
+    current_kernel = rh.run("uname -a | awk {'print $3'}").out
     cmd = f"sudo rpm-ostree override replace {wd}/*.rpm"
     print(cmd)
     while True:
-        ret = rh.run(cmd).out.strip().split("\n")
-        if ret and ret[-1] == 'Run "systemctl reboot" to start a reboot':
+        out, err, ret = rh.run(cmd)
+        out = out.strip().split("\n")
+        if out and out[-1] == 'Run "systemctl reboot" to start a reboot':
             break
         else:
-            print(ret)
-            print("Output was something unexpected")
+            print(out)
+            print(err)
+            if f"cannot install both kernel-core-{want} and kernel-core-{current_kernel}" in err:
+                cmd = f"sudo rpm-ostree override replace {wd}/*.rpm --remove=kernel-modules-core-{current_kernel}"
+
+
 
     rh.run("sudo systemctl reboot")
     time.sleep(10)
