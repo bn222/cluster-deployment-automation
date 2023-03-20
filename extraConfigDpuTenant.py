@@ -84,7 +84,7 @@ class ExtraConfigDpuTenant:
         contents = open("manifests/tenant/setenvovnkube.yaml").read()
         for e in cfg["mapping"]:
             a = {}
-            a["OVNKUBE_NODE_MGMT_PORT_NETDEV"] = "ens1f0v0"
+            a["OVNKUBE_NODE_MGMT_PORT_NETDEV"] = f"{bf_port}v0"
             contents += f"  {e['worker']}: |\n"
             for (k, v) in a.items():
                 contents += f"    {k}={v}\n"
