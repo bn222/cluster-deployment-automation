@@ -213,6 +213,9 @@ class ClusterDeployer():
             else:
                 print(lh.run(f"ip link set {intif} nomaster"))
 
+        if os.path.exists(self._cc["kubeconfig"]):
+            os.remove(self._cc["kubeconfig"])
+
     def _validate_external_port(self, lh) -> Optional[str]:
         # do automatic detection, if needed
         if self._cc["external_port"] == "auto":
