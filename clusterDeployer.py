@@ -302,8 +302,16 @@ class ClusterDeployer():
         return ("workers" in self.args.steps) and \
                (len(self._cc["workers"]) > len(self._cc.worker_vms()))
 
+    def _is_sno_configuration(self) -> bool:
+        return len(self._cc["masters"]) == 1 and len(self._cc["workers"]) == 0
+
     def deploy(self) -> None:
         if self._cc["masters"]:
+            if self._is_sno_configuration():
+                print("Setting up a Single Node OpenShift (SNO) environment.")
+                self._cc["api_ip"] = self._cc["masters"][0]["ip"]
+                self._cc["ingress_ip"] = self._cc["masters"][0]["ip"]
+
             lh = host.LocalHost()
             if self.need_external_network() and not self._validate_external_port(lh):
                 print(f"Can't find a valid external port, config is {self._cc['external_port']}")
@@ -354,6 +362,7 @@ class ClusterDeployer():
         cfg["vip_dhcp_allocation"] = False
         cfg["additional_ntp_source"] = "clock.redhat.com"
         cfg["base_dns_domain"] = "redhat.com"
+        cfg["sno"] = self._is_sno_configuration()
 
         print("Creating cluster")
         print(cfg)

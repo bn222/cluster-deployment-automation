@@ -96,6 +96,19 @@ clusters:
 EOF
 ```
 
+## Generate a vm Single Node OpenShift (SNO) cluster configuration file (3)
+```
+cat > cluster.yaml << EOF
+clusters:
+  - name : "vm-sno"
+    masters:
+    - name: "sno-master"
+      type: "vm"
+      node: "localhost"
+      ip: "192.168.122.41"
+EOF
+```
+
 ## Start the installation
 ```
 source ocp-venv/bin/activate
