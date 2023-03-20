@@ -81,26 +81,49 @@ class RemoteHost(Host):
         self._bmc_password = bmc_password
         self.auto_reconnect = False
 
-    def ssh_connect(self, username: str, id_rsa_path: Optional[str] = None) -> None:
+    def ssh_connect(self, username: str, id_rsa_path: Optional[str] = None,
+                    id_ed25519_path: Optional[str] = None) -> None:
         if id_rsa_path is None:
             id_rsa_path = os.path.join(os.environ["HOME"], ".ssh/id_rsa")
+        if id_ed25519_path is None:
+            id_ed25519_path = os.path.join(os.environ["HOME"], ".ssh/id_ed25519")
         with open(id_rsa_path, "r") as f:
             self._id_rsa = f.read().strip()
+        try:
+            with open(id_ed25519_path, "r") as f:
+                self._id_ed25519 = f.read().strip()
+        except FileNotFoundError:
+            self._id_ed25519 = None
         print(f"waiting for {self._hostname} to respond to ping")
         self.wait_ping()
         print(f"{self._hostname} responded to ping, trying to connect")
         self.ssh_connect_looped(username)
 
     def ssh_connect_looped(self, username: str) -> None:
+        try:
+            pkey = paramiko.RSAKey.from_private_key(io.StringIO(self._id_rsa))
+        except paramiko.ssh_exception.PasswordRequiredException:
+            if not self._id_ed25519:
+                raise
+            else:
+                pkey = paramiko.Ed25519Key.from_private_key(io.StringIO(
+                    self._id_ed25519))
+
         while True:
             self._username = username
             self._host = paramiko.SSHClient()
             self._host.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            self._pkey = paramiko.RSAKey.from_private_key(io.StringIO(self._id_rsa))
 
             try:
-                self._host.connect(self._hostname, username=username, pkey=self._pkey)
+                self._host.connect(self._hostname, username=username,
+                                   pkey=pkey)
             except paramiko.ssh_exception.AuthenticationException as e:
+                if pkey.get_name() != "ssh-ed25519" and self._id_ed25519:
+                    print("Retry connect with es25519.")
+                    pkey = paramiko.Ed25519Key.from_private_key(io.StringIO(
+                        self._id_ed25519))
+                    continue
+
                 print(type(e))
                 raise e
             except Exception as e:
