@@ -1,10 +1,11 @@
-
 from k8sClient import K8sClient
 import os
 import host
 import time
 from extraConfigSriov import ExtraConfigSriov
 from extraConfigSriov import ExtraConfigSriovOvSHWOL
+import sys
+import jinja2
 
 class ExtraConfigDpuTenant:
     def __init__(self, cc):
@@ -27,9 +28,45 @@ class ExtraConfigDpuTenant:
         ec.run(cfg)
         print("Waiting for mcp dpu-host to become ready")
         tclient.oc("wait mcp dpu-host --for condition=updated --timeout=50m")
+
+        first_worker = self._cc["workers"][0]['name']
+        ip = tclient.get_ip(first_worker)
+        if ip is None:
+            sys.exit(-1)
+        rh = host.RemoteHost(ip)
+        rh.ssh_connect("core")
+        bf = [x for x in rh.run("lspci").out.split("\n") if "BlueField" in x]
+        if not bf:
+            print(f"Couldn't find BF on {first_worker}")
+            sys.exit(-1)
+        bf = bf[0].split(" ")[0]
+
+        print(f"BF is at {bf}")
+
+        bf_port = None
+        for port in rh.all_ports():
+            ret = rh.run(f'ethtool -i {port["ifname"]}')
+            if ret.returncode != 0:
+                continue
+
+            d = {}
+            for e in ret.out.strip().split("\n"):
+                key, value = e.split(":", 1)
+                d[key] = value
+            if d["bus-info"].endswith(bf):
+                bf_port = port["ifname"]
+        print(bf_port)
+
+        with open("manifests/tenant/SriovNetworkNodePolicy.yaml") as f:
+            j2_template = jinja2.Template(f.read())
+            rendered = j2_template.render(bf_port=bf_port, bf_addr=bf)
+
+        with open("/tmp/a.yaml", "w") as f:
+            f.write(rendered)
+
         print("Creating sriov pool config")
         tclient.oc("create -f manifests/tenant/sriov-pool-config.yaml")
-        tclient.oc("create -f manifests/tenant/SriovNetworkNodePolicy.yaml")
+        tclient.oc("create -f /tmp/a.yaml")
         print("Waiting for mcp to be updated")
         time.sleep(60)
         tclient.oc("wait mcp dpu-host --for condition=updated --timeout=50m")

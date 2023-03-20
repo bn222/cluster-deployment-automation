@@ -12,6 +12,5 @@ spec:
   nicSelector:
     vendor: "15b3"
     deviceId: "a2d6"
-    pfNames: ['ens1f0#1-15']
-    rootDevices: ['0000:3b:00.0']
-
+    pfNames: ['{{bf_port}}#1-15']
+    rootDevices: ['0000:{{bf_addr}}']
