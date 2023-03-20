@@ -55,7 +55,7 @@ def install_remotelyh(ip, links):
     rh.ssh_connect("core")
     return want in rh.run("uname -a").out
 
-def install_custom_kernel(ips):
+def install_custom_kernel(lh, client, bf_names, ips):
     print(f"Installing custom kernel on {ips}")
     links = [
       "https://s3.upshift.redhat.com/DH-PROD-CKI/internal-artifacts/696717272/build%20aarch64/3333360250/artifacts/kernel-core-4.18.0-372.35.1.el8_6.mr3440_221116_1544.aarch64.rpm",
@@ -81,6 +81,15 @@ def install_custom_kernel(ips):
             print("finished installing custom kernels")
             break
 
+    for bf, ip in zip(bf_names, ips):
+        if ip is None:
+            sys.exit(-1)
+        rh = host.RemoteHost(ip)
+        rh.ssh_connect("core")
+
+        def cb():
+            host.sync_time(lh, rh)
+        client.wait_ready(bf, cb)
 
 def run_dpu_network_operator_git(lh, kc):
     repo_dir = "/root/dpu-network-operator"
@@ -138,16 +147,7 @@ class ExtraConfigDpuInfra:
             client.wait_ready(bf, cb)
 
         # workaround, this will reboot the BF
-        install_custom_kernel(ips)
-        for bf, ip in zip(bf_names, ips):
-            if ip is None:
-                sys.exit(-1)
-            rh = host.RemoteHost(ip)
-            rh.ssh_connect("core")
-
-            def cb():
-                host.sync_time(lh, rh)
-            client.wait_ready(bf, cb)
+        # install_custom_kernel(lh, client, bf_names, ips)
 
         lh.run("dnf install -y golang")
 
