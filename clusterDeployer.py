@@ -145,7 +145,7 @@ class ClusterDeployer():
 
         lh = host.LocalHost()
         for m in self._cc.local_vms():
-            assert(m["node"] == "localhost")
+            assert m["node"] == "localhost"
             images_path = self.local_host_config()["virsh_pool"].images_path()
             name = m["name"]
             image = f"/{images_path}/{name}.qcow2"
@@ -221,7 +221,7 @@ class ClusterDeployer():
         if self._cc["external_port"] == "auto":
             self._cc["external_port"] = lh.port_from_route("default")
             if not self._cc["external_port"]:
-                 return None
+                return None
 
         # check that the interface really exists
         extif = self._cc["external_port"]
