@@ -6,6 +6,7 @@ import xml.etree.ElementTree as et
 import shutil
 from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
+from clustersConfig import ClustersConfig
 import host
 import secrets
 import re
@@ -85,6 +86,28 @@ def setup_all_vms(h: host.LocalHost, vms, iso_path, virsh_pool) -> list:
 
     return futures
 
+
+class ExtraConfigRunner():
+    def __init__(self, cc: ClustersConfig):
+        ec = {
+            "bf_bfb_image": ExtraConfigBFB(cc),
+            "switch_to_nic_mode": ExtraConfigSwitchNicMode(cc),
+            "sriov_network_operator": ExtraConfigSriov(cc),
+            "sriov_ovs_hwol": ExtraConfigSriovOvSHWOL(cc),
+            "dpu_infra": ExtraConfigDpuInfra(cc),
+            "dpu_tenant": ExtraConfigDpuTenant(cc),
+            "ovnk8s": ExtraConfigOvnK(cc),
+        }
+        self._extra_config = ec
+
+    def run(self, to_run):
+        if to_run["name"] not in self._extra_config:
+            print(f"{to_run['name']} is not an extra config")
+            sys.exit(-1)
+        else:
+            print(f"running extra config {to_run['name']}")
+            self._extra_config[to_run['name']].run(to_run)
+
 class ClusterDeployer():
     def __init__(self, cc, ai, args, secrets_path: str):
         self._client = None
@@ -94,7 +117,7 @@ class ClusterDeployer():
         self._secrets_path = secrets_path
         self._iso_path = "/root/iso"
         os.makedirs(self._iso_path, exist_ok=True)
-        self._extra_config = {}
+        self._extra_config = ExtraConfigRunner(cc)
 
         pool_name = f"{self._cc['name']}_guest_images"
         for e in self._cc["hosts"]:
@@ -257,22 +280,7 @@ class ClusterDeployer():
     def _prepost_config(self, to_run) -> None:
         if not to_run:
             return
-
-        if not self._extra_config:
-            self._extra_config["bf_bfb_image"] = ExtraConfigBFB(self._cc)
-            self._extra_config["switch_to_nic_mode"] = ExtraConfigSwitchNicMode(self._cc)
-            self._extra_config["sriov_network_operator"] = ExtraConfigSriov(self._cc)
-            self._extra_config["sriov_ovs_hwol"] = ExtraConfigSriovOvSHWOL(self._cc)
-            self._extra_config["dpu_infra"] = ExtraConfigDpuInfra(self._cc)
-            self._extra_config["dpu_tenant"] = ExtraConfigDpuTenant(self._cc)
-            self._extra_config["ovnk8s"] = ExtraConfigOvnK(self._cc)
-
-        if to_run["name"] not in self._extra_config:
-            print(f"{to_run['name']} is not an extra config")
-            sys.exit(-1)
-        else:
-            print(f"running extra config {to_run['name']}")
-            self._extra_config[to_run['name']].run(to_run)
+        self._extra_config.run(to_run)
 
     def need_api_network(self):
         return len(self._cc.local_vms()) != len(self._cc.all_nodes())
