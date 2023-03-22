@@ -256,7 +256,7 @@ class ClusterDeployer():
     def _validate_api_port(self, lh) -> Optional[str]:
         if self._cc["network_api_port"] == "auto":
             def carrier_no_addr(intf):
-                return not intf["addr_info"] and not "NO-CARRIER" in intf["flags"]
+                return not intf["addr_info"] and "NO-CARRIER" not in intf["flags"]
 
             intif = common.first(carrier_no_addr, lh.ipa())
             if not intif:
