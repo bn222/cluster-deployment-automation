@@ -188,9 +188,10 @@ class ClusterDeployer():
         xml_str = lh.run("virsh net-dumpxml default").out
         q = et.fromstring(xml_str)
         removed_macs = []
+        names = [x["name"] for x in self._cc.local_vms()]
+        ips = [x["ip"] for x in self._cc.local_vms()]
         for e in q[-1][0][1:]:
-            if (e.attrib["name"] in [x["name"] for x in self._cc.local_vms()] or
-                e.attrib["ip"] in [x["ip"] for x in self._cc.local_vms()]):
+            if e.attrib["name"] in names or e.attrib["ip"] in ips:
                 mac = e.attrib["mac"]
                 name = e.attrib["name"]
                 ip = e.attrib["ip"]
