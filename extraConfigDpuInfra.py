@@ -195,7 +195,7 @@ class ExtraConfigDpuInfra:
                 rh = host.RemoteHost(ip)
                 rh.ssh_connect("core")
                 result = rh.run("sudo ovs-vsctl show")
-                good[b] = "enp3s0f0nc1pf0" in result.out
+                good[b] = "c1pf0hpf" in result.out
                 if not good[b]:
                     print(f"Applying workaround (NHE-325) to {b}")
                     rh.run("sudo systemctl restart ovs-configuration")
