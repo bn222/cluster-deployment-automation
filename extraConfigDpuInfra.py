@@ -6,6 +6,8 @@ from k8sClient import K8sClient
 import os
 import sys
 import shutil
+from common_patches import apply_common_pathches
+
 
 def install_remotely(ip, links):
     try:
@@ -132,6 +134,7 @@ class ExtraConfigDpuInfra:
         kc = "/root/kubeconfig.infracluster"
         client = K8sClient(kc)
         lh = host.LocalHost()
+        apply_common_pathches(client)
 
         bf_names = [x["name"] for x in self._cc["workers"] if x["type"] == "bf"]
         ips = [client.get_ip(e) for e in bf_names]
