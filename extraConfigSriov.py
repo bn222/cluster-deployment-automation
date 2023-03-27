@@ -3,18 +3,21 @@ from k8sClient import K8sClient
 import os
 from git import Repo
 import time
+from concurrent.futures import Future
 from clustersConfig import ClustersConfig
 from arguments import parse_args
 import shutil
 import jinja2
 import sys
+from typing import Dict
 
 
 class ExtraConfigSriov:
     def __init__(self, cc):
         self._cc = cc
 
-    def run(self, _):
+    def run(self, _, futures: Dict[str, Future]) -> None:
+        [f.result() for (_, f) in futures.items()]
         client = K8sClient(self._cc["kubeconfig"])
         lh = host.LocalHost()
         repo_dir = "/root/sriov-network-operator"

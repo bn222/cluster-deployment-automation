@@ -5,6 +5,8 @@ import common
 from k8sClient import K8sClient
 from nfs import NFS
 from extraConfigSriov import ExtraConfigSriov
+from concurrent.futures import Future
+from typing import Dict
 import time
 import sys
 
@@ -26,7 +28,7 @@ class ExtraConfigBFB:
     def __init__(self, cc):
         self._cc = cc
 
-    def run(self, _) -> None:
+    def run(self, _, futures: Dict[str, Future]) -> None:
         coreosBuilder.ensure_fcos_exists()
         print("Loading BF-2 with BFB image on all workers")
         lh = host.LocalHost()
@@ -51,20 +53,19 @@ class ExtraConfigBFB:
             check(h.bf_load_bfb())
 
         executor = ThreadPoolExecutor(max_workers=len(self._cc["workers"]))
-        futures = []
         # Assuming that all workers have BF that need to reset to bfb image in
         # dpu mode
         for e in self._cc["workers"]:
+            futures[e["name"]].result()
             f = executor.submit(helper, e)
-            futures.append(f)
-        [f.result() for f in futures]
+            futures[e["name"]] = f
 
 
 class ExtraConfigSwitchNicMode:
     def __init__(self, cc):
         self._cc = cc
 
-    def run(self, _) -> None:
+    def run(self, _, futures: Dict[str, Future]) -> None:
         client = K8sClient(self._cc["kubeconfig"])
 
         ec = ExtraConfigSriov(self._cc)

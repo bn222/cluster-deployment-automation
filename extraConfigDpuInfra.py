@@ -3,10 +3,12 @@ import host
 import time
 from git import Repo
 from k8sClient import K8sClient
+from concurrent.futures import Future
 import os
 import sys
 import shutil
 from common_patches import apply_common_pathches
+from typing import Dict
 
 
 def install_remotely(ip, links):
@@ -101,14 +103,14 @@ def run_dpu_network_operator_git(lh, kc):
         print(f"Repo exists at {repo_dir}, deleting it")
         shutil.rmtree(repo_dir)
     print(f"Cloning repo to {repo_dir}")
-    Repo.clone_from(url, repo_dir, branch='master')
+    Repo.clone_from(url, repo_dir, branch='wip2')
 
     cur_dir = os.getcwd()
     os.chdir(repo_dir)
     lh.run("rm -rf bin")
     env = os.environ.copy()
     env["KUBECONFIG"] = kc
-    env["IMG"] = "quay.io/bnemeth/dpu-network-operator"
+    env["IMG"] = "quay.io/bnemeth/dpu-network-operator:wip6"
     # cleanup first, to make this script idempotent
     print("running make undeploy")
     print(lh.run("make undeploy", env))
@@ -130,7 +132,8 @@ class ExtraConfigDpuInfra:
     def __init__(self, cc):
         self._cc = cc
 
-    def run(self, _):
+    def run(self, _, futures: Dict[str, Future]) -> None:
+        [f.result() for (_, f) in futures.items()]
         kc = "/root/kubeconfig.infracluster"
         client = K8sClient(kc)
         lh = host.LocalHost()
@@ -174,6 +177,9 @@ class ExtraConfigDpuInfra:
 
         print("Creating OVNKubeConfig cr")
         client.oc("create -f manifests/infra/ovnkubeconfig.yaml")
+
+        print("Patching mcp setting maxUnavailable to 2")
+        client.oc("patch mcp dpu --type=json -p=\[\{\"op\":\"replace\",\"path\":\"/spec/maxUnavailable\",\"value\":2\}\]")
 
         print("Labeling nodes")
         for b in bf_names:

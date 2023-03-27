@@ -3,8 +3,10 @@ import os
 import host
 import time
 from common_patches import apply_common_pathches
+from concurrent.futures import Future
 from extraConfigSriov import ExtraConfigSriov
 from extraConfigSriov import ExtraConfigSriovOvSHWOL
+from typing import Dict
 import sys
 import jinja2
 
@@ -13,7 +15,8 @@ class ExtraConfigDpuTenant:
     def __init__(self, cc):
         self._cc = cc
 
-    def run(self, cfg):
+    def run(self, cfg, futures: Dict[str, Future]) -> None:
+        [f.result() for (_, f) in futures.items()]
         print("Running post config step")
         tclient = K8sClient("/root/kubeconfig.tenantcluster")
         create_nm_operator(tclient)
@@ -23,13 +26,17 @@ class ExtraConfigDpuTenant:
         time.sleep(60)
         print("Waiting for mcp to be updated")
         tclient.oc("wait mcp dpu-host --for condition=updated")
+
+        print("Patching mcp setting maxUnavailable to 2")
+        tclient.oc("patch mcp dpu-host--type=json -p=\[\{\"op\":\"replace\",\"path\":\"/spec/maxUnavailable\",\"value\":2\}\]")
+
         print("Labeling nodes")
         for e in self._cc["workers"]:
             cmd = f"label node {e['name']} node-role.kubernetes.io/dpu-host="
             print(tclient.oc(cmd))
         print("Deploying sriov network operator")
         ec = ExtraConfigSriov(self._cc)
-        ec.run(cfg)
+        ec.run(cfg, futures)
         print("Waiting for mcp dpu-host to become ready")
         tclient.oc("wait mcp dpu-host --for condition=updated --timeout=50m")
 

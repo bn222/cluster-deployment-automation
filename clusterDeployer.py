@@ -5,7 +5,9 @@ import json
 import xml.etree.ElementTree as et
 import shutil
 from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future
 from typing import Optional
+from typing import Dict
 from clustersConfig import ClustersConfig
 import host
 import secrets
@@ -100,13 +102,13 @@ class ExtraConfigRunner():
         }
         self._extra_config = ec
 
-    def run(self, to_run):
+    def run(self, to_run, futures: Dict[str, Future]) -> None:
         if to_run["name"] not in self._extra_config:
             print(f"{to_run['name']} is not an extra config")
             sys.exit(-1)
         else:
             print(f"running extra config {to_run['name']}")
-            self._extra_config[to_run['name']].run(to_run)
+            self._extra_config[to_run['name']].run(to_run, futures)
 
 class ClusterDeployer():
     def __init__(self, cc, ai, args, secrets_path: str):
@@ -128,7 +130,12 @@ class ClusterDeployer():
 
             e["virsh_pool"] = VirshPool(h, pool_name, e["images_path"])
 
-        self._futures = {}
+        def empty():
+            f = Future()
+            f.set_result(None)
+            return f
+
+        self._futures = {e["name"]: empty() for e in self._cc.all_nodes()}
 
     def local_host_config(self):
         return next(e for e in self._cc["hosts"] if e["name"] == "localhost")
@@ -281,7 +288,7 @@ class ClusterDeployer():
     def _prepost_config(self, to_run) -> None:
         if not to_run:
             return
-        self._extra_config.run(to_run)
+        self._extra_config.run(to_run, self._futures)
 
     def need_api_network(self):
         return len(self._cc.local_vms()) != len(self._cc.all_nodes())
@@ -381,6 +388,8 @@ class ClusterDeployer():
         self._ai.create_cluster(cluster_name, cfg)
 
     def create_masters(self) -> None:
+        for e in self._cc["masters"]:
+            self._futures[e["name"]].result()
         cluster_name = self._cc["name"]
         infra_env = f"{cluster_name}-x86"
         print(f"Ensuring infraenv {infra_env} exists.")
@@ -444,6 +453,8 @@ class ClusterDeployer():
             time.sleep(5)
 
     def create_workers(self) -> None:
+        for e in self._cc["workers"]:
+            self._futures[e["name"]].result()
         is_bf = (x["type"] == "bf" for x in self._cc["workers"])
 
         if any(is_bf):
