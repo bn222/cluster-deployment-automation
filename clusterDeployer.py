@@ -19,7 +19,7 @@ import socket
 import coreosBuilder
 from extraConfigBFB import ExtraConfigBFB, ExtraConfigSwitchNicMode
 from extraConfigSriov import ExtraConfigSriov, ExtraConfigSriovOvSHWOL
-from extraConfigDpuTenant import ExtraConfigDpuTenant
+from extraConfigDpuTenant import ExtraConfigDpuTenantMC, ExtraConfigDpuTenant
 from extraConfigDpuInfra import ExtraConfigDpuInfra
 from extraConfigOvnK import ExtraConfigOvnK
 import paramiko
@@ -97,6 +97,7 @@ class ExtraConfigRunner():
             "sriov_network_operator": ExtraConfigSriov(cc),
             "sriov_ovs_hwol": ExtraConfigSriovOvSHWOL(cc),
             "dpu_infra": ExtraConfigDpuInfra(cc),
+            "dpu_tenant_mc": ExtraConfigDpuTenantMC(cc),
             "dpu_tenant": ExtraConfigDpuTenant(cc),
             "ovnk8s": ExtraConfigOvnK(cc),
         }

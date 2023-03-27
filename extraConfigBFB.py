@@ -68,9 +68,6 @@ class ExtraConfigSwitchNicMode:
     def run(self, _, futures: Dict[str, Future]) -> None:
         client = K8sClient(self._cc["kubeconfig"])
 
-        ec = ExtraConfigSriov(self._cc)
-        ec.run(None)
-
         client.oc("create -f manifests/nicmode/pool.yaml")
 
         # label nodes
