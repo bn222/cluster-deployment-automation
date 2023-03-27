@@ -18,7 +18,7 @@ import requests
 import socket
 import coreosBuilder
 from extraConfigBFB import ExtraConfigBFB, ExtraConfigSwitchNicMode
-from extraConfigSriov import ExtraConfigSriov, ExtraConfigSriovOvSHWOL
+from extraConfigSriov import ExtraConfigSriov, ExtraConfigSriovOvSHWOL, ExtraConfigSriovOvSHWOL_NewAPI
 from extraConfigDpuTenant import ExtraConfigDpuTenantMC, ExtraConfigDpuTenant
 from extraConfigDpuInfra import ExtraConfigDpuInfra
 from extraConfigOvnK import ExtraConfigOvnK
@@ -97,6 +97,7 @@ class ExtraConfigRunner():
             "switch_to_nic_mode": ExtraConfigSwitchNicMode(cc),
             "sriov_network_operator": ExtraConfigSriov(cc),
             "sriov_ovs_hwol": ExtraConfigSriovOvSHWOL(cc),
+            "sriov_ovs_hwol_new_api": ExtraConfigSriovOvSHWOL_NewAPI(cc),
             "dpu_infra": ExtraConfigDpuInfra(cc),
             "dpu_tenant_mc": ExtraConfigDpuTenantMC(cc),
             "dpu_tenant": ExtraConfigDpuTenant(cc),
