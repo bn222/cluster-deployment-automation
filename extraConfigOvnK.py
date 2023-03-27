@@ -1,8 +1,6 @@
-from git import Repo
 from k8sClient import K8sClient
-import os
-import host
-import time
+from configCVO import ConfigCVO
+import sys
 
 
 class ExtraConfigOvnK:
@@ -10,8 +8,16 @@ class ExtraConfigOvnK:
         self._cc = cc
 
     def run(self, cfg):
-        print("Running post config step to load custom ovn-k")
-        iclient = K8sClient("/root/kubeconfig.infracluster")
+        print("Running post config step to load custom OVN-K")
+        iclient = K8sClient(self._cc["kubeconfig"])
+
+        if "image" not in cfg:
+            print("Error image not provided to load custom OVN-K")
+            sys.exit(-1)
+
+        image = cfg["image"]
+
+        print(f"Image {image} provided to load custom OVN-K")
 
         patch = f"""spec:
   template:
@@ -20,10 +26,11 @@ class ExtraConfigOvnK:
       - name: network-operator
         env:
         - name: OVN_IMAGE
-          value: {cfg["image"]}
+          value: {image}
 """
 
-        iclient.oc("scale --replicas=0 deploy/cluster-version-operator -n openshift-cluster-version")
+        configCVO = ConfigCVO()
+        configCVO.scaleDown(iclient)
         iclient.oc(f'patch -p "{patch}" deploy network-operator -n openshift-network-operator')
 
         # TODO: wait for all ovn-k pods to become ready again
