@@ -41,6 +41,15 @@ class ExtraConfigDpuTenant:
     def __init__(self, cc):
         self._cc = cc
 
+    def render_sriov_node_policy(self, policyname: str, bf_port: str, bf_addr: str, numvfs: int, resourcename: str, outfilename: str):
+        with open("./manifests/tenant/SriovNetworkNodePolicy.yaml.j2") as f:
+            j2_template = jinja2.Template(f.read())
+            rendered = j2_template.render(policyName=policyname, bf_port=bf_port, bf_addr=bf_addr, numVfs=numvfs, resourceName=resourcename)
+            print(rendered)
+
+        with open(outfilename, "w") as outFile:
+            outFile.write(rendered)
+
     def run(self, cfg, futures: Dict[str, Future]) -> None:
         [f.result() for (_, f) in futures.items()]
         print("Running post config step")
@@ -76,16 +85,24 @@ class ExtraConfigDpuTenant:
                 bf_port = port["ifname"]
         print(bf_port)
 
-        with open("manifests/tenant/SriovNetworkNodePolicy.yaml") as f:
-            j2_template = jinja2.Template(f.read())
-            rendered = j2_template.render(bf_port=bf_port, bf_addr=bf)
+        numVfs = 16
+        numMgmtVfs = 1
+        workloadPolicyName = "policy-mlnx-bf"
+        workloadResourceName = "mlnx_bf"
+        workloadBfPort = bf_port + f"#{numMgmtVfs}-{numVfs-1}"
+        workloadPolicyFile = "/tmp/" + workloadPolicyName + ".yaml"
+        mgmtPolicyName = "mgmt-policy-mlnx-bf"
+        mgmtResourceName = "mgmtvf"
+        mgmtBfPort = bf_port + f"#0-{numMgmtVfs-1}"
+        mgmtPolicyFile = "/tmp/" + mgmtPolicyName + ".yaml"
 
-        with open("/tmp/a.yaml", "w") as f:
-            f.write(rendered)
+        self.render_sriov_node_policy(workloadPolicyName, workloadBfPort, bf, numVfs, workloadResourceName, workloadPolicyFile)
+        self.render_sriov_node_policy(mgmtPolicyName, mgmtBfPort, bf, numVfs, mgmtResourceName, mgmtPolicyFile)
 
         print("Creating sriov pool config")
         tclient.oc("create -f manifests/tenant/sriov-pool-config.yaml")
-        tclient.oc("create -f /tmp/a.yaml")
+        tclient.oc("create -f " + workloadPolicyFile)
+        tclient.oc("create -f " + mgmtPolicyFile)
         print("Waiting for mcp to be updated")
         time.sleep(60)
         tclient.oc("wait mcp dpu-host --for condition=updated --timeout=50m")
