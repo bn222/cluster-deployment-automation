@@ -22,6 +22,7 @@ from extraConfigSriov import ExtraConfigSriov, ExtraConfigSriovOvSHWOL
 from extraConfigDpuTenant import ExtraConfigDpuTenantMC, ExtraConfigDpuTenant
 from extraConfigDpuInfra import ExtraConfigDpuInfra
 from extraConfigOvnK import ExtraConfigOvnK
+from extraConfigCNO import ExtraConfigCNO
 import paramiko
 import common
 from virshPool import VirshPool
@@ -100,6 +101,7 @@ class ExtraConfigRunner():
             "dpu_tenant_mc": ExtraConfigDpuTenantMC(cc),
             "dpu_tenant": ExtraConfigDpuTenant(cc),
             "ovnk8s": ExtraConfigOvnK(cc),
+            "cno": ExtraConfigCNO(cc),
         }
         self._extra_config = ec
 
