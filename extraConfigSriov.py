@@ -33,6 +33,12 @@ class ExtraConfigSriov:
         os.chdir(repo_dir)
         env = os.environ.copy()
         env["KUBECONFIG"] = client._kc
+
+        if "image" in cfg:
+            image = cfg["image"]
+            print(f"Image {image} provided to load custom sriov-network-operator")
+            env["SRIOV_NETWORK_OPERATOR_IMAGE"] = image
+
         # cleanup first, to make this script idempotent
         print("running make undeploy")
         print(lh.run("make undeploy", env))
