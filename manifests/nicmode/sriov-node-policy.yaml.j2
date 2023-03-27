@@ -1,7 +1,7 @@
 apiVersion: sriovnetwork.openshift.io/v1
 kind: SriovNetworkNodePolicy
 metadata:
-  name: sriov-node-policy
+  name: {{policyName}}
   namespace: openshift-sriov-network-operator
 spec:
   deviceType: netdevice
@@ -12,7 +12,7 @@ spec:
         - {{ line -}}
       {% endfor %}
   nodeSelector:
-    feature.node.kubernetes.io/network-sriov.capable: "true"
-  numVfs: 12
+    network.operator.openshift.io/smart-nic: ""
+  numVfs: {{numVfs}}
   priority: 5
-  resourceName: mlxnics
+  resourceName: {{resourceName}}
