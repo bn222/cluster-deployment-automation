@@ -209,6 +209,79 @@ class ExtraConfigDpuInfra:
                     print(f"Applying workaround (NHE-325) to {b}")
                     rh.run("sudo systemctl restart ovs-configuration")
 
+# VF Management port requires a new API. We need a new extra config class to handle the API changes.
+class ExtraConfigDpuInfra_NewAPI(ExtraConfigDpuInfra):
+    def run(self, _):
+        kc = "/root/kubeconfig.infracluster"
+        client = K8sClient(kc)
+        lh = host.LocalHost()
+        apply_common_pathches(client)
+
+        bf_names = [x["name"] for x in self._cc["workers"] if x["type"] == "bf"]
+        ips = [client.get_ip(e) for e in bf_names]
+
+        for bf, ip in zip(bf_names, ips):
+            if ip is None:
+                sys.exit(-1)
+            rh = host.RemoteHost(ip)
+            rh.ssh_connect("core")
+
+            def cb():
+                host.sync_time(lh, rh)
+            client.wait_ready(bf, cb)
+
+        # workaround, this will reboot the BF
+        # install_custom_kernel(lh, client, bf_names, ips)
+
+        lh.run("dnf install -y golang")
+
+        # workaround, subscription based install broken
+        run_dpu_network_operator_git(lh, kc)
+
+        print("Waiting for pod to be in running state")
+        while True:
+            pods = client._client.list_namespaced_pod("openshift-dpu-network-operator").items
+            if len(pods) == 1:
+                if pods[0].status.phase == "Running":
+                    break
+                print(f"Pod is in {pods[0].status.phase} state")
+            elif len(pods) > 1:
+                print("unexpected number of pods")
+                sys.exit(-1)
+            time.sleep(5)
+
+        print("Creating namespace for tenant")
+        client.oc("create -f manifests/infra/tenantcluster-dpu.yaml")
+
+        print("Creating OVNKubeConfig cr")
+        client.oc("create -f manifests/infra/ovnkubeconfig.yaml")
+
+        print("Labeling nodes")
+        for b in bf_names:
+            client.oc(f"label node {b} node-role.kubernetes.io/dpu-worker=")
+
+        # No need to create config map
+
+        for b in bf_names:
+            client.oc(f"label node {b} network.operator.openshift.io/dpu=")
+        print("Waiting for mcp to be ready")
+        time.sleep(60)
+        client.oc("wait mcp dpu --for condition=updated --timeout=50m")
+
+        # https://issues.redhat.com/browse/NHE-325
+        good = {b: False for b in bf_names}
+        while not all(good.values()):
+            time.sleep(60)
+            client.oc("wait mcp dpu --for condition=updated --timeout=50m")
+            for b in bf_names:
+                ip = client.get_ip(b)
+                rh = host.RemoteHost(ip)
+                rh.ssh_connect("core")
+                result = rh.run("sudo ovs-vsctl show")
+                good[b] = "c1pf0hpf" in result.out
+                if not good[b]:
+                    print(f"Applying workaround (NHE-325) to {b}")
+                    rh.run("sudo systemctl restart ovs-configuration")
 
 def main():
     pass
