@@ -18,10 +18,11 @@ import requests
 import socket
 import coreosBuilder
 from extraConfigBFB import ExtraConfigBFB, ExtraConfigSwitchNicMode
-from extraConfigSriov import ExtraConfigSriov, ExtraConfigSriovOvSHWOL
-from extraConfigDpuTenant import ExtraConfigDpuTenant
-from extraConfigDpuInfra import ExtraConfigDpuInfra
+from extraConfigSriov import ExtraConfigSriov, ExtraConfigSriovOvSHWOL, ExtraConfigSriovOvSHWOL_NewAPI
+from extraConfigDpuTenant import ExtraConfigDpuTenantMC, ExtraConfigDpuTenant, ExtraConfigDpuTenant_NewAPI
+from extraConfigDpuInfra import ExtraConfigDpuInfra, ExtraConfigDpuInfra_NewAPI
 from extraConfigOvnK import ExtraConfigOvnK
+from extraConfigCNO import ExtraConfigCNO
 import paramiko
 import common
 from virshPool import VirshPool
@@ -96,9 +97,14 @@ class ExtraConfigRunner():
             "switch_to_nic_mode": ExtraConfigSwitchNicMode(cc),
             "sriov_network_operator": ExtraConfigSriov(cc),
             "sriov_ovs_hwol": ExtraConfigSriovOvSHWOL(cc),
+            "sriov_ovs_hwol_new_api": ExtraConfigSriovOvSHWOL_NewAPI(cc),
             "dpu_infra": ExtraConfigDpuInfra(cc),
+            "dpu_infra_new_api": ExtraConfigDpuInfra_NewAPI(cc),
+            "dpu_tenant_mc": ExtraConfigDpuTenantMC(cc),
             "dpu_tenant": ExtraConfigDpuTenant(cc),
+            "dpu_tenant_new_api": ExtraConfigDpuTenant_NewAPI(cc),
             "ovnk8s": ExtraConfigOvnK(cc),
+            "cno": ExtraConfigCNO(cc),
         }
         self._extra_config = ec
 

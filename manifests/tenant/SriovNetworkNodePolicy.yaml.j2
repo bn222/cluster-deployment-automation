@@ -1,16 +1,16 @@
 apiVersion: sriovnetwork.openshift.io/v1
 kind: SriovNetworkNodePolicy
 metadata:
-  name: policy-mlnx-bf
+  name: {{policyName}}
   namespace: openshift-sriov-network-operator
 spec:
-  resourceName: mlnx_bf
+  resourceName: {{resourceName}}
   nodeSelector:
     node-role.kubernetes.io/dpu-host: ""
   priority: 99
-  numVfs: 16
+  numVfs: {{numVfs}}
   nicSelector:
     vendor: "15b3"
     deviceId: "a2d6"
-    pfNames: ['{{bf_port}}#1-15']
+    pfNames: ['{{bf_port}}']
     rootDevices: ['0000:{{bf_addr}}']
