@@ -166,7 +166,8 @@ class ExtraConfigDpuTenant:
         ec.ensure_pci_realloc(tclient, "dpu-host")
 
 class ExtraConfigDpuTenant_NewAPI(ExtraConfigDpuTenant):
-    def run(self, cfg):
+    def run(self, cfg, futures: Dict[str, Future]) -> None:
+        [f.result() for (_, f) in futures.items()]
         print("Running post config step")
         tclient = K8sClient("/root/kubeconfig.tenantcluster")
         print("Waiting for mcp dpu-host to become ready")

@@ -211,7 +211,8 @@ class ExtraConfigDpuInfra:
 
 # VF Management port requires a new API. We need a new extra config class to handle the API changes.
 class ExtraConfigDpuInfra_NewAPI(ExtraConfigDpuInfra):
-    def run(self, _):
+    def run(self, _, futures: Dict[str, Future]) -> None:
+        [f.result() for (_, f) in futures.items()]
         kc = "/root/kubeconfig.infracluster"
         client = K8sClient(kc)
         lh = host.LocalHost()

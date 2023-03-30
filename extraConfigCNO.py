@@ -1,13 +1,15 @@
 from k8sClient import K8sClient
 from configCVO import ConfigCVO
 import sys
-
+from concurrent.futures import Future
+from typing import Dict
 
 class ExtraConfigCNO:
     def __init__(self, cc):
         self._cc = cc
 
-    def run(self, cfg):
+    def run(self, cfg, futures: Dict[str, Future]) -> None:
+        [f.result() for (_, f) in futures.items()]
         print("Running post config step to load custom CNO")
         iclient = K8sClient(self._cc["kubeconfig"])
 

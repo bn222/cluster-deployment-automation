@@ -97,7 +97,8 @@ class ExtraConfigSriovOvSHWOL:
         with open(outfilename, "w") as outFile:
             outFile.write(rendered)
 
-    def run(self, _) -> None:
+    def run(self, _, futures: Dict[str, Future]) -> None:
+        [f.result() for (_, f) in futures.items()]
         client = K8sClient(self._cc["kubeconfig"])
         client.oc("create -f manifests/nicmode/pool.yaml")
 
@@ -162,7 +163,8 @@ class ExtraConfigSriovOvSHWOL:
 
 # VF Management port requires a new API. We need a new extra config class to handle the API changes.
 class ExtraConfigSriovOvSHWOL_NewAPI(ExtraConfigSriovOvSHWOL):
-    def run(self, _) -> None:
+    def run(self, _, futures: Dict[str, Future]) -> None:
+        [f.result() for (_, f) in futures.items()]
         client = K8sClient(self._cc["kubeconfig"])
         client.oc("create -f manifests/nicmode/pool.yaml")
 
@@ -238,10 +240,7 @@ class ExtraConfigSriovOvSHWOL_NewAPI(ExtraConfigSriovOvSHWOL):
         self.ensure_pci_realloc(client, "sriov")
 
 def main():
-    args = parse_args()
-    cc = ClustersConfig(args.config)
-    ec = ExtraConfigSriov(cc)
-    ec.run(None)
+    pass
 
 
 if __name__ == "__main__":
