@@ -1,5 +1,5 @@
 from k8sClient import K8sClient
-from configCVO import ConfigCVO
+from configOperators import ConfigCVO
 import sys
 from concurrent.futures import Future
 from typing import Dict
