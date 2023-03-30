@@ -16,7 +16,7 @@ class ExtraConfigSriov:
     def __init__(self, cc):
         self._cc = cc
 
-    def run(self, _, futures: Dict[str, Future]) -> None:
+    def run(self, cfg, futures: Dict[str, Future]) -> None:
         [f.result() for (_, f) in futures.items()]
         client = K8sClient(self._cc["kubeconfig"])
         lh = host.LocalHost()
