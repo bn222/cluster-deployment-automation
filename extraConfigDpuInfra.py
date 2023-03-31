@@ -97,20 +97,20 @@ def install_custom_kernel(lh, client, bf_names, ips):
 
 def run_dpu_network_operator_git(lh, kc):
     repo_dir = "/root/dpu-network-operator"
-    url = "https://github.com/bn222/dpu-network-operator.git"
+    url = "https://github.com/wizhaoredhat/dpu-network-operator.git"
 
     if os.path.exists(repo_dir):
         print(f"Repo exists at {repo_dir}, deleting it")
         shutil.rmtree(repo_dir)
     print(f"Cloning repo to {repo_dir}")
-    Repo.clone_from(url, repo_dir, branch='wip2')
+    Repo.clone_from(url, repo_dir, branch='revert_dpu_node_reboot_ctrler')
 
     cur_dir = os.getcwd()
     os.chdir(repo_dir)
     lh.run("rm -rf bin")
     env = os.environ.copy()
     env["KUBECONFIG"] = kc
-    env["IMG"] = "quay.io/bnemeth/dpu-network-operator:wip6"
+    env["IMG"] = "quay.io/wizhao/dpu-network-operator:test_march30"
     # cleanup first, to make this script idempotent
     print("running make undeploy")
     print(lh.run("make undeploy", env))
@@ -194,20 +194,15 @@ class ExtraConfigDpuInfra:
         time.sleep(60)
         client.oc("wait mcp dpu --for condition=updated --timeout=50m")
 
-        # https://issues.redhat.com/browse/NHE-325
-        good = {b: False for b in bf_names}
-        while not all(good.values()):
-            time.sleep(60)
-            client.oc("wait mcp dpu --for condition=updated --timeout=50m")
-            for b in bf_names:
-                ip = client.get_ip(b)
-                rh = host.RemoteHost(ip)
-                rh.ssh_connect("core")
-                result = rh.run("sudo ovs-vsctl show")
-                good[b] = "c1pf0hpf" in result.out
-                if not good[b]:
-                    print(f"Applying workaround (NHE-325) to {b}")
-                    rh.run("sudo systemctl restart ovs-configuration")
+        for b in bf_names:
+            ip = client.get_ip(b)
+            rh = host.RemoteHost(ip)
+            rh.ssh_connect("core")
+            result = rh.run("sudo ovs-vsctl show")
+            if "c1pf0hpf" not in result.out:
+                print(result.out)
+                print("Did not find interface c1pf0hpf in br-ex. Try to restart ovs-configuration on node.")
+                sys.exit(-1)
 
 # VF Management port requires a new API. We need a new extra config class to handle the API changes.
 class ExtraConfigDpuInfra_NewAPI(ExtraConfigDpuInfra):
@@ -269,20 +264,15 @@ class ExtraConfigDpuInfra_NewAPI(ExtraConfigDpuInfra):
         time.sleep(60)
         client.oc("wait mcp dpu --for condition=updated --timeout=50m")
 
-        # https://issues.redhat.com/browse/NHE-325
-        good = {b: False for b in bf_names}
-        while not all(good.values()):
-            time.sleep(60)
-            client.oc("wait mcp dpu --for condition=updated --timeout=50m")
-            for b in bf_names:
-                ip = client.get_ip(b)
-                rh = host.RemoteHost(ip)
-                rh.ssh_connect("core")
-                result = rh.run("sudo ovs-vsctl show")
-                good[b] = "c1pf0hpf" in result.out
-                if not good[b]:
-                    print(f"Applying workaround (NHE-325) to {b}")
-                    rh.run("sudo systemctl restart ovs-configuration")
+        for b in bf_names:
+            ip = client.get_ip(b)
+            rh = host.RemoteHost(ip)
+            rh.ssh_connect("core")
+            result = rh.run("sudo ovs-vsctl show")
+            if "c1pf0hpf" not in result.out:
+                print(result.out)
+                print("Did not find interface c1pf0hpf in br-ex. Try to restart ovs-configuration on node.")
+                sys.exit(-1)
 
 def main():
     pass
