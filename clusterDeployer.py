@@ -338,6 +338,11 @@ class ClusterDeployer():
                 self._cc["ingress_ip"] = self._cc["masters"][0]["ip"]
 
             lh = host.LocalHost()
+            min_cores = 32
+            cc = int(lh.run("nproc").out)
+            if cc < min_cores:
+                print(f"{cc} cores on localhost but need at least {min_cores}")
+                sys.exit(-1)
             if self.need_external_network() and not self._validate_external_port(lh):
                 print(f"Can't find a valid external port, config is {self._cc['external_port']}")
                 sys.exit(-1)
