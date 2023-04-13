@@ -78,11 +78,24 @@ class AssistedInstallerService():
         all_versions += [{"openshift_version": "4.12-multi", "version": "4.12.5"}]
         all_versions += [{"openshift_version": "4.13-multi", "version": "4.13.0-ec.3"}]
         all_versions += [{"openshift_version": "4.13-multi", "version": "4.13.0-nightly"}]
+        all_versions += [{"openshift_version": "4.14-multi", "version": "4.14.0-nightly"}]
         for e in all_versions:
             e["cpu_architecture"] = "multi"
             e["support_level"] = "beta"
             e["cpu_architectures"] = ["x86_64", "arm64", "ppc64le", "s390x"]
             e["url"] = self.get_pullspec(e["version"])
+
+        # workaround: if openshift_version == 4.14-multi, and
+        # version == "4.14.0" nightly, it errors out. Instead,
+        # pretend that we are installing 4.13, but use 4.14
+        # pulspec
+        if version == "4.14.0-nightly":
+            j = [e for e in all_versions if e["version"] == version]
+            url = j[0]["url"]
+            version = "4.13.0-nightly"
+            for e in all_versions:
+                if e["version"] == version:
+                    e["url"] = url
 
         j = [e for e in all_versions if e["version"] == version]
 

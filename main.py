@@ -11,6 +11,13 @@ def main():
     if args.url == "192.168.122.1":
         ais = AssistedInstallerService(args.url)
         ais.start(cc["version"])
+        # workaround, this will still install 4.14, but AI will think
+        # it is 4.13 (see also workaround when setting up versions)
+        if cc["version"] == "4.14.0-nightly":
+            print("Applying workaround for assisted installer issue")
+            print("Will pretend to install 4.13, but using 4.14 pullsec")
+            print("Ignore all output from Assisted that mentions 4.13")
+            cc["version"] = "4.13.0-nightly"
     else:
         print(f"Will use Assisted Installer running at {args.url}")
 
