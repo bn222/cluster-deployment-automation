@@ -740,13 +740,19 @@ class ClusterDeployer():
             print(f"succesfully ran pxeboot on bf {host_name}")
 
         ipa = json.loads(output.out.strip().split("\n")[-1].strip())
-        bf_interface = "enp3s0f0"
+        detected = common.extract_interfaces(ipa)
+        bf_interfaces = ["enp3s0f0", "enp3s0f0np0"]
+        found = [x for x in bf_interfaces if x in detected]
+        if len(found) != 1:
+            print("Failed to find any of {bf_interfaces} on bf {host_name}")
+            print(f"Output was: {ipa}")
+        found = found[0]
         try:
-            ip = common.extract_ip(ipa, bf_interface)
+            ip = common.extract_ip(ipa, found)
             print(ip)
         except Exception:
             ip = None
-            print(f"Failed to find ip on {bf_interface}, output was {ipa}")
+            print(f"Failed to find ip on {found}, output was {ipa}")
             sys.exit(-1)
         return ip
 
