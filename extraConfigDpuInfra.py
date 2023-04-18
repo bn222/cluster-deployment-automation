@@ -252,11 +252,14 @@ class ExtraConfigDpuInfra_NewAPI(ExtraConfigDpuInfra):
         print("Creating OVNKubeConfig cr")
         client.oc("create -f manifests/infra/ovnkubeconfig.yaml")
 
+        print("Patching mcp setting maxUnavailable to 2")
+        client.oc("patch mcp dpu --type=json -p=\[\{\"op\":\"replace\",\"path\":\"/spec/maxUnavailable\",\"value\":2\}\]")
+
         print("Labeling nodes")
         for b in bf_names:
             client.oc(f"label node {b} node-role.kubernetes.io/dpu-worker=")
 
-        # No need to create config map
+        # DELTA: No need to create config map to set dpu mode.
 
         for b in bf_names:
             client.oc(f"label node {b} network.operator.openshift.io/dpu=")

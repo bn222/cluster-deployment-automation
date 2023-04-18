@@ -223,6 +223,7 @@ class ExtraConfigDpuTenant_NewAPI(ExtraConfigDpuTenant):
         time.sleep(60)
         tclient.oc("wait mcp dpu-host --for condition=updated --timeout=50m")
 
+        # DELTA START: We don't create sriovdpuconfigmap.yaml to set dpu-host mode.
         mgmtPortResourceName = "openshift.io/" + mgmtResourceName
         print(f"Creating Config Map for mgmt port resource name {mgmtPortResourceName}")
         with open('./manifests/tenant/hardware-offload-config.yaml.j2') as f:
@@ -234,12 +235,15 @@ class ExtraConfigDpuTenant_NewAPI(ExtraConfigDpuTenant):
             outFile.write(rendered)
 
         print(tclient.oc("create -f /tmp/hardware-offload-config.yaml"))
+        # DELTA END
 
         print("creating mc to disable ovs")
         tclient.oc("create -f manifests/tenant/disable-ovs.yaml")
         print("Waiting for mcp")
         time.sleep(60)
         tclient.oc("wait mcp dpu-host --for condition=updated --timeout=50m")
+
+        # DELTA: We don't create env-override to set management port.
 
         for e in self._cc["workers"]:
             cmd = f"label node {e['name']} network.operator.openshift.io/dpu-host="
