@@ -7,6 +7,7 @@ import time
 import requests
 import host
 import sys
+import re
 
 """
 Assisted service is an utility to deploy clusters. The Git repository is
@@ -66,47 +67,58 @@ class AssistedInstallerService():
         j[0]["worker"]["disk_size_gb"] = 8
         j[0]["sno"]["disk_size_gb"] = 8
         y["data"]["HW_VALIDATOR_REQUIREMENTS"] = json.dumps(j)
-
         # Don't reuse json.loads(y["data"]["RELEASE_IMAGES"]). It seems
         # that AI doesn't allow to use similar versions (like both -ec.3
         # and nightly) in the same config. For that reason, pass in the
-        # version, and instantiate AI _only_ with one version, i.e. the 
+        # version, and instantiate AI _only_ with one version, i.e. the
         # version we will be using.
-
-        all_versions = []
-        all_versions += [{"openshift_version": "4.12-multi", "version": "4.12.0"}]
-        all_versions += [{"openshift_version": "4.12-multi", "version": "4.12.5"}]
-        all_versions += [{"openshift_version": "4.13-multi", "version": "4.13.0-ec.3"}]
-        all_versions += [{"openshift_version": "4.13-multi", "version": "4.13.0-nightly"}]
-        all_versions += [{"openshift_version": "4.14-multi", "version": "4.14.0-nightly"}]
-        for e in all_versions:
-            e["cpu_architecture"] = "multi"
-            e["support_level"] = "beta"
-            e["cpu_architectures"] = ["x86_64", "arm64", "ppc64le", "s390x"]
-            e["url"] = self.get_pullspec(e["version"])
-
-        # workaround: if openshift_version == 4.14-multi, and
-        # version == "4.14.0" nightly, it errors out. Instead,
-        # pretend that we are installing 4.13, but use 4.14
-        # pulspec
-        if version == "4.14.0-nightly":
-            j = [e for e in all_versions if e["version"] == version]
-            url = j[0]["url"]
-            version = "4.13.0-nightly"
-            for e in all_versions:
-                if e["version"] == version:
-                    e["url"] = url
-
-        j = [e for e in all_versions if e["version"] == version]
-
-        y["data"]["RELEASE_IMAGES"] = json.dumps(j)
+        y["data"]["RELEASE_IMAGES"] = json.dumps([self.prep_version(version)])
         return y
 
-    def get_pullspec(self, version) -> str:
-        if "nightly" in version:
-            return self.get_nightly_pullspec(version)
+    def prep_version(self, version):
+        if re.search(r'4\.12\.[0-9]+-multi', version):
+            # Note how 4.12.0 has the -multi suffix because AI requires that
+            # for 4.12. CDA hides this and simply expect 4.12.0 from the user
+            # since that follows the same versioning scheme
+            ret = {
+              'openshift_version': f'{version}',
+              'cpu_architectures': ['x86_64', 'arm64', 'ppc64le', 's390x'],
+              'url': self.get_normal_pullspec(version.rstrip("-multi")),
+              'version': f'{version}'
+            }
+        elif re.search(r'4\.13\.0-ec.[0-9]+', version):
+            ret = {
+              'openshift_version': '4.13-multi',
+              'cpu_architectures': ['x86_64', 'arm64', 'ppc64le', 's390x'],
+              'url': self.get_normal_pullspec(version),
+              'version': f'{version}-multi'
+            }
+        elif re.search(r'4\.13\.0-nightly', version):
+            ret = {
+              'openshift_version': '4.13.0-nightly',
+              'cpu_architectures': ['x86_64', 'arm64', 'ppc64le', 's390x'],
+              'url': self.get_nightly_pullspec(version),
+              'version': f'{version}-multi'
+            }
+        elif re.search(r'4\.14\.0-nightly', version):
+            # workaround: if openshift_version == 4.14-multi, and
+            # version == "4.14.0" nightly, it errors out. Instead
+            # pretend that we are installing 4.13, but use the 4.14
+            # pullspec
+            ret = {
+              'openshift_version': '4.13.0-nightly',
+              'cpu_architectures': ['x86_64', 'arm64', 'ppc64le', 's390x'],
+              'url': self.get_nightly_pullspec(version),
+              'version': f'{version}-multi'
+            }
         else:
-            return self.get_ec_pullspec(version)
+            print(f"Unknown version {version}")
+            sys.exit(-1)
+        ret["cpu_architecture"] = "multi"
+        if "ec" in version or "nightly" in version:
+            ret["support_level"] = "beta"
+        ret["cpu_architectures"] = ['x86_64', 'arm64', 'ppc64le', 's390x']
+        return ret
 
     def get_nightly_pullspec(self, version) -> str:
         version = version.rstrip("-nightly")
@@ -115,7 +127,7 @@ class AssistedInstallerService():
         j = json.loads(response.content)
         return j["pullSpec"]
 
-    def get_ec_pullspec(self, version) -> str:
+    def get_normal_pullspec(self, version) -> str:
         return f"quay.io/openshift-release-dev/ocp-release:{version}-multi"
 
     def _ensure_pod_started(self) -> None:
