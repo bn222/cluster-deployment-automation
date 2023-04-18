@@ -141,13 +141,16 @@ class ClustersConfig():
     def _ensure_clusters_loaded(self) -> None:
         if self._clusters:
             return
+        self._clusters = self._load_clusters()
 
+    def _load_clusters(self) -> dict[str, ClusterInfo]:
         cluster = None
+        ret = []
         print("loading cluster information")
         for e in read_sheet():
             if e[0].startswith("Cluster"):
                 if cluster is not None:
-                    self._clusters.append(cluster)
+                    ret.append(cluster)
                 cluster = ClusterInfo(e[0])
             if cluster is None:
                 continue
@@ -158,8 +161,8 @@ class ClustersConfig():
                 cluster.network_api_port = e[3]
             elif e[7] == "no":
                 cluster.workers.append(e[0])
-        self._clusters.append(cluster)
-        self._clusters = {x.provision_host : x for x in self._clusters}
+        ret.append(cluster)
+        return {x.provision_host: x for x in ret}
 
     def print(self) -> None:
         print(safe_dump(self.fullConfig))
