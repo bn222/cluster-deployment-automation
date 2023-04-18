@@ -11,6 +11,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 import host
 import re
 from typing import List
+from typing import Dict
 
 logging.basicConfig(level=logging.INFO,
         format='%(asctime)s %(levelname)s: %(message)s', datefmt='%H:%M:%S'
@@ -55,7 +56,8 @@ def read_sheet() -> list:
 
 class ClustersConfig():
     def __init__(self, yamlPath: str):
-        self._clusters = []
+        self._clusters = {}  # type: Dict[str, ClusterInfo]
+
 
         lh = host.LocalHost()
         # Run the hostname command and only take the first part. For example
@@ -142,6 +144,7 @@ class ClustersConfig():
         if self._clusters:
             return
         self._clusters = self._load_clusters()
+        self._validate_clusters()
 
     def _load_clusters(self) -> dict[str, ClusterInfo]:
         cluster = None
@@ -163,6 +166,19 @@ class ClustersConfig():
                 cluster.workers.append(e[0])
         ret.append(cluster)
         return {x.provision_host: x for x in ret}
+
+    def _validate_clusters(self) -> None:
+        for _, v in self._clusters.items():
+            if v.provision_host == "":
+                print(f"Provision host missing for cluster {v.name}")
+                sys.exit(-1)
+            if v.network_api_port == "":
+                print(f"Network api port missing for cluster {v.name}")
+                sys.exit(-1)
+            for e in v.workers:
+                if e == "":
+                    print("Unnamed worker found for cluster {c.name}")
+                    sys.exit(-1)
 
     def print(self) -> None:
         print(safe_dump(self.fullConfig))
