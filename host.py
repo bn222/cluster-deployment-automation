@@ -94,7 +94,7 @@ class RemoteHost(Host):
                 self._id_ed25519 = f.read().strip()
         except FileNotFoundError:
             self._id_ed25519 = None
-        print(f"waiting for {self._hostname} to respond to ping")
+        print(f"waiting for '{self._hostname}' to respond to ping")
         self.wait_ping()
         print(f"{self._hostname} responded to ping, trying to connect")
         self.ssh_connect_looped(username)
@@ -204,7 +204,7 @@ class RemoteHost(Host):
     """
     @retry(stop=stop_after_attempt(10), wait=wait_fixed(60))
     def _boot_with_overrides(self, iso_path: str) -> None:
-        print(f"Trying to boot {self._bmc_url()}")
+        print(f"Trying to boot '{self._hostname}' through {self._bmc_url()}")
         red = self._redfish()
         try:
             red.eject_iso()
