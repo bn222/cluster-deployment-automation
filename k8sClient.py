@@ -61,6 +61,7 @@ class K8sClient():
 
     def ensure_oc_binary(self) -> None:
         lh = host.LocalHost()
+        print(f"Current working directory is {os.getcwd()}")
         assert os.path.exists("build")
         if not os.path.isfile(os.path.join(os.getcwd(), "build/oc")):
             url = oc_url + "openshift-client-linux.tar.gz"
