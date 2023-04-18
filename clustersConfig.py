@@ -146,7 +146,7 @@ class ClustersConfig():
         self._clusters = self._load_clusters()
         self._validate_clusters()
 
-    def _load_clusters(self) -> dict[str, ClusterInfo]:
+    def _load_clusters(self) -> Dict[str, ClusterInfo]:
         cluster = None
         ret = []
         print("loading cluster information")
