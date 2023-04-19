@@ -91,14 +91,14 @@ class AssistedInstallerService():
               'openshift_version': '4.13-multi',
               'cpu_architectures': ['x86_64', 'arm64', 'ppc64le', 's390x'],
               'url': self.get_normal_pullspec(version),
-              'version': f'{version}-multi'
+              'version': f'{version}'
             }
         elif re.search(r'4\.13\.0-nightly', version):
             ret = {
-              'openshift_version': '4.13.0-nightly',
+              'openshift_version': '4.13-multi',
               'cpu_architectures': ['x86_64', 'arm64', 'ppc64le', 's390x'],
               'url': self.get_nightly_pullspec(version),
-              'version': f'{version}-multi'
+              'version': f'{version}'
             }
         elif re.search(r'4\.14\.0-nightly', version):
             # workaround: if openshift_version == 4.14-multi, and
@@ -106,10 +106,10 @@ class AssistedInstallerService():
             # pretend that we are installing 4.13, but use the 4.14
             # pullspec
             ret = {
-              'openshift_version': '4.13.0-nightly',
+              'openshift_version': '4.13-multi',
               'cpu_architectures': ['x86_64', 'arm64', 'ppc64le', 's390x'],
               'url': self.get_nightly_pullspec(version),
-              'version': f'{version}-multi'
+              'version': f'{version}'
             }
         else:
             print(f"Unknown version {version}")
