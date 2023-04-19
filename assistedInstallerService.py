@@ -9,6 +9,14 @@ import host
 import sys
 import re
 
+
+def load_url_or_file(url_or_file: str):
+    if url_or_file.startswith("http"):
+        return get_url(url_or_file).text
+    else:
+        return open(url_or_file).read()
+
+
 """
 Assisted service is an utility to deploy clusters. The Git repository is
 available here: https://github.com/openshift/assisted-service
@@ -30,11 +38,14 @@ that can be used to create and monitor clusters. However, since we are deploying
 non-standard way, the web-ui can't be used.
 """
 class AssistedInstallerService():
-    def __init__(self, ip: str, branch: str="master"):
+    def __init__(self, ip: str, branch: str = "master"):
         self._ip = ip
         base_url = f"https://raw.githubusercontent.com/openshift/assisted-service/{branch}"
-        self.podConfig = get_url(f"{base_url}/deploy/podman/configmap.yml").text
-        self.podFile = get_url(f"{base_url}/deploy/podman/pod-persistent.yml").text
+        pod_config_url = f"{base_url}/deploy/podman/configmap.yml"
+        pod_file = f"{base_url}/deploy/podman/pod-persistent.yml"
+        pod_file = "/tmp/pod-persistent.yml"
+        self.podConfig = load_url_or_file(pod_config_url)
+        self.podFile = load_url_or_file(pod_file)
         self.workdir = os.path.join(os.getcwd(), "build")
 
     def _configure(self, version) -> None:
@@ -58,7 +69,7 @@ class AssistedInstallerService():
         y = yaml.safe_load(self.podConfig)
         y["data"]["IMAGE_SERVICE_BASE_URL"] = f"http://{self._ip}:8888"
         y["data"]["SERVICE_BASE_URL"] = f"http://{self._ip}:8090"
-        y["data"]["AGENT_DOCKER_IMAGE"] = "registry.redhat.io/rhai-tech-preview/assisted-installer-agent-rhel8:latest"
+        y["data"]["AGENT_DOCKER_IMAGE"] = "quay.io/itsoiref/assisted-installer-agent:chronyx" #"quay.io/edge-infrastructure/assisted-service:latest"
         y["data"]["CONTROLLER_IMAGE"] = "registry.redhat.io/rhai-tech-preview/assisted-installer-reporter-rhel8:latest"
         y["data"]["INSTALLER_IMAGE"] = "registry.redhat.io/rhai-tech-preview/assisted-installer-rhel8:latest"
 
@@ -84,32 +95,33 @@ class AssistedInstallerService():
               'openshift_version': f'{version}',
               'cpu_architectures': ['x86_64', 'arm64', 'ppc64le', 's390x'],
               'url': self.get_normal_pullspec(version.rstrip("-multi")),
-              'version': f'{version}'
+              'version': version,
             }
         elif re.search(r'4\.13\.0-ec.[0-9]+', version):
             ret = {
               'openshift_version': '4.13-multi',
               'cpu_architectures': ['x86_64', 'arm64', 'ppc64le', 's390x'],
               'url': self.get_normal_pullspec(version),
-              'version': f'{version}'
+              'version': version,
             }
         elif re.search(r'4\.13\.0-nightly', version):
             ret = {
               'openshift_version': '4.13-multi',
               'cpu_architectures': ['x86_64', 'arm64', 'ppc64le', 's390x'],
               'url': self.get_nightly_pullspec(version),
-              'version': f'{version}'
+              'version': version,
             }
         elif re.search(r'4\.14\.0-nightly', version):
             # workaround: if openshift_version == 4.14-multi, and
             # version == "4.14.0" nightly, it errors out. Instead
             # pretend that we are installing 4.13, but use the 4.14
             # pullspec
+            version = "4.13.0-nighty"
             ret = {
               'openshift_version': '4.13-multi',
               'cpu_architectures': ['x86_64', 'arm64', 'ppc64le', 's390x'],
               'url': self.get_nightly_pullspec(version),
-              'version': f'{version}'
+              'version': version,
             }
         else:
             print(f"Unknown version {version}")
