@@ -9,6 +9,8 @@ from extraConfigSriov import ExtraConfigSriovOvSHWOL
 from typing import Dict
 import sys
 import jinja2
+import re
+import json
 
 
 class ExtraConfigDpuTenantMC:
@@ -120,7 +122,8 @@ class ExtraConfigDpuTenant:
         contents = open("manifests/tenant/setenvovnkube.yaml").read()
         for e in cfg["mapping"]:
             a = {}
-            a["OVNKUBE_NODE_MGMT_PORT_NETDEV"] = f"{bf_port}v0"
+            mp = re.sub('np\d$', '', bf_port)
+            a["OVNKUBE_NODE_MGMT_PORT_NETDEV"] = f"{mp}v0"
             contents += f"  {e['worker']}: |\n"
             for (k, v) in a.items():
                 contents += f"    {k}={v}\n"
@@ -149,15 +152,16 @@ class ExtraConfigDpuTenant:
             a = {}
             a["TENANT_K8S_NODE"] = e['worker']
             a["DPU_IP"] = iclient.get_ip(e['bf'])
-            a["MGMT_IFNAME"] = "eth1"
+            a["MGMT_IFNAME"] = "c1pf0vf0"
             contents += f"  {e['bf']}: |\n"
             for (k, v) in a.items():
                 contents += f"    {k}={v}\n"
         open("/tmp/envoverrides.yaml", "w").write(contents)
 
         iclient.oc("create -f /tmp/envoverrides.yaml")
+        patch = json.dumps({"spec":{"kubeConfigFile":"tenant-cluster-1-kubeconf"}})
         r = iclient.oc(
-            "patch --type merge -p {\"spec\":{\"kubeConfigFile\":\"tenant-cluster-1-kubeconf\"}} OVNKubeConfig ovnkubeconfig-sample -n tenantcluster-dpu")
+            f"patch --type merge -p '{patch}' OVNKubeConfig ovnkubeconfig-sample -n tenantcluster-dpu")
         print(r)
         print("Creating network attachement definition")
         tclient.oc("create -f manifests/tenant/nad.yaml")
@@ -265,15 +269,16 @@ class ExtraConfigDpuTenant_NewAPI(ExtraConfigDpuTenant):
             a = {}
             a["TENANT_K8S_NODE"] = e['worker']
             a["DPU_IP"] = iclient.get_ip(e['bf'])
-            a["MGMT_IFNAME"] = "eth1"
+            a["MGMT_IFNAME"] = "c1pf0vf0"
             contents += f"  {e['bf']}: |\n"
             for (k, v) in a.items():
                 contents += f"    {k}={v}\n"
         open("/tmp/envoverrides.yaml", "w").write(contents)
 
         iclient.oc("create -f /tmp/envoverrides.yaml")
+        patch = json.dumps({"spec":{"kubeConfigFile":"tenant-cluster-1-kubeconf"}})
         r = iclient.oc(
-            "patch --type merge -p {\"spec\":{\"kubeConfigFile\":\"tenant-cluster-1-kubeconf\"}} OVNKubeConfig ovnkubeconfig-sample -n tenantcluster-dpu")
+            f"patch --type merge -p '{patch}' OVNKubeConfig ovnkubeconfig-sample -n tenantcluster-dpu")
         print(r)
         print("Creating network attachement definition")
         tclient.oc("create -f manifests/tenant/nad.yaml")
