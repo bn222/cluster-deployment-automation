@@ -43,7 +43,6 @@ class AssistedInstallerService():
         base_url = f"https://raw.githubusercontent.com/openshift/assisted-service/{branch}"
         pod_config_url = f"{base_url}/deploy/podman/configmap.yml"
         pod_file = f"{base_url}/deploy/podman/pod-persistent.yml"
-        pod_file = "/tmp/pod-persistent.yml"
         self.podConfig = load_url_or_file(pod_config_url)
         self.podFile = load_url_or_file(pod_file)
         self.workdir = os.path.join(os.getcwd(), "build")
