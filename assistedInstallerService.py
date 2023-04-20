@@ -68,7 +68,7 @@ class AssistedInstallerService():
         y = yaml.safe_load(self.podConfig)
         y["data"]["IMAGE_SERVICE_BASE_URL"] = f"http://{self._ip}:8888"
         y["data"]["SERVICE_BASE_URL"] = f"http://{self._ip}:8090"
-        y["data"]["AGENT_DOCKER_IMAGE"] = "quay.io/itsoiref/assisted-installer-agent:chronyx" #"quay.io/edge-infrastructure/assisted-service:latest"
+        y["data"]["AGENT_DOCKER_IMAGE"] = "quay.io/edge-infrastructure/assisted-service:latest"
         y["data"]["CONTROLLER_IMAGE"] = "registry.redhat.io/rhai-tech-preview/assisted-installer-reporter-rhel8:latest"
         y["data"]["INSTALLER_IMAGE"] = "registry.redhat.io/rhai-tech-preview/assisted-installer-rhel8:latest"
 
