@@ -4,6 +4,7 @@ import host
 import time
 from common_patches import apply_common_pathches
 from concurrent.futures import Future
+from extraConfigDpuInfra import run_dpu_network_operator_git
 from extraConfigSriov import ExtraConfigSriov
 from extraConfigSriov import ExtraConfigSriovOvSHWOL
 from typing import Dict
@@ -51,6 +52,21 @@ class ExtraConfigDpuTenant:
 
         with open(outfilename, "w") as outFile:
             outFile.write(rendered)
+
+    def render_envoverrides_cm(self, client: K8sClient, cfg, ns: str, ) -> str:
+        contents = open("manifests/tenant/envoverrides.yaml").read()
+        contents += f"{ns}\n"
+        contents += "data:\n"
+        for e in cfg["mapping"]:
+            a = {}
+            a["TENANT_K8S_NODE"] = e['worker']
+            a["DPU_IP"] = client.get_ip(e['bf'])
+            a["MGMT_IFNAME"] = "c1pf0vf0"
+            contents += f"  {e['bf']}: |\n"
+            for (k, v) in a.items():
+                contents += f"    {k}={v}\n"
+        open(f"/tmp/envoverrides-{ns}.yaml", "w").write(contents)
+        return f"/tmp/envoverrides-{ns}.yaml"
 
     def run(self, cfg, futures: Dict[str, Future]) -> None:
         [f.result() for (_, f) in futures.items()]
@@ -147,18 +163,16 @@ class ExtraConfigDpuTenant:
         iclient.oc(f"project tenantcluster-dpu")
         print(iclient.oc(f"create secret generic tenant-cluster-1-kubeconf --from-file=config={tclient._kc}"))
 
-        contents = open("manifests/tenant/envoverrides.yaml").read()
-        for e in cfg["mapping"]:
-            a = {}
-            a["TENANT_K8S_NODE"] = e['worker']
-            a["DPU_IP"] = iclient.get_ip(e['bf'])
-            a["MGMT_IFNAME"] = "c1pf0vf0"
-            contents += f"  {e['bf']}: |\n"
-            for (k, v) in a.items():
-                contents += f"    {k}={v}\n"
-        open("/tmp/envoverrides.yaml", "w").write(contents)
+        tc_namespace = "tenantcluster-dpu"
+        dpu_namespace = "openshift-dpu-network-operator"
+        file = self.render_envoverrides_cm(iclient, cfg, tc_namespace)
+        iclient.oc(f"create -f {file}")
+        file = self.render_envoverrides_cm(iclient, cfg, dpu_namespace)
+        iclient.oc(f"create -f {file}")
 
-        iclient.oc("create -f /tmp/envoverrides.yaml")
+        # Restart DPU network operator to apply env-overrides cm
+        restart_dpu_network_operator(iclient)
+
         patch = json.dumps({"spec":{"kubeConfigFile":"tenant-cluster-1-kubeconf"}})
         r = iclient.oc(
             f"patch --type merge -p '{patch}' OVNKubeConfig ovnkubeconfig-sample -n tenantcluster-dpu")
@@ -264,18 +278,16 @@ class ExtraConfigDpuTenant_NewAPI(ExtraConfigDpuTenant):
         iclient.oc(f"project tenantcluster-dpu")
         print(iclient.oc(f"create secret generic tenant-cluster-1-kubeconf --from-file=config={tclient._kc}"))
 
-        contents = open("manifests/tenant/envoverrides.yaml").read()
-        for e in cfg["mapping"]:
-            a = {}
-            a["TENANT_K8S_NODE"] = e['worker']
-            a["DPU_IP"] = iclient.get_ip(e['bf'])
-            a["MGMT_IFNAME"] = "c1pf0vf0"
-            contents += f"  {e['bf']}: |\n"
-            for (k, v) in a.items():
-                contents += f"    {k}={v}\n"
-        open("/tmp/envoverrides.yaml", "w").write(contents)
+        tc_namespace = "tenantcluster-dpu"
+        dpu_namespace = "openshift-dpu-network-operator"
+        file = self.render_envoverrides_cm(iclient, cfg, tc_namespace)
+        iclient.oc(f"create -f {file}")
+        file = self.render_envoverrides_cm(iclient, cfg, dpu_namespace)
+        iclient.oc(f"create -f {file}")
 
-        iclient.oc("create -f /tmp/envoverrides.yaml")
+        # Restart DPU network operator to apply env-overrides cm
+        restart_dpu_network_operator(iclient)
+
         patch = json.dumps({"spec":{"kubeConfigFile":"tenant-cluster-1-kubeconf"}})
         r = iclient.oc(
             f"patch --type merge -p '{patch}' OVNKubeConfig ovnkubeconfig-sample -n tenantcluster-dpu")
@@ -289,6 +301,14 @@ class ExtraConfigDpuTenant_NewAPI(ExtraConfigDpuTenant):
 def create_nm_operator(client: K8sClient):
     print("Apply NMO subscription")
     client.oc("create -f manifests/tenant/nmo-subscription.yaml")
+
+def restart_dpu_network_operator(iclient: K8sClient):
+    lh = host.LocalHost()
+    print("Restarting dpu-network-operator")
+    run_dpu_network_operator_git(lh, "/root/kubeconfig.infracluster")
+    iclient.oc("wait deploy/dpu-network-operator-controller-manager --for condition=available -n openshift-dpu-network-operator")
+    print("Creating OVNKubeConfig cr")
+    iclient.oc("create -f manifests/infra/ovnkubeconfig.yaml")
 
 
 def main():
