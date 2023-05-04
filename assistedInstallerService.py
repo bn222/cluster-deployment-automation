@@ -115,12 +115,13 @@ class AssistedInstallerService():
             # version == "4.14.0" nightly, it errors out. Instead
             # pretend that we are installing 4.13, but use the 4.14
             # pullspec
-            version = "4.13.0-nighty"
+            wa_version = "4.13.0-nighty"
+
             ret = {
               'openshift_version': '4.13-multi',
               'cpu_architectures': ['x86_64', 'arm64', 'ppc64le', 's390x'],
               'url': self.get_nightly_pullspec(version),
-              'version': version,
+              'version': wa_version,
             }
         else:
             print(f"Unknown version {version}")
