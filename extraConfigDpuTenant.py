@@ -60,6 +60,7 @@ class ExtraConfigDpuTenant:
         for e in cfg["mapping"]:
             a = {}
             a["TENANT_K8S_NODE"] = e['worker']
+            # Can be removed since API is replaced https://github.com/openshift/dpu-network-operator/pull/67
             a["DPU_IP"] = client.get_ip(e['bf'])
             a["MGMT_IFNAME"] = "c1pf0vf0"
             contents += f"  {e['bf']}: |\n"
@@ -247,7 +248,7 @@ class ExtraConfigDpuTenant_NewAPI(ExtraConfigDpuTenant):
         time.sleep(60)
         tclient.oc("wait mcp dpu-host --for condition=updated --timeout=50m")
 
-        # DELTA START: We don't create sriovdpuconfigmap.yaml to set dpu-host mode.
+        # DELTA START: We don't create sriovdpuconfigmap.yaml to set dpu-host mode. https://github.com/openshift/cluster-network-operator/pull/1676
         mgmtPortResourceName = "openshift.io/" + mgmtResourceName
         print(f"Creating Config Map for mgmt port resource name {mgmtPortResourceName}")
         with open('./manifests/tenant/hardware-offload-config.yaml.j2') as f:
@@ -267,15 +268,19 @@ class ExtraConfigDpuTenant_NewAPI(ExtraConfigDpuTenant):
         time.sleep(60)
         tclient.oc("wait mcp dpu-host --for condition=updated --timeout=50m")
 
-        # DELTA: We don't create env-override to set management port.
+        # DELTA: We don't create env-override to set management port. https://github.com/ovn-org/ovn-kubernetes/pull/3467
 
         for e in self._cc["workers"]:
             cmd = f"label node {e['name']} network.operator.openshift.io/dpu-host="
             print(tclient.oc(cmd))
             rh = host.RemoteHost(tclient.get_ip(e['name']))
             rh.ssh_connect("core")
-            # workaround for https://issues.redhat.com/browse/NHE-335
-            print(rh.run("sudo ovs-vsctl del-port br-int ovn-k8s-mp0"))
+            # DELTA: "ovn-k8s-mp0" port is deleted by OVN-K. https://github.com/ovn-org/ovn-kubernetes/pull/3571
+            result = rh.run("sudo ovs-vsctl show")
+            if "ovn-k8s-mp0" in result.out:
+                print(result.out)
+                print("Unexpected ovn-k8s-mp0 interface found in br-int.")
+                sys.exit(-1)
 
         print("Final infrastructure cluster configuration")
         iclient = K8sClient("/root/kubeconfig.infracluster")

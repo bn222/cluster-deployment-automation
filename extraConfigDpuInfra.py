@@ -259,7 +259,7 @@ class ExtraConfigDpuInfra_NewAPI(ExtraConfigDpuInfra):
         for b in bf_names:
             client.oc(f"label node {b} node-role.kubernetes.io/dpu-worker=")
 
-        # DELTA: No need to create config map to set dpu mode.
+        # DELTA: No need to create config map to set dpu mode. https://github.com/openshift/cluster-network-operator/pull/1676
 
         for b in bf_names:
             client.oc(f"label node {b} network.operator.openshift.io/dpu=")
