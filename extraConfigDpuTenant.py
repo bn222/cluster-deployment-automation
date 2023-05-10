@@ -102,16 +102,19 @@ class ExtraConfigDpuTenant:
             if d["bus-info"].endswith(bf):
                 bf_port = port["ifname"]
         print(bf_port)
+        if bf_port is None:
+            print("Couldn't find bf port")
+            sys.exit(-1)
 
         numVfs = 16
         numMgmtVfs = 1
         workloadPolicyName = "policy-mlnx-bf"
         workloadResourceName = "mlnx_bf"
-        workloadBfPort = bf_port + f"#{numMgmtVfs}-{numVfs-1}"
+        workloadBfPort = f"{bf_port}#{numMgmtVfs}-{numVfs-1}"
         workloadPolicyFile = "/tmp/" + workloadPolicyName + ".yaml"
         mgmtPolicyName = "mgmt-policy-mlnx-bf"
         mgmtResourceName = "mgmtvf"
-        mgmtBfPort = bf_port + f"#0-{numMgmtVfs-1}"
+        mgmtBfPort = f"{bf_port}#0-{numMgmtVfs-1}"
         mgmtPolicyFile = "/tmp/" + mgmtPolicyName + ".yaml"
 
         self.render_sriov_node_policy(workloadPolicyName, workloadBfPort, bf, numVfs, workloadResourceName, workloadPolicyFile)
@@ -218,16 +221,19 @@ class ExtraConfigDpuTenant_NewAPI(ExtraConfigDpuTenant):
             if d["bus-info"].endswith(bf):
                 bf_port = port["ifname"]
         print(bf_port)
+        if bf_port is None:
+            print("Couldn't find bf port")
+            sys.exit(-1)
 
         numVfs = 16
         numMgmtVfs = 1
         workloadPolicyName = "policy-mlnx-bf"
         workloadResourceName = "mlnx_bf"
-        workloadBfPort = bf_port + f"#{numMgmtVfs}-{numVfs-1}"
+        workloadBfPort = f"{bf_port}#{numMgmtVfs}-{numVfs-1}"
         workloadPolicyFile = "/tmp/" + workloadPolicyName + ".yaml"
         mgmtPolicyName = "mgmt-policy-mlnx-bf"
         mgmtResourceName = "mgmtvf"
-        mgmtBfPort = bf_port + f"#0-{numMgmtVfs-1}"
+        mgmtBfPort = f"{bf_port}#0-{numMgmtVfs-1}"
         mgmtPolicyFile = "/tmp/" + mgmtPolicyName + ".yaml"
 
         self.render_sriov_node_policy(workloadPolicyName, workloadBfPort, bf, numVfs, workloadResourceName, workloadPolicyFile)
