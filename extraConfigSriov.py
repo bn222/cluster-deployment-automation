@@ -81,8 +81,11 @@ class ExtraConfigSriovOvSHWOL:
             outFile.write(rendered)
         client.oc("create -f /tmp/pci-realloc.yaml")
         print("Waiting for mcp")
+        start = time.time()
         time.sleep(60)
         client.oc(f"wait mcp {mcp_name} --for condition=updated --timeout=50m")
+        minutes, seconds = divmod(int(time.time() - start), 60)
+        print(f"It took {minutes}m {seconds}s to for mcp {mcp_name} to update")
 
     def ensure_pci_realloc(self, client: K8sClient, mcp_name: str) -> None:
         if self.need_pci_realloc(client):
@@ -156,8 +159,11 @@ class ExtraConfigSriovOvSHWOL:
         print(client.oc("create -f " + workloadPolicyFile))
         print(client.oc("create -f " + mgmtPolicyFile))
         print(client.oc("create -f manifests/nicmode/nad.yaml"))
+        start = time.time()
         time.sleep(60)
         print(client.oc("wait mcp sriov --for condition=updated --timeout=50m"))
+        minutes, seconds = divmod(int(time.time() - start), 60)
+        print(f"It took {minutes}m {seconds}s to for mcp sriov to update")
 
         self.ensure_pci_realloc(client, "sriov")
 
@@ -222,8 +228,11 @@ class ExtraConfigSriovOvSHWOL_NewAPI(ExtraConfigSriovOvSHWOL):
         print(client.oc("create -f " + workloadPolicyFile))
         print(client.oc("create -f " + mgmtPolicyFile))
         print(client.oc("create -f manifests/nicmode/nad.yaml"))
+        start = time.time()
         time.sleep(60)
         print(client.oc("wait mcp sriov --for condition=updated --timeout=50m"))
+        minutes, seconds = divmod(int(time.time() - start), 60)
+        print(f"It took {minutes}m {seconds}s to for mcp sriov to update")
 
         mgmtPortResourceName = "openshift.io/" + managementResourceName
         print(f"Creating Config Map for Hardware Offload with resource name {mgmtPortResourceName}")
