@@ -47,8 +47,11 @@ class Host:
             id_rsa_path = os.path.join(os.environ["HOME"], ".ssh/id_rsa")
         if id_ed25519_path is None:
             id_ed25519_path = os.path.join(os.environ["HOME"], ".ssh/id_ed25519")
-        with open(id_rsa_path, "r") as f:
-            self._id_rsa = f.read().strip()
+        try:
+            with open(id_rsa_path, "r") as f:
+                self._id_rsa = f.read().strip()
+        except FileNotFoundError:
+            self._id_rsa = None
         try:
             with open(id_ed25519_path, "r") as f:
                 self._id_ed25519 = f.read().strip()
@@ -62,7 +65,7 @@ class Host:
     def ssh_connect_looped(self, username: str) -> None:
         try:
             pkey = paramiko.RSAKey.from_private_key(io.StringIO(self._id_rsa))
-        except paramiko.ssh_exception.PasswordRequiredException:
+        except (paramiko.ssh_exception.PasswordRequiredException, paramiko.ssh_exception.SSHException):
             if not self._id_ed25519:
                 raise
             else:
