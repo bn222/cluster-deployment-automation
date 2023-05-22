@@ -59,6 +59,7 @@ class ExtraConfigBFB:
             futures[e["name"]].result()
             f = executor.submit(helper, e)
             futures[e["name"]] = f
+        print("BFB setup complete")
 
 
 class ExtraConfigSwitchNicMode:
