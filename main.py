@@ -5,6 +5,7 @@ from clusterDeployer import ClusterDeployer
 from arguments import parse_args
 
 def main():
+
     args = parse_args()
     cc = ClustersConfig(args.config)
 
@@ -32,6 +33,7 @@ def main():
 
     if args.teardown:
         cd.teardown()
+        ais.stop()
     else:
         cd.deploy()
 
