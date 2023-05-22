@@ -68,9 +68,11 @@ class AssistedInstallerService():
         y = yaml.safe_load(self.podConfig)
         y["data"]["IMAGE_SERVICE_BASE_URL"] = f"http://{self._ip}:8888"
         y["data"]["SERVICE_BASE_URL"] = f"http://{self._ip}:8090"
-        y["data"]["AGENT_DOCKER_IMAGE"] = "registry.redhat.io/rhai-tech-preview/assisted-installer-agent-rhel8:latest"
-        y["data"]["CONTROLLER_IMAGE"] = "registry.redhat.io/rhai-tech-preview/assisted-installer-reporter-rhel8:latest"
-        y["data"]["INSTALLER_IMAGE"] = "registry.redhat.io/rhai-tech-preview/assisted-installer-rhel8:latest"
+        v = "v1.0.0-46"
+        base_url = "registry.redhat.io/rhai-tech-preview"
+        # y["data"]["AGENT_DOCKER_IMAGE"] = f"{base_url}/assisted-installer-agent-rhel8:{v}"
+        # y["data"]["CONTROLLER_IMAGE"] = f"{base_url}/assisted-installer-reporter-rhel8:{v}"
+        # y["data"]["INSTALLER_IMAGE"] = f"{base_url}/assisted-installer-rhel8:{v}"
 
         j = json.loads(y["data"]["HW_VALIDATOR_REQUIREMENTS"])
         j[0]["master"]["disk_size_gb"] = 8
