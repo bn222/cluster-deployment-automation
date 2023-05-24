@@ -150,6 +150,9 @@ def configure_bridge(h: host.Host) -> None:
         cmd = "systemctl restart libvirtd"
         h.run_or_die(cmd)
 
+        # Not sure why/whether this is needed. But we saw failures w/o it.
+        # We need to investigate how to remove the sleep to speed up
+        time.sleep(5)
 
 class ExtraConfigRunner():
     def __init__(self, cc: ClustersConfig):

@@ -227,12 +227,25 @@ class AssistedInstallerService():
         r = lh.run(f"podman play kube --configmap {cm} {pod}")
         return r
 
-    def wait_for_api(self) -> None:
+    def _ensure_libvirt_running(self) -> None:
         lh = host.LocalHost()
+        if all(x["ifname"] != "virbr0" for x in lh.all_ports()):
+            logger.info("Can't find virbr0. Trying to restart libvirt.")
+            cmd = "systemctl start libvirtd"
+            lh.run(cmd)
+            cmd = "virsh net-start default"
+            lh.run(cmd)
+
+            # Not sure whether or why this is needed. But we've seen failures w/o this.
+            # Need to find out if/how we can remove this to speed up.
+            time.sleep(5)
 
         if all(x["ifname"] != "virbr0" for x in lh.all_ports()):
             logger.error("Can't find virbr0. Make sure that libvirtd is running.")
             sys.exit(-1)
+
+    def wait_for_api(self) -> None:
+        self._ensure_libvirt_running()
 
         url = f"http://{self._ip}:8090/api/assisted-install/v2/clusters"
         response, count = 0, 0
