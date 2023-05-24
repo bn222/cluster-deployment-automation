@@ -165,6 +165,12 @@ class AssistedInstallerService():
         virbr0_present= list(filter(lambda x: x["ifname"] == "virbr0", lh.all_ports()))
 
         if not virbr0_present:
+            cmd = "systemctl start libvirtd"
+            lh.run(cmd)
+            cmd = "virsh net-start default"
+            lh.run(cmd)
+            virbr0_present= list(filter(lambda x: x["ifname"] == "virbr0", lh.all_ports()))
+        if not virbr0_present:
             print("Can't find virbr0. Make sure that libvirtd is running.")
             sys.exit(-1)
 
