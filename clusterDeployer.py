@@ -83,6 +83,13 @@ def setup_vm(h: host.LocalHost, virsh_pool: VirshPool, cfg: dict, iso_path: str)
     return ret
 
 
+def run_cmd(h, cmd):
+    ret = h.run(cmd)
+    if ret.returncode:
+        print(f"{cmd} failed: {ret.err}")
+        sys.exit(-1)
+
+
 def setup_all_vms(h: host.LocalHost, vms, iso_path, virsh_pool) -> list:
     if not vms:
         return []
@@ -317,6 +324,61 @@ class ClusterDeployer():
     def need_api_network(self):
         return len(self._cc.local_vms()) != len(self._cc.all_nodes())
 
+    def configure_bridge_and_net(self, h) -> None:
+        cmd = "sed -e 's/#\\(user\\|group\\) = \".*\"$/\\1 = \"root\"/' -i /etc/libvirt/qemu.conf"
+        run_cmd(h, cmd)
+
+        hostname = h.get_hostname()
+        cmd = "systemctl enable libvirtd"
+        run_cmd(h, cmd)
+        cmd = "systemctl start libvirtd"
+        run_cmd(h, cmd)
+
+        # stp must be disabled or it might conflict with default configuration of some physical switches
+        # 'bridge' section of network 'default' can't be updated => destroy and recreate
+        # check that default exists and contains stp=off
+        cmd = "virsh net-dumpxml default"
+        ret = h.run(cmd)
+
+        if "stp='off'" not in ret.out:
+            print("=================== !!!!!!!!!!!!!!!!!!!!!! ====================")
+            print(" !!!!!!!!!!!!! Destoying and recreating bridge !!!!!!!!!!!!!!!!")
+            print("=================== !!!!!!!!!!!!!!!!!!!!!! ====================")
+            print("\tcreating default-net.xml on localhost")
+            contents = """
+<network>
+  <name>default</name>
+  <forward mode='nat'/>
+  <bridge name='virbr0' stp='off' delay='0'/>
+  <ip address='192.168.122.1' netmask='255.255.0.0'>
+    <dhcp>
+      <range start='192.168.122.2' end='192.168.122.254'/>
+    </dhcp>
+  </ip>
+</network>
+"""
+            bridge_xml = os.path.join("/tmp", 'vir_bridge.xml')
+            with open(bridge_xml, 'w') as outfile:
+                outfile.write(contents)
+
+            cmd = "virsh net-destroy default"
+            h.run(cmd) # ignore return code - it might fail if net was not started
+
+            cmd = "virsh net-undefine default"
+            ret = h.run(cmd)
+            if ret.returncode != 0 and "Network not found" not in ret.err:
+                print(ret)
+                sys.exit(-1)
+
+            cmd = f"virsh net-define {bridge_xml}"
+            run_cmd(h, cmd)
+
+            cmd = "virsh net-start default"
+            run_cmd(h, cmd)
+
+        cmd = "systemctl restart libvirtd"
+        run_cmd(h, cmd)
+
     def ensure_linked_to_bridge(self) -> None:
         if not self.need_api_network():
             print("\tOnly running local VMs (virbr0 not connected to externally)")
@@ -334,6 +396,7 @@ class ClusterDeployer():
         interface = interface[0]
         bridge = "virbr0"
 
+        self.configure_bridge_and_net(lh)
         if "master" not in interface:
             print(f"\tNo master set for interface {api_network}, setting it to {bridge}")
             lh.run(f"ip link set {api_network} master {bridge}")
