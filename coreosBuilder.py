@@ -9,11 +9,11 @@ import glob
 
 
 def ensure_fcos_exists(dst: str="/root/iso/fedora-coreos.iso") -> None:
-    print("ensuring that fcos exists")
+    print(f"\tensuring that {dst} exists")
     if os.path.exists(dst):
-        print(f"fcos found at {dst}, not rebuilding it")
+        print(f"\tfcos found at {dst}, not rebuilding it")
     else:
-        print(f"fcos not found at {dst}, building it now")
+        print(f"\tfcos not found at {dst}, building it now")
         builder = CoreosBuilder("/tmp/build")
         builder.build(dst)
 

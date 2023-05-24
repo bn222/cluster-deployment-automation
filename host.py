@@ -2,6 +2,7 @@ from ailib import Redfish
 import socket
 from tenacity import retry, stop_after_attempt, wait_fixed
 import paramiko
+import logging
 import subprocess
 from collections import namedtuple
 import io
@@ -13,6 +14,7 @@ import shlex
 import sys
 from typing import Optional
 import common
+import datetime
 
 
 Result = namedtuple("Result", "out err returncode")
@@ -50,6 +52,8 @@ class LocalHost(Host):
         pass
 
     def run(self, cmd: str, env: dict = os.environ.copy()) -> Result:
+        now = datetime.datetime.now()
+        print("\t\t", now.strftime("%Y-%m-%d %H:%M:%S: "), "running ", cmd)
         args = shlex.split(cmd)
         pipe = subprocess.PIPE
         with subprocess.Popen(args, stdout=pipe, stderr=pipe, env=env) as proc:
@@ -81,6 +85,8 @@ class RemoteHost(Host):
         self._bmc_user = bmc_user
         self._bmc_password = bmc_password
         self.auto_reconnect = False
+        logger = paramiko.util.logging.getLogger()
+        logger.setLevel(logging.WARN)
 
     def ssh_connect(self, username: str, id_rsa_path: Optional[str] = None,
                     id_ed25519_path: Optional[str] = None) -> None:
@@ -98,9 +104,9 @@ class RemoteHost(Host):
                 self._id_ed25519 = f.read().strip()
         except FileNotFoundError:
             self._id_ed25519 = None
-        print(f"waiting for '{self._hostname}' to respond to ping")
+        print(f"\twaiting for '{self._hostname}' to respond to ping")
         self.wait_ping()
-        print(f"{self._hostname} responded to ping, trying to connect")
+        print(f"\t{self._hostname} responded to ping, trying to connect")
         self.ssh_connect_looped(username)
 
     def ssh_connect_looped(self, username: str) -> None:
@@ -123,7 +129,7 @@ class RemoteHost(Host):
                                    pkey=pkey)
             except paramiko.ssh_exception.AuthenticationException as e:
                 if pkey.get_name() != "ssh-ed25519" and self._id_ed25519:
-                    print("Retry connect with es25519.")
+                    print("\tRetry connect with es25519.")
                     pkey = paramiko.Ed25519Key.from_private_key(io.StringIO(
                         self._id_ed25519))
                     continue
@@ -134,7 +140,7 @@ class RemoteHost(Host):
                 print(type(e))
                 time.sleep(10)
                 continue
-            print(f"connected to {self._hostname}")
+            print(f"\tconnected to {self._hostname}")
             break
 
     def _read_output(self, cmd: str) -> Result:
@@ -142,7 +148,7 @@ class RemoteHost(Host):
 
         out = []
         for line in iter(stdout.readline, ""):
-            print(f"{self._hostname}: {line.strip()}")
+            print(f"\t{self._hostname}: {line.strip()}")
             out.append(line)
 
         err = []
@@ -158,11 +164,12 @@ class RemoteHost(Host):
     def run(self, cmd: str) -> Result:
         while True:
             try:
-                print(f"running command {cmd}")
+                now = datetime.datetime.now()
+                print("\t\t", now.strftime("%Y-%m-%d %H:%M:%S: "), f"running {cmd} on {self._hostname}")
                 return self._read_output(cmd)
             except Exception as e:
                 print(e)
-                print("Connection lost while running command {cmd}, reconnecting...")
+                print(f"\tConnection lost while running command {cmd}, reconnecting...")
                 self.ssh_connect_looped(self._username)
 
     def close(self) -> None:
@@ -211,26 +218,26 @@ class RemoteHost(Host):
     """
     @retry(stop=stop_after_attempt(10), wait=wait_fixed(60))
     def _boot_with_overrides(self, iso_path: str) -> None:
-        print(f"Trying to boot '{self._hostname}' through {self._bmc_url()}")
+        print(f"\tTrying to boot '{self._hostname}' through {self._bmc_url()}")
         red = self._redfish()
         try:
             red.eject_iso()
         except Exception as e:
             print(e)
-            print("eject failed, but continuing")
+            print("\t\teject failed, but continuing")
             pass
         red.insert_iso(iso_path)
-        print(f"inserted iso {iso_path}")
+        print(f"\t\tinserted iso {iso_path}")
         try:
             red.set_iso_once()
         except Exception as e:
             print(e)
             raise e
 
-        print("setting to boot from iso")
+        print("\t\tsetting to boot from iso")
         red.restart()
         time.sleep(10)
-        print(f"Finished sending boot to {self._bmc_url()}")
+        print(f"\tFinished sending boot to {self._bmc_url()}")
 
     def stop(self) -> None:
         red = self._redfish()

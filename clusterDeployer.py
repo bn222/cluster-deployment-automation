@@ -30,19 +30,18 @@ import glob
 
 
 def setup_vm(h: host.LocalHost, virsh_pool: VirshPool, cfg: dict, iso_path: str):
+    print("\tSetting up vm")
     name = cfg["name"]
     ip = cfg["ip"]
     mac = "52:54:"+":".join(re.findall("..", secrets.token_hex()[:8]))
     host_xml = f"<host mac='{mac}' name='{name}' ip='{ip}'/>"
-    print(f"Creating static DHCP entry for VM {name}")
+    print(f"\tCreating static DHCP entry for VM {name}")
     cmd = f"virsh net-update default add ip-dhcp-host \"{host_xml}\" --live --config"
     ret = h.run(cmd)
     if ret.err:
         print(cmd)
         print(ret.err)
         sys.exit(-1)
-    else:
-        print(ret.out)
 
     OS_VARIANT = "rhel8.5"
     RAM_MB = 32784
@@ -77,6 +76,7 @@ def setup_all_vms(h: host.LocalHost, vms, iso_path, virsh_pool) -> list:
     if not vms:
         return []
 
+    print(f"\tSetting up vms")
     virsh_pool.ensure_initialized()
 
     executor = ThreadPoolExecutor(max_workers=len(vms))
@@ -110,10 +110,10 @@ class ExtraConfigRunner():
 
     def run(self, to_run, futures: Dict[str, Future]) -> None:
         if to_run["name"] not in self._extra_config:
-            print(f"{to_run['name']} is not an extra config")
+            print(f"\t{to_run['name']} is not an extra config")
             sys.exit(-1)
         else:
-            print(f"running extra config {to_run['name']}")
+            print(f"\trunning extra config {to_run['name']}")
             self._extra_config[to_run['name']].run(to_run, futures)
 
 class ClusterDeployer():
@@ -128,12 +128,14 @@ class ClusterDeployer():
         self._extra_config = ExtraConfigRunner(cc)
 
         pool_name = f"{self._cc['name']}_guest_images"
+        print(f"Starting ClusterDeployer with pool {pool_name}")
         for e in self._cc["hosts"]:
             if e["name"] == "localhost":
                 h = host.LocalHost()
             else:
                 h = host.RemoteHost(e["name"])
 
+            print(f"\tCreating virsh_pool for {e['name']}")
             e["virsh_pool"] = VirshPool(h, pool_name, e["images_path"])
 
         def empty():
@@ -191,9 +193,9 @@ class ClusterDeployer():
             # destroy the VM only if that really exists
             if lh.run(f"virsh desc {name}").returncode == 0:
                 r = lh.run(f"virsh destroy {name}")
-                print(r.err if r.err else r.out)
+                print("\t" + r.err if r.err else "\t" + r.out)
                 r = lh.run(f"virsh undefine {name}")
-                print(r.err if r.err else r.out)
+                print("\t" + r.err if r.err else "\t" + r.out)
 
         self._ai.ensure_infraenv_deleted(f"{cluster_name}-x86")
         self._ai.ensure_infraenv_deleted(f"{cluster_name}-arm")
@@ -210,7 +212,8 @@ class ClusterDeployer():
                 ip = e.attrib["ip"]
                 pre = "virsh net-update default delete ip-dhcp-host"
                 cmd = f"{pre} \"<host mac='{mac}' name='{name}' ip='{ip}'/>\" --live --config"
-                print(lh.run(cmd))
+                r = lh.run(cmd)
+                print("\t" + r.err if r.err else "\t" + r.out)
                 removed_macs.append(mac)
 
         fn = "/var/lib/libvirt/dnsmasq/virbr0.status"
@@ -220,25 +223,28 @@ class ClusterDeployer():
         if contents:
             j = json.loads(contents)
             names = [x["name"] for x in self._cc.local_vms()]
-            print(f'Cleaning up {fn}')
-            print(f'removing hosts with mac in {removed_macs} or name in {names}')
+            print(f'\tCleaning up {fn}')
+            print(f'\tremoving hosts with mac in {removed_macs} or name in {names}')
             filtered = []
             for entry in j:
                 if entry["mac-address"] in removed_macs:
-                    print(f'Removed host with mac {entry["mac-address"]}')
+                    print(f'\tRemoved host with mac {entry["mac-address"]}')
                     continue
                 if "hostname" in entry and entry["hostname"] in names:
-                    print(f'Removed host with name {entry["hostname"]}')
+                    print(f'\tRemoved host with name {entry["hostname"]}')
                     continue
                 else:
-                    print(f'Kept entry {entry}')
+                    print(f'\tKept entry {entry}')
                 filtered.append(entry)
 
-            print(lh.run("virsh net-destroy default"))
+            r = lh.run("virsh net-destroy default")
+            print("\t" + r.err if r.err else "\t" + r.out)
             with open(fn, "w") as f:
                 f.write(json.dumps(filtered, indent=4))
-            print(lh.run("virsh net-start default"))
-            print(lh.run("systemctl restart libvirtd"))
+            r = lh.run("virsh net-start default")
+            print("\t" + r.err if r.err else "\t" + r.out)
+            r = lh.run("systemctl restart libvirtd")
+            print("\t" + r.err if r.err else "\t" + r.out)
 
             vp = self.local_host_config()["virsh_pool"]
             vp.ensure_removed()
@@ -246,9 +252,10 @@ class ClusterDeployer():
         if self.need_api_network():
             intif = self._validate_api_port(lh)
             if not intif:
-                print("can't find network API port")
+                print("\tcan't find network API port")
             else:
-                print(lh.run(f"ip link set {intif} nomaster"))
+                r = lh.run(f"ip link set {intif} nomaster")
+                print("\t" + r.err if r.err else "\t" + r.out)
 
         if os.path.exists(self._cc["kubeconfig"]):
             os.remove(self._cc["kubeconfig"])
@@ -263,7 +270,7 @@ class ClusterDeployer():
         # check that the interface really exists
         extif = self._cc["external_port"]
         if lh.port_exists(extif):
-            print(f"Using {extif} as external port")
+            print(f"\tUsing {extif} as external port")
             return extif
         return None
 
@@ -279,7 +286,7 @@ class ClusterDeployer():
 
         intif = self._cc["network_api_port"]
         if lh.port_exists(intif):
-            print(f"Using {intif} as network API port")
+            print(f"\tUsing {intif} as network API port")
             return intif
         return None
 
@@ -301,26 +308,26 @@ class ClusterDeployer():
 
     def ensure_linked_to_bridge(self) -> None:
         if not self.need_api_network():
-            print("Only running local VMs (virbr0 not connected to externally)")
+            print("\tOnly running local VMs (virbr0 not connected to externally)")
             return
 
         api_network = self._cc["network_api_port"]
-        print(f"link {api_network} to virbr0")
+        print(f"\tlink {api_network} to virbr0")
 
         lh = host.LocalHost()
         interface = list(filter(lambda x: x["ifname"] == api_network, lh.all_ports()))
         if not interface:
-            print("Missing API network interface {api_network}")
+            print(f"\tMissing API network interface {api_network}")
             sys.exit(-1)
 
         interface = interface[0]
         bridge = "virbr0"
 
         if "master" not in interface:
-            print(f"No master set for interface {api_network}, setting it to {bridge}")
+            print(f"\tNo master set for interface {api_network}, setting it to {bridge}")
             lh.run(f"ip link set {api_network} master {bridge}")
         elif interface["master"] != bridge:
-            print(f"Incorrect master set for interface {api_network}")
+            print(f"\tIncorrect master set for interface {api_network}")
             sys.exit(-1)
 
     def need_external_network(self) -> bool:
@@ -341,13 +348,13 @@ class ClusterDeployer():
             min_cores = 32
             cc = int(lh.run("nproc").out)
             if cc < min_cores:
-                print(f"{cc} cores on localhost but need at least {min_cores}")
+                print(f"\t{cc} cores on localhost but need at least {min_cores}")
                 sys.exit(-1)
             if self.need_external_network() and not self._validate_external_port(lh):
-                print(f"Can't find a valid external port, config is {self._cc['external_port']}")
+                print(f"\tCan't find a valid external port, config is {self._cc['external_port']}")
                 sys.exit(-1)
             if self.need_api_network() and not self._validate_api_port(lh):
-                print(f"Can't find a valid network API port, config is {self._cc['network_api_port']}")
+                print(f"\tCan't find a valid network API port, config is {self._cc['network_api_port']}")
                 sys.exit(-1)
 
             if "pre" in self.args.steps:
@@ -403,7 +410,7 @@ class ClusterDeployer():
             self._futures[e["name"]].result()
         cluster_name = self._cc["name"]
         infra_env = f"{cluster_name}-x86"
-        print(f"Ensuring infraenv {infra_env} exists.")
+        print(f"\tEnsuring infraenv {infra_env} exists.")
 
         cfg = {}
         cfg["cluster"] = cluster_name
@@ -448,7 +455,7 @@ class ClusterDeployer():
 
     def _wait_known_state(self, names, cb=lambda: None) -> None:
         names = list(names)
-        print(f"Waiting for {names} to be in \'known\' state")
+        print(f"\tWaiting for {names} to be in \'known\' state")
         status = {n: "" for n in names}
         while not all(v == "known" for v in status.values()):
             new_status = {n: self._get_status(n) for n in names}
@@ -488,6 +495,7 @@ class ClusterDeployer():
         def boot_helper(worker, iso):
             return self.boot_iso_x86(worker, iso)
 
+        print("=== Setting up physical x86 workers ===")
         executor = ThreadPoolExecutor(max_workers=len(self._cc["workers"]))
         futures = []
 
@@ -504,10 +512,11 @@ class ClusterDeployer():
             w["ip"] = socket.gethostbyname(w["node"])
 
     def _create_vm_x86_workers(self) -> None:
+        print("=== Setting up vm x86 workers on localhost ===")
         cluster_name = self._cc["name"]
         infra_env = f"{cluster_name}-x86"
         vm = list(x for x in self._cc["workers"] if x["type"] == "vm")
-        print(infra_env)
+        print(f"\tinfra_env = {infra_env}")
         lh = host.LocalHost()
         futures = setup_all_vms(lh, vm,
                                 os.path.join(os.getcwd(), f"{infra_env}.iso"),
@@ -515,7 +524,7 @@ class ClusterDeployer():
         self._wait_known_state(e["name"] for e in vm)
 
     def _create_x86_workers(self) -> None:
-        print("Setting up x86 workers")
+        print("== Setting up x86 workers ==")
         cluster_name = self._cc["name"]
         infra_env_name = f"{cluster_name}-x86"
 
@@ -535,22 +544,22 @@ class ClusterDeployer():
         self._create_physical_x86_workers()
         self._create_vm_x86_workers()
 
-        print("renaming workers")
+        print("\trenaming workers")
         self._rename_workers(infra_env_name)
         self._wait_known_state(e["name"] for e in self._cc["workers"])
-        print("starting infra env")
+        print("\tstarting infra env")
         self._ai.start_infraenv(infra_env_name)
-        print("waiting for workers to be ready")
+        print("\twaiting for workers to be ready")
         self.wait_for_workers()
 
     def _rename_workers(self, infra_env_name: str) -> None:
-        print("Waiting for connectivity to all workers")
+        print("\tWaiting for connectivity to all workers")
         hosts = []
         for w in self._cc["workers"]:
             rh = host.RemoteHost(w['ip'])
             rh.ssh_connect("core")
             hosts.append(rh)
-        print("Connectivity established to all workers, now checking that they have an IP in 192.168.122/24")
+        print("\tConnectivity established to all workers, now checking that they have an IP in 192.168.122/24")
 
         def addresses(h):
             ret = []
@@ -568,19 +577,19 @@ class ClusterDeployer():
 
         for w, h in zip(self._cc["workers"], hosts):
             if all(not addr_ok(a) for a in addresses(h)):
-                print(f'Worker {w["name"]} doesn\'t have an IP in {subnet}.')
+                print(f'\tWorker {w["name"]} doesn\'t have an IP in {subnet}.')
                 sys.exit(-1)
 
-        print("Connectivity established to all workers, renaming them in Assited installer")
-        print(f"looking for workers with ip {[w['ip'] for w in self._cc['workers']]}")
+        print("\tConnectivity established to all workers, renaming them in Assited installer")
+        print(f"\tlooking for workers with ip {[w['ip'] for w in self._cc['workers']]}")
         while True:
             renamed = self._try_rename_workers(infra_env_name)
             expected = len(self._cc["workers"])
             if renamed == expected:
-                print(f"Found and renamed {renamed} workers")
+                print(f"\tFound and renamed {renamed} workers")
                 break
             elif renamed:
-                print(f"Found and renamed {renamed} workers, but waiting for {expected}, retrying")
+                print(f"\tFound and renamed {renamed} workers, but waiting for {expected}, retrying")
                 time.sleep(5)
 
     def _try_rename_workers(self, infra_env_name: str) -> int:
@@ -604,7 +613,7 @@ class ClusterDeployer():
 
     def boot_iso_x86(self, worker: dict, iso: str) -> None:
         host_name = worker["node"]
-        print(f"trying to boot {host_name}")
+        print(f"\ttrying to boot {host_name}")
 
         lh = host.LocalHost()
         nfs = NFS(lh, self._cc["external_port"])
@@ -614,8 +623,9 @@ class ClusterDeployer():
         iso = nfs.host_file(f"/root/iso/{iso}")
         h.boot_iso_redfish(iso)
         h.ssh_connect("core")
-        print("connected")
-        print(h.run("hostname"))
+        print(f"{host_name} connected")
+        r = h.run("hostname")
+        print("\t" + r.err if r.err else "\t" + r.out)
 
     def _create_bf_workers(self) -> None:
         cluster_name = self._cc["name"]
@@ -659,11 +669,11 @@ class ClusterDeployer():
         self.wait_for_workers()
 
     def _download_iso(self, infra_env_name: str, iso_path: str) -> None:
-        print(f"Download iso from {infra_env_name} to {iso_path}, will retry until success")
+        print(f"\tDownload iso from {infra_env_name} to {iso_path}, will retry until success")
         while True:
             try:
                 self._ai.download_iso(infra_env_name, iso_path)
-                print(f"iso for {infra_env_name} downloaded to {iso_path}")
+                print(f"\tiso for {infra_env_name} downloaded to {iso_path}")
                 break
             except Exception:
                 time.sleep(5)
@@ -678,14 +688,14 @@ class ClusterDeployer():
             j = json.load(f)
         ssh_pub_key = j["passwd"]["users"][0]["sshAuthorizedKeys"][0]
         # It seems that if you have both rsa and ed25519, AI will prefer to use ed25519.
-        print(f"The SSH key that the discovery ISO will use is: {ssh_pub_key}")
+        print(f"\tThe SSH key that the discovery ISO will use is: {ssh_pub_key}")
         for file in glob.glob("/root/.ssh/*.pub"):
             with open(file, 'r') as f:
                 key = " ".join(f.read().split(" ")[:-1])
                 if key.split()[0] == ssh_pub_key.split()[0]:
-                    print(f"Found matching public key at {file}")
+                    print(f"\tFound matching public key at {file}")
                     ssh_priv_key = os.path.splitext(file)[0]
-                    print(f"Found matching private key at {ssh_priv_key}")
+                    print(f"\tFound matching private key at {ssh_priv_key}")
         return ssh_priv_key
 
     def _update_etc_hosts(self) -> None:
@@ -709,7 +719,7 @@ class ClusterDeployer():
         nfs = NFS(lh, self._cc["external_port"])
 
         host_name = worker["node"]
-        print(f"Preparing BF on host {host_name}")
+        print(f"\tPreparing BF on host {host_name}")
         h = host.RemoteHostWithBF2(host_name, worker["bmc_ip"], worker["bmc_user"], worker["bmc_password"])
         skip_boot = False
         if h.ping():
@@ -719,10 +729,10 @@ class ClusterDeployer():
                 print(d)
                 skip_boot = d["NAME"] == 'Fedora Linux' and d['VARIANT'] == 'CoreOS'
             except paramiko.ssh_exception.AuthenticationException as e:
-                print("Authentication failed, will not be able to skip boot")
+                print("\tAuthentication failed, will not be able to skip boot")
 
         if skip_boot:
-            print(f"Skipping booting {host_name}, already booted with FCOS")
+            print(f"\tSkipping booting {host_name}, already booted with FCOS")
         else:
             nfs_file = nfs.host_file("/root/iso/fedora-coreos.iso")
             h.boot_iso_redfish(nfs_file)
@@ -734,25 +744,25 @@ class ClusterDeployer():
         output = h.bf_pxeboot(nfs_iso, nfs_key)
         print(output)
         if output.returncode:
-            print(f"Failed to run pxeboot on bf {host_name}")
+            print(f"\tFailed to run pxeboot on bf {host_name}")
             sys.exit(-1)
         else:
-            print(f"succesfully ran pxeboot on bf {host_name}")
+            print(f"\tsuccesfully ran pxeboot on bf {host_name}")
 
         ipa = json.loads(output.out.strip().split("\n")[-1].strip())
         detected = common.extract_interfaces(ipa)
         bf_interfaces = ["enp3s0f0", "enp3s0f0np0"]
         found = [x for x in bf_interfaces if x in detected]
         if len(found) != 1:
-            print("Failed to find any of {bf_interfaces} on bf {host_name}")
-            print(f"Output was: {ipa}")
+            print("\tFailed to find any of {bf_interfaces} on bf {host_name}")
+            print(f"\tOutput was: {ipa}")
         found = found[0]
         try:
             ip = common.extract_ip(ipa, found)
             print(ip)
         except Exception:
             ip = None
-            print(f"Failed to find ip on {found}, output was {ipa}")
+            print(f"\tFailed to find ip on {found}, output was {ipa}")
             sys.exit(-1)
         return ip
 
@@ -775,7 +785,7 @@ class ClusterDeployer():
                         continue
                     h = host.RemoteHost(ai_ip, None, None)
                     h.ssh_connect("core")
-                    print(f'connected to {e["name"]}, setting user:pw')
+                    print(f'\tconnected to {e["name"]}, setting user:pw')
                     h.run("echo root:redhat | sudo chpasswd")
                     connections[e["name"]] = h
 
@@ -790,7 +800,7 @@ class ClusterDeployer():
                 out = h.run("sudo podman images").out
                 e = re.search(r".*Top layer (\w+) of image (\w+) not found in layer tree. The storage may be corrupted, consider running", out)
                 if e:
-                    print(f'Removing corrupt image from worker {w["name"]}')
+                    print(f'\tRemoving corrupt image from worker {w["name"]}')
                     print(h.run(f"sudo podman rmi {e.group(2)}"))
                 try:
                     out = h.run("sudo podman images --format json").out
@@ -798,7 +808,7 @@ class ClusterDeployer():
                     for image in podman_images:
                         inspect_output = h.run(f"sudo podman image inspect {image['Id']}").out
                         if "A storage corruption might have occurred" in inspect_output:
-                            print("Corrupt image found")
+                            print("\tCorrupt image found")
                             h.run(f"sudo podman rmi {image['id']}")
                 except Exception as e:
                     print(e)

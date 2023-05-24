@@ -18,18 +18,20 @@ class VirshPool:
         if not self.initialized():
             self.initialize()
         else:
-            print(f"Pool {self._name} already initialized")
+            print(f"Pool {self._name} already initialized on {self._host._hostname}")
 
     def remove(self) -> None:
-        print(self._host.run(f"virsh pool-destroy {self._name}"))
-        print(self._host.run(f"virsh pool-undefine {self._name}"))
+        r = self._host.run(f"virsh pool-destroy {self._name}")
+        print("\t" + r.err if r.err else "\t" + r.out)
+        r = self._host.run(f"virsh pool-undefine {self._name}")
+        print("\t" + r.err if r.err else "\t" + r.out)
 
     def ensure_removed(self) -> None:
         if self.initialized():
             self.remove()
 
     def initialize(self) -> None:
-        print(f"Initializing pool {self._name} at {self._images_path}")
+        print(f"\tInitializing pool {self._name} at {self._images_path}")
         print(self._host.run(f"virsh pool-define-as {self._name} dir - - - - {self._images_path}"))
         print(self._host.run(f"mkdir -p {self._images_path}"))
         print(self._host.run(f"chmod a+rw {self._images_path}"))

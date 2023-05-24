@@ -48,7 +48,7 @@ class AssistedInstallerService():
         self.workdir = os.path.join(os.getcwd(), "build")
 
     def _configure(self, version) -> None:
-        print("creating working directory")
+        print("\tcreating working directory")
         if os.path.exists(self.workdir):
             rmdir(self.workdir)
         os.mkdir(self.workdir)
@@ -151,7 +151,7 @@ class AssistedInstallerService():
             exit(1)
         name = "assisted-installer"
         if name in map(lambda x: x["Name"], json.loads(result.out)):
-            print(f"{name} already running, stopping it before restarting")
+            print(f"\t{name} already running, stopping it before restarting")
             lh.run(f"podman pod stop {name}")
             lh.run(f"podman pod rm {name}")
         else:
@@ -198,6 +198,7 @@ class AssistedInstallerService():
             print(f"{name} not yet running")
 
     def start(self, version) -> None:
+        print("Starting assisted installer")
         self._configure(version)
         self._ensure_pod_started()
         self.wait_for_api()
