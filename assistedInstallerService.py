@@ -68,9 +68,9 @@ class AssistedInstallerService():
         y = yaml.safe_load(self.podConfig)
         y["data"]["IMAGE_SERVICE_BASE_URL"] = f"http://{self._ip}:8888"
         y["data"]["SERVICE_BASE_URL"] = f"http://{self._ip}:8090"
-        y["data"]["AGENT_DOCKER_IMAGE"] = f"quay.io/edge-infrastructure/assisted-installer-agent:latest"
-        y["data"]["CONTROLLER_IMAGE"] = f"quay.io/edge-infrastructure/edge-infrastructure/assisted-installer-controller:latest"
         y["data"]["INSTALLER_IMAGE"] = f"quay.io/edge-infrastructure/assisted-installer:latest"
+        y["data"]["CONTROLLER_IMAGE"] = f"quay.io/edge-infrastructure/assisted-installer-controller:latest"
+        y["data"]["AGENT_DOCKER_IMAGE"] = f"quay.io/edge-infrastructure/assisted-installer-agent:latest"
 
         j = json.loads(y["data"]["HW_VALIDATOR_REQUIREMENTS"])
         j[0]["master"]["disk_size_gb"] = 8
