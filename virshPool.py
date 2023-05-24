@@ -20,7 +20,7 @@ class VirshPool:
         if not self.initialized():
             self.initialize()
         else:
-            print(f"Pool {self._name} already initialized on {self._host._hostname}")
+            print(f"Pool {self._name} already initialized on {self._host.get_hostname()}")
 
     def remove(self) -> None:
         r = self._host.run(f"virsh pool-destroy {self._name}")

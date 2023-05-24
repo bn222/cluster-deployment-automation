@@ -10,3 +10,4 @@ gspread
 oauth2client
 jinja2
 kubernetes
+scp

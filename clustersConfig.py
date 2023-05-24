@@ -117,6 +117,12 @@ class ClustersConfig():
             for host_config in cc["hosts"]:
               if "images_path" not in host_config:
                 host_config["images_path"] = f'/home/{cc["name"]}_guests_images'
+              if "username" not in host_config:
+                  host_config["username"] = "core"
+              if "password" not in host_config:
+                  host_config["password"] = None
+              if "network_api_port" not in host_config:
+                  host_config["network_api_port"] = "auto"
 
     def _apply_jinja(self, contents: str) -> str:
         def worker_number(a):

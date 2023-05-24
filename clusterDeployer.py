@@ -29,8 +29,11 @@ from virshPool import VirshPool
 import glob
 
 
-def setup_vm(h: host.LocalHost, virsh_pool: VirshPool, cfg: dict, iso_path: str):
-    print("\tSetting up vm")
+def setup_vm(lh, rh, virsh_pool: VirshPool, cfg: dict, iso_path: str):
+    # lh is the localhost, on which bridge configuration is always done
+    # rh is where the vms are installed. It can be localhost as well as remote hosts
+    hostname = rh.get_hostname()
+    print(f"\tSetting up vm on {hostname}")
     name = cfg["name"]
     ip = cfg["ip"]
     mac = "52:54:"+":".join(re.findall("..", secrets.token_hex()[:8]))
@@ -38,17 +41,17 @@ def setup_vm(h: host.LocalHost, virsh_pool: VirshPool, cfg: dict, iso_path: str)
     # If adding a worker node fails, one might want to retry w/o tearing down the whole cluster
     # In that case, the DHCP entry might already be present, with wrong mac -> remove it
     cmd = "virsh net-dumpxml default"
-    ret = h.run(cmd)
+    ret = lh.run(cmd)
     if name in ret.out:
         print(f"\t{name} already configured as static DHCP entry - removing before adding back with proper configuration")
         host_xml = f"<host name='{name}'/>"
         cmd = f"virsh net-update default delete ip-dhcp-host \"{host_xml}\" --live --config"
-        ret = h.run(cmd)
+        ret = lh.run(cmd)
 
     host_xml = f"<host mac='{mac}' name='{name}' ip='{ip}'/>"
     print(f"\tCreating static DHCP entry for VM {name}")
     cmd = f"virsh net-update default add ip-dhcp-host \"{host_xml}\" --live --config"
-    ret = h.run(cmd)
+    ret = lh.run(cmd)
     if ret.err:
         print(cmd)
         print(ret.err)
@@ -58,29 +61,42 @@ def setup_vm(h: host.LocalHost, virsh_pool: VirshPool, cfg: dict, iso_path: str)
     RAM_MB = 32784
     DISK_GB = 48
     CPU_CORE = 8
-    network = "default"
 
-    cmd = f"""
-    virt-install
-        --connect qemu:///system
-        -n {name}
-        -r {RAM_MB}
-        --vcpus {CPU_CORE}
-        --os-variant={OS_VARIANT}
-        --import
-        --network=network:{network},mac={mac}
-        --events on_reboot=restart
-        --cdrom {iso_path}
-        --disk pool={virsh_pool.name()},size={DISK_GB},sparse=false
-        --wait=-1
-    """
+    if hostname == "localhost":
+        network = "network=default"
+    else:
+        network = "bridge=virbr0"
+
+    cmd = f""" virt-install \
+        --connect qemu:///system \
+        -n {name} \
+        -r {RAM_MB} \
+        --vcpus {CPU_CORE} \
+        --os-variant={OS_VARIANT} \
+        --import \
+        --network {network},mac={mac} \
+        --events on_reboot=restart \
+        --cdrom {iso_path} \
+        --disk pool={virsh_pool.name()},size={DISK_GB},sparse=false \
+        --wait=-1 """
     print(f"Starting VM {name}")
-    ret = h.run(cmd)
+    ret = rh.run(cmd)
     if ret.returncode != 0:
         print(f"Finished starting VM {name}, cmd = {cmd}, err=  error {ret}")
     else:
         print(f"Finished starting VM {name} without any errors")
     return ret
+
+
+def copy_iso_on_remote(rh, iso_path, virsh_pool) -> str:
+    hostname = rh.get_hostname()
+    virsh_pool.ensure_initialized()
+    print(f"\tCopying {iso_path} to {hostname}:/{virsh_pool.images_path()}")
+    rh.scp(iso_path, virsh_pool.images_path())
+    basename = os.path.basename(iso_path)
+    iso_path = os.path.join(virsh_pool.images_path(), basename)
+    print(f"\tiso_path modified to {iso_path}")
+    return iso_path
 
 
 def run_cmd(h, cmd):
@@ -90,19 +106,20 @@ def run_cmd(h, cmd):
         sys.exit(-1)
 
 
-def setup_all_vms(h: host.LocalHost, vms, iso_path, virsh_pool) -> list:
+def setup_all_vms(lh, rh, vms, iso_path, virsh_pool) -> list:
     if not vms:
         return []
 
-    print(f"\tSetting up vms")
+    hostname = rh.get_hostname()
+    print(f"\tSetting up vms on {hostname}")
     virsh_pool.ensure_initialized()
 
     executor = ThreadPoolExecutor(max_workers=len(vms))
     futures = []
     for e in vms:
-        futures.append(executor.submit(setup_vm, h, virsh_pool, e, iso_path))
+        futures.append(executor.submit(setup_vm, lh, rh, virsh_pool, e, iso_path))
 
-        while not h.vm_is_running(e["name"]) and not futures[-1].done():
+        while not rh.vm_is_running(e["name"]) and not futures[-1].done():
             time.sleep(1)
 
     return futures
@@ -163,8 +180,8 @@ class ClusterDeployer():
 
         self._futures = {e["name"]: empty() for e in self._cc.all_nodes()}
 
-    def local_host_config(self):
-        return next(e for e in self._cc["hosts"] if e["name"] == "localhost")
+    def local_host_config(self, hostname: Optional[str] = "localhost"):
+        return next(e for e in self._cc["hosts"] if e["name"] == hostname)
 
     """
     Using Aicli, we will find all the clusters installed on our host included in our configuration file.
@@ -344,8 +361,9 @@ class ClusterDeployer():
             print("=================== !!!!!!!!!!!!!!!!!!!!!! ====================")
             print(" !!!!!!!!!!!!! Destoying and recreating bridge !!!!!!!!!!!!!!!!")
             print("=================== !!!!!!!!!!!!!!!!!!!!!! ====================")
-            print("\tcreating default-net.xml on localhost")
-            contents = """
+            print(f"\tcreating default-net.xml on {hostname}")
+            if hostname == "localhost":
+                contents = """
 <network>
   <name>default</name>
   <forward mode='nat'/>
@@ -357,9 +375,20 @@ class ClusterDeployer():
   </ip>
 </network>
 """
+            else:
+                contents = """
+<network>
+  <name>default</name>
+  <forward mode='nat'/>
+  <bridge name='virbr0' stp='off' delay='0'/>
+  <ip address='192.168.123.250' netmask='255.255.0.0'/>
+</network>
+"""
             bridge_xml = os.path.join("/tmp", 'vir_bridge.xml')
             with open(bridge_xml, 'w') as outfile:
                 outfile.write(contents)
+            if h.get_hostname() != "localhost":
+                h.scp(bridge_xml, bridge_xml)
 
             cmd = "virsh net-destroy default"
             h.run(cmd) # ignore return code - it might fail if net was not started
@@ -379,16 +408,20 @@ class ClusterDeployer():
         cmd = "systemctl restart libvirtd"
         run_cmd(h, cmd)
 
-    def ensure_linked_to_bridge(self) -> None:
+
+    def ensure_linked_to_bridge(self, h, network_api_port: Optional[str] = "auto") -> None:
         if not self.need_api_network():
             print("\tOnly running local VMs (virbr0 not connected to externally)")
             return
 
-        api_network = self._cc["network_api_port"]
+        if network_api_port == "auto":
+            api_network = self._cc["network_api_port"]
+        else:
+            api_network = network_api_port
+
         print(f"\tlink {api_network} to virbr0")
 
-        lh = host.LocalHost()
-        interface = list(filter(lambda x: x["ifname"] == api_network, lh.all_ports()))
+        interface = list(filter(lambda x: x["ifname"] == api_network, h.all_ports()))
         if not interface:
             print(f"\tMissing API network interface {api_network}")
             sys.exit(-1)
@@ -396,17 +429,22 @@ class ClusterDeployer():
         interface = interface[0]
         bridge = "virbr0"
 
-        self.configure_bridge_and_net(lh)
+        self.configure_bridge_and_net(h)
         if "master" not in interface:
             print(f"\tNo master set for interface {api_network}, setting it to {bridge}")
-            lh.run(f"ip link set {api_network} master {bridge}")
+            # set interface down before starting bridge as otherwise bridge start might fail if interface
+            # already got an IP address in same network as bridge
+            h.run(f"ip link set {api_network} down")
+            h.run(f"ip link set {api_network} master {bridge}")
+            h.run(f"ip link set {api_network} up")
         elif interface["master"] != bridge:
             print(f"\tIncorrect master set for interface {api_network}")
             sys.exit(-1)
 
     def need_external_network(self) -> bool:
+        vm_bm = list(x for x in self._cc["workers"] if x["type"] == "vm" and x["node"] != 'localhost')
         return ("workers" in self.args.steps) and \
-               (len(self._cc["workers"]) > len(self._cc.worker_vms()))
+               (len(self._cc["workers"]) > len(self._cc.worker_vms()) or len(vm_bm) > 0)
 
     def _is_sno_configuration(self) -> bool:
         return len(self._cc["masters"]) == 1 and len(self._cc["workers"]) == 0
@@ -443,7 +481,7 @@ class ClusterDeployer():
             else:
                 print("Skipping master creation.")
 
-            self.ensure_linked_to_bridge()
+            self.ensure_linked_to_bridge(lh)
             if "workers" in self.args.steps:
                 if self._cc["workers"]:
                     self.create_workers()
@@ -495,7 +533,7 @@ class ClusterDeployer():
         self._ai.download_iso_with_retry(infra_env)
 
         lh = host.LocalHost()
-        futures = setup_all_vms(lh, self._cc["masters"],
+        futures = setup_all_vms(lh, lh, self._cc["masters"],
                                 os.path.join(os.getcwd(), f"{infra_env}.iso"),
                                 self.local_host_config()["virsh_pool"])
 
@@ -510,7 +548,7 @@ class ClusterDeployer():
         self._ai.wait_cluster(cluster_name)
         for p in futures:
             p.result()
-        self.ensure_linked_to_bridge()
+        self.ensure_linked_to_bridge(lh)
         print(f'downloading kubeconfig to {self._cc["kubeconfig"]}')
         self._ai.download_kubeconfig(self._cc["name"], os.path.dirname(self._cc["kubeconfig"]))
         self._update_etc_hosts()
@@ -589,13 +627,54 @@ class ClusterDeployer():
         print("=== Setting up vm x86 workers on localhost ===")
         cluster_name = self._cc["name"]
         infra_env = f"{cluster_name}-x86"
-        vm = list(x for x in self._cc["workers"] if x["type"] == "vm")
+        vm = list(x for x in self._cc["workers"] if x["type"] == "vm" and x["node"] == 'localhost')
+
         print(f"\tinfra_env = {infra_env}")
         lh = host.LocalHost()
-        futures = setup_all_vms(lh, vm,
+        futures = setup_all_vms(lh, lh, vm,
                                 os.path.join(os.getcwd(), f"{infra_env}.iso"),
                                 self.local_host_config()["virsh_pool"])
         self._wait_known_state(e["name"] for e in vm)
+
+    def _create_remote_vm_x86_workers(self) -> None:
+        print("=== Setting up vm x86 workers on remote hosts ===")
+        cluster_name = self._cc["name"]
+        infra_env = f"{cluster_name}-x86"
+        bm_hostnames = set()
+        bms = []
+        for x in self._cc["workers"]:
+            if x["node"] not in bm_hostnames and x["type"] == "vm" and x["node"] != 'localhost':
+                bms.append(x)
+                bm_hostnames.add(x["node"])
+        print(f"\tinfra_env = {infra_env}")
+        for bm in bms:
+            rh = host.RemoteHost(bm["node"])
+            host_config = self.local_host_config(bm["node"])
+            rh.ssh_connect(host_config["username"], host_config["password"])
+            cmd = "yum -y install libvirt qemu-img qemu-kvm virt-install"
+            run_cmd(rh, cmd)
+
+        lh = host.LocalHost()
+        vms = []
+        for bm in bms:
+            rh = host.RemoteHost(bm["node"])
+            print(f"==== Setting up vms on {bm['node']} ====")
+            host_config = self.local_host_config(bm["node"])
+            rh.ssh_connect(host_config["username"], host_config["password"])
+
+            # TODO validate api port
+            self.ensure_linked_to_bridge(rh, host_config["network_api_port"])
+
+            iso_path = copy_iso_on_remote(rh, os.path.join(os.getcwd(), f"{infra_env}.iso"),
+                                          self.local_host_config(bm["node"])["virsh_pool"])
+
+            vm = list(x for x in self._cc["workers"] if x["type"] == "vm" and x["node"] == bm["node"])
+            vms.extend(vm)
+            print(f"Starting {len(vm)} VMs on {bm['node']}")
+            setup_all_vms(lh, rh, vm, iso_path,
+                          self.local_host_config(bm["node"])["virsh_pool"])
+        self._wait_known_state(e["name"] for e in vms)
+
 
     def _create_x86_workers(self) -> None:
         print("== Setting up x86 workers ==")
@@ -617,6 +696,7 @@ class ClusterDeployer():
 
         self._create_physical_x86_workers()
         self._create_vm_x86_workers()
+        self._create_remote_vm_x86_workers()
 
         print("\trenaming workers")
         self._rename_workers(infra_env_name)
@@ -744,6 +824,7 @@ class ClusterDeployer():
 
     def _download_iso(self, infra_env_name: str, iso_path: str) -> None:
         print(f"\tDownload iso from {infra_env_name} to {iso_path}, will retry until success")
+
         while True:
             try:
                 self._ai.download_iso(infra_env_name, iso_path)

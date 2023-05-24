@@ -4,6 +4,7 @@ from tenacity import retry, stop_after_attempt, wait_fixed
 import paramiko
 import logging
 import subprocess
+from scp import SCPClient
 from collections import namedtuple
 import io
 import os
@@ -47,9 +48,12 @@ class Host():
     def port_exists(self, port_name: str) -> bool:
         return self.run(f"ip link show {port_name}").returncode == 0
 
+    def get_hostname(self) -> str:
+        return self._hostname
+
 class LocalHost(Host):
     def __init__(self):
-        pass
+        self._hostname = "localhost"
 
     def run(self, cmd: str, env: dict = os.environ.copy()) -> Result:
         now = datetime.datetime.now()
@@ -88,7 +92,7 @@ class RemoteHost(Host):
         logger = paramiko.util.logging.getLogger()
         logger.setLevel(logging.WARN)
 
-    def ssh_connect(self, username: str, id_rsa_path: Optional[str] = None,
+    def ssh_connect(self, username: str, password: Optional[str] = None, id_rsa_path: Optional[str] = None,
                     id_ed25519_path: Optional[str] = None) -> None:
         if id_rsa_path is None:
             id_rsa_path = os.path.join(os.environ["HOME"], ".ssh/id_rsa")
@@ -106,10 +110,11 @@ class RemoteHost(Host):
             self._id_ed25519 = None
         print(f"\twaiting for '{self._hostname}' to respond to ping")
         self.wait_ping()
-        print(f"\t{self._hostname} responded to ping, trying to connect")
-        self.ssh_connect_looped(username)
+        print(f"\t{self._hostname} responded to ping, trying to connect using {username}")
+        self.ssh_connect_looped(username, password)
 
-    def ssh_connect_looped(self, username: str) -> None:
+
+    def ssh_connect_looped(self, username: str, password: str) -> None:
         try:
             pkey = paramiko.RSAKey.from_private_key(io.StringIO(self._id_rsa))
         except (paramiko.ssh_exception.PasswordRequiredException, paramiko.ssh_exception.SSHException):
@@ -121,12 +126,13 @@ class RemoteHost(Host):
 
         while True:
             self._username = username
+            self._password = password
             self._host = paramiko.SSHClient()
             self._host.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
             try:
                 self._host.connect(self._hostname, username=username,
-                                   pkey=pkey)
+                                   pkey=pkey, password=password)
             except paramiko.ssh_exception.AuthenticationException as e:
                 if pkey.get_name() != "ssh-ed25519" and self._id_ed25519:
                     print("\tRetry connect with es25519.")
@@ -140,7 +146,7 @@ class RemoteHost(Host):
                 print(type(e))
                 time.sleep(10)
                 continue
-            print(f"\tconnected to {self._hostname}")
+            print(f"\tconnected to {self._hostname} with {self._username}")
             break
 
     def _read_output(self, cmd: str) -> Result:
@@ -161,6 +167,11 @@ class RemoteHost(Host):
 
         return Result(out, err, exit_code)
 
+    def scp(self, source, destination):
+        ssh_scp = SCPClient(self._host.get_transport())
+        ssh_scp.put(source, destination)
+
+
     def run(self, cmd: str) -> Result:
         while True:
             try:
@@ -170,7 +181,8 @@ class RemoteHost(Host):
             except Exception as e:
                 print(e)
                 print(f"\tConnection lost while running command {cmd}, reconnecting...")
-                self.ssh_connect_looped(self._username)
+                self.ssh_connect_looped(self._username, self._password)
+
 
     def close(self) -> None:
         self._host.close()

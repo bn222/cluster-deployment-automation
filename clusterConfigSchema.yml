@@ -22,3 +22,6 @@ clusters:
     hosts:
     - name: "A"
       images_path: "/path/to/pool/directory"
+      username: "<core> to connect to bms hosting vms"
+      password: "password"
+      network_api_port: "<auto> to keep cluster default - <device name> to overwrite cluster default>"
