@@ -19,6 +19,7 @@ import common
 
 
 Result = namedtuple("Result", "out err returncode")
+all_hosts = {}
 
 
 def sync_time(src, dst):
@@ -326,3 +327,14 @@ class RemoteHostWithBF2(RemoteHost):
     def bf_load_bfb(self) -> Result:
         print("Loading BFB image")
         return self.run_in_container("/bfb")
+
+
+def get_host(name):
+    if name in all_hosts:
+        return all_hosts[name]
+    if name == "localhost":
+        h = LocalHost()
+    else:
+        h = RemoteHost(name)
+    all_hosts[name] = h
+    return h

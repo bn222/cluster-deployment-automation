@@ -164,11 +164,7 @@ class ClusterDeployer():
         pool_name = f"{self._cc['name']}_guest_images"
         print(f"Starting ClusterDeployer with pool {pool_name}")
         for e in self._cc["hosts"]:
-            if e["name"] == "localhost":
-                h = host.LocalHost()
-            else:
-                h = host.RemoteHost(e["name"])
-
+            h = host.get_host(e["name"])
             print(f"\tCreating virsh_pool for {e['name']}")
             e["virsh_pool"] = VirshPool(h, pool_name, e["images_path"])
 
@@ -215,7 +211,7 @@ class ClusterDeployer():
         print(f"Tearing down {cluster_name}")
         self._ai.ensure_cluster_deleted(self._cc["name"])
 
-        lh = host.LocalHost()
+        lh = host.get_host("localhost")
         for m in self._cc.local_vms():
             assert m["node"] == "localhost"
             images_path = self.local_host_config()["virsh_pool"].images_path()
@@ -555,7 +551,7 @@ class ClusterDeployer():
         ip = self._ai.get_ai_ip(name)
         if ip is None:
             return
-        rh = host.RemoteHost(ip)
+        rh = host.get_host(ip)
         print(f"Gathering logs from {name}")
         print(rh.run("sudo journalctl TAG=agent --no-pager").out)
 
@@ -597,7 +593,7 @@ class ClusterDeployer():
         for w in self._cc["workers"]:
             ai_ip = self._ai.get_ai_ip(w["name"])
             assert ai_ip is not None
-            rh = host.RemoteHost(ai_ip)
+            rh = host.get_host(ai_ip)
             rh.ssh_connect("core")
             rh.run("echo root:redhat | sudo chpasswd")
 
@@ -646,7 +642,7 @@ class ClusterDeployer():
                 bm_hostnames.add(x["node"])
         print(f"\tinfra_env = {infra_env}")
         for bm in bms:
-            rh = host.RemoteHost(bm["node"])
+            rh = host.get_host(bm["node"])
             host_config = self.local_host_config(bm["node"])
             rh.ssh_connect(host_config["username"], host_config["password"])
             cmd = "yum -y install libvirt qemu-img qemu-kvm virt-install"
@@ -655,7 +651,7 @@ class ClusterDeployer():
         lh = host.LocalHost()
         vms = []
         for bm in bms:
-            rh = host.RemoteHost(bm["node"])
+            rh = host.get_host(bm["node"])
             print(f"==== Setting up vms on {bm['node']} ====")
             host_config = self.local_host_config(bm["node"])
             rh.ssh_connect(host_config["username"], host_config["password"])
@@ -708,7 +704,7 @@ class ClusterDeployer():
         print("\tWaiting for connectivity to all workers")
         hosts = []
         for w in self._cc["workers"]:
-            rh = host.RemoteHost(w['ip'])
+            rh = host.get_host(w['ip'])
             rh.ssh_connect("core")
             hosts.append(rh)
         print("\tConnectivity established to all workers, now checking that they have an IP in 192.168.122/24")
@@ -936,7 +932,7 @@ class ClusterDeployer():
                     ai_ip = self._ai.get_ai_ip(e["name"])
                     if ai_ip is None:
                         continue
-                    h = host.RemoteHost(ai_ip, None, None)
+                    h = host.get_host(ai_ip)
                     h.ssh_connect("core")
                     print(f'\tconnected to {e["name"]}, setting user:pw')
                     h.run("echo root:redhat | sudo chpasswd")
