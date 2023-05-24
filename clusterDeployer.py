@@ -35,6 +35,17 @@ def setup_vm(h: host.Host, virsh_pool: VirshPool, cfg: dict, iso_path: str):
     name = cfg["name"]
     ip = cfg["ip"]
     mac = "52:54:"+":".join(re.findall("..", secrets.token_hex()[:8]))
+
+    # If adding a worker node fails, one might want to retry w/o tearing down the whole cluster
+    # In that case, the DHCP entry might already be present, with wrong mac -> remove it
+    cmd = "virsh net-dumpxml default"
+    ret = h.run(cmd)
+    if name in ret.out:
+        logger.info(f"{name} already configured as static DHCP entry - removing before adding back with proper configuration")
+        host_xml = f"<host name='{name}'/>"
+        cmd = f"virsh net-update default delete ip-dhcp-host \"{host_xml}\" --live --config"
+        ret = h.run(cmd)
+
     host_xml = f"<host mac='{mac}' name='{name}' ip='{ip}'/>"
     logger.info(f"Creating static DHCP entry for VM {name}")
     cmd = f"virsh net-update default add ip-dhcp-host \"{host_xml}\" --live --config"
