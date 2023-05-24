@@ -140,6 +140,15 @@ class Host:
                     logger.log(log_level, f"Connection lost while running command {cmd}, reconnecting...")
                     self.ssh_connect_looped(self._username)
 
+    def run_or_die(self, cmd: str) -> Result:
+        ret = self.run(cmd)
+        if ret.returncode:
+            logger.error(f"{cmd} failed: {ret.err}")
+            sys.exit(-1)
+        else:
+            logger.debug(ret.out.strip())
+        return ret
+
     def close(self) -> None:
         self._host.close()
 
