@@ -1,3 +1,5 @@
+import sys
+
 class VirshPool:
     def __init__(self, host, name: str, images_path: str):
         self._host = host
@@ -32,7 +34,13 @@ class VirshPool:
 
     def initialize(self) -> None:
         print(f"\tInitializing pool {self._name} at {self._images_path}")
-        print(self._host.run(f"virsh pool-define-as {self._name} dir - - - - {self._images_path}"))
-        print(self._host.run(f"mkdir -p {self._images_path}"))
-        print(self._host.run(f"chmod a+rw {self._images_path}"))
-        print(self._host.run(f"virsh pool-start {self._name}"))
+        ret = self._host.run(f"virsh pool-define-as {self._name} dir - - - - {self._images_path}")
+        if ret.returncode == 0:
+            ret = self._host.run(f"mkdir -p {self._images_path}")
+        if ret.returncode == 0:
+            ret = self._host.run(f"chmod a+rw {self._images_path}")
+        if ret.returncode == 0:
+            ret = self._host.run(f"virsh pool-start {self._name}")
+        if ret.returncode != 0:
+            print(f"\tUnable to initialize pool {self._name}: {ret.err}")
+            sys.exit(-1)
