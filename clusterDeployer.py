@@ -57,7 +57,7 @@ def setup_vm(h: host.Host, virsh_pool: VirshPool, cfg: dict, iso_path: str):
 
     OS_VARIANT = "rhel8.5"
     RAM_MB = 32784
-    DISK_GB = 48
+    DISK_GB = cfg['disk_size']
     CPU_CORE = 8
     network = "default"
 
