@@ -686,7 +686,12 @@ class ClusterDeployer():
         self._ai.ensure_infraenv_created(infra_env_name, cfg)
 
         os.makedirs(self._iso_path, exist_ok=True)
-        self._download_iso(infra_env_name, self._iso_path)
+
+        file_path = os.path.join(os.getcwd(), f"{infra_env_name}.iso")
+        if os.path.isfile(file_path):
+            print(f"\tiso for {infra_env_name} was already downloaded to {file_path}")
+        else:
+            self._ai.download_iso_with_retry(infra_env_name)
 
         self._create_physical_x86_workers()
         self._create_vm_x86_workers()
@@ -761,14 +766,14 @@ class ClusterDeployer():
 
     def boot_iso_x86(self, worker: dict, iso: str) -> None:
         host_name = worker["node"]
-        print(f"\ttrying to boot {host_name}")
+        print(f"\ttrying to boot {host_name} using {iso}")
 
         lh = host.LocalHost()
         nfs = NFS(lh, self._cc["external_port"])
 
         h = host.RemoteHostWithBF2(host_name, worker["bmc_ip"], worker["bmc_user"], worker["bmc_password"])
 
-        iso = nfs.host_file(f"/root/iso/{iso}")
+        iso = nfs.host_file(os.path.join(os.getcwd(), iso))
         h.boot_iso_redfish(iso)
         h.ssh_connect("core")
         print(f"{host_name} connected")

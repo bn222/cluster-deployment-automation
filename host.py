@@ -230,7 +230,7 @@ class RemoteHost(Host):
     """
     @retry(stop=stop_after_attempt(10), wait=wait_fixed(60))
     def _boot_with_overrides(self, iso_path: str) -> None:
-        print(f"\tTrying to boot '{self._hostname}' through {self._bmc_url()}")
+        print(f"\tTrying to boot '{self._hostname}' through {self._bmc_url()} using {iso_path}")
         red = self._redfish()
         try:
             red.eject_iso()

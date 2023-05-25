@@ -1,6 +1,7 @@
 import time
 import os
 import json
+from typing import Optional
 from ailib import AssistedClient
 import requests
 import common

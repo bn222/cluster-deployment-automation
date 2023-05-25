@@ -107,6 +107,7 @@ class CoreosBuilder():
         if os.path.exists(fcos_dir):
             shutil.rmtree(fcos_dir)
         os.makedirs(fcos_dir)
+        cur_dir = os.getcwd()
         os.chdir(fcos_dir)
 
         cmd = f"""
@@ -150,6 +151,7 @@ class CoreosBuilder():
         print(cmd)
         print(lh.run(cmd))
         print(lh.run(f"chmod a+rw {dst}"))
+        os.chdir(cur_dir)
 
     def _find_iso(self, fcos_dir: str) -> Optional[str]:
         for root, _, files in os.walk(fcos_dir, topdown=False):
