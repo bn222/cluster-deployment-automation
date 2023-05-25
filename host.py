@@ -82,6 +82,9 @@ class LocalHost(Host):
         with open(file_name) as f:
             return f.read()
 
+    def remove(self, source):
+        if os.path.exists(source):
+            os.remove(source)
 
 class RemoteHost(Host):
     def __init__(self, hostname: str, bmc_ip: Optional[str] = None, bmc_user: Optional[str] = None, bmc_password: Optional[str] = None):
@@ -170,6 +173,13 @@ class RemoteHost(Host):
     def scp(self, source, destination):
         ssh_scp = SCPClient(self._host.get_transport())
         ssh_scp.put(source, destination)
+
+    def remove(self, source):
+        try:
+            ssh_sftp = self._host.open_sftp()
+            ssh_sftp.remove(source)
+        except FileNotFoundError:
+            pass
 
 
     def run(self, cmd: str) -> Result:

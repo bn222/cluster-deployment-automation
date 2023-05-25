@@ -98,11 +98,12 @@ class ClustersConfig():
             if "hosts" not in cc:
                 cc["hosts"] = []
 
-            # creates hosts entries for each referenced node name
             all_nodes = cc["masters"] + cc["workers"]
             for n in all_nodes:
                 if "disk_size" not in n:
                     n["disk_size"] = 48
+
+            # creates hosts entries for each referenced node name
             node_names = set(x["name"] for x in cc["hosts"])
             for h in all_nodes:
                 if h["node"] not in node_names:
@@ -201,6 +202,12 @@ class ClustersConfig():
 
     def __setitem__(self, key, value) -> None:
         self.fullConfig["clusters"][0][key] = value
+
+    def all_hosts(self) -> list:
+        return self["hosts"]
+
+    def all_remotes(self) -> list:
+        return [x for x in self["hosts"] if x["node"] != "localhost"]
 
     def all_nodes(self) -> list:
         return self["masters"] + self["workers"]

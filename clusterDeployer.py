@@ -211,30 +211,33 @@ class ClusterDeployer():
         print(f"Tearing down {cluster_name}")
         self._ai.ensure_cluster_deleted(self._cc["name"])
 
-        lh = host.get_host("localhost")
-        for m in self._cc.local_vms():
-            assert m["node"] == "localhost"
+        for m in self._cc.all_vms():
+            h = host.get_host(m["node"])
+            if m["node"] != "localhost":
+                host_config = self.local_host_config(m["node"])
+                h.ssh_connect(host_config["username"], host_config["password"])
+
             images_path = self.local_host_config()["virsh_pool"].images_path()
             name = m["name"]
             image = f"/{images_path}/{name}.qcow2"
-            if os.path.exists(image):
-                os.remove(image)
+            h.remove(image)
 
             # destroy the VM only if that really exists
-            if lh.run(f"virsh desc {name}").returncode == 0:
-                r = lh.run(f"virsh destroy {name}")
-                print("\t" + r.err if r.err else "\t" + r.out)
-                r = lh.run(f"virsh undefine {name}")
-                print("\t" + r.err if r.err else "\t" + r.out)
+            if h.run(f"virsh desc {name}").returncode == 0:
+                r = h.run(f"virsh destroy {name}")
+                print("\t", r.err if r.err else "\t" + r.out)
+                r = h.run(f"virsh undefine {name}")
+                print("\t", r.err if r.err else "\t" + r.out)
 
         self._ai.ensure_infraenv_deleted(f"{cluster_name}-x86")
         self._ai.ensure_infraenv_deleted(f"{cluster_name}-arm")
 
+        lh = host.LocalHost()
         xml_str = lh.run("virsh net-dumpxml default").out
         q = et.fromstring(xml_str)
         removed_macs = []
-        names = [x["name"] for x in self._cc.local_vms()]
-        ips = [x["ip"] for x in self._cc.local_vms()]
+        names = [x["name"] for x in self._cc.all_vms()]
+        ips = [x["ip"] for x in self._cc.all_vms()]
         for e in q[-1][0][1:]:
             if e.attrib["name"] in names or e.attrib["ip"] in ips:
                 mac = e.attrib["mac"]
@@ -252,7 +255,7 @@ class ClusterDeployer():
 
         if contents:
             j = json.loads(contents)
-            names = [x["name"] for x in self._cc.local_vms()]
+            names = [x["name"] for x in self._cc.all_vms()]
             print(f'\tCleaning up {fn}')
             print(f'\tremoving hosts with mac in {removed_macs} or name in {names}')
             filtered = []
@@ -279,12 +282,14 @@ class ClusterDeployer():
             vp.ensure_removed()
 
         if self.need_api_network():
-            intif = self._validate_api_port(lh)
-            if not intif:
-                print("\tcan't find network API port")
-            else:
-                r = lh.run(f"ip link set {intif} nomaster")
-                print("\t" + r.err if r.err else "\t" + r.out)
+            for m in self._cc.all_hosts():
+                h = host.get_host(m["name"])
+                intif = self._validate_api_port(h)
+                if not intif:
+                    print("\tcan't find network API port")
+                else:
+                    r = h.run(f"ip link set {intif} nomaster")
+                    print("\t" + r.err if r.err else "\t" + r.out)
 
         if os.path.exists(self._cc["kubeconfig"]):
             os.remove(self._cc["kubeconfig"])
