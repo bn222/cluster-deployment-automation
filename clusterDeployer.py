@@ -8,14 +8,15 @@ from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import Future
 from typing import Optional
 from typing import Dict
-from clustersConfig import ClustersConfig
-import host
 import secrets
 import re
+import glob
+import socket
+import paramiko
+from clustersConfig import ClustersConfig
+import host
 from k8sClient import K8sClient
 from nfs import NFS
-import requests
-import socket
 import coreosBuilder
 from extraConfigBFB import ExtraConfigBFB, ExtraConfigSwitchNicMode
 from extraConfigSriov import ExtraConfigSriov, ExtraConfigSriovOvSHWOL, ExtraConfigSriovOvSHWOL_NewAPI
@@ -23,10 +24,8 @@ from extraConfigDpuTenant import ExtraConfigDpuTenantMC, ExtraConfigDpuTenant, E
 from extraConfigDpuInfra import ExtraConfigDpuInfra, ExtraConfigDpuInfra_NewAPI
 from extraConfigOvnK import ExtraConfigOvnK
 from extraConfigCNO import ExtraConfigCNO
-import paramiko
 import common
 from virshPool import VirshPool
-import glob
 
 
 def setup_vm(lh, rh, virsh_pool: VirshPool, cfg: dict, iso_path: str):
@@ -268,8 +267,7 @@ class ClusterDeployer():
                 if "hostname" in entry and entry["hostname"] in names:
                     print(f'\tRemoved host with name {entry["hostname"]}')
                     continue
-                else:
-                    print(f'\tKept entry {entry}')
+                print(f'\tKept entry {entry}')
                 filtered.append(entry)
 
             r = lh.run("virsh net-destroy default")
@@ -631,9 +629,9 @@ class ClusterDeployer():
 
         print(f"\tinfra_env = {infra_env}")
         lh = host.LocalHost()
-        futures = setup_all_vms(lh, lh, vm,
-                                os.path.join(os.getcwd(), f"{infra_env}.iso"),
-                                self.local_host_config()["virsh_pool"])
+        setup_all_vms(lh, lh, vm,
+                      os.path.join(os.getcwd(), f"{infra_env}.iso"),
+                      self.local_host_config()["virsh_pool"])
         self._wait_known_state(e["name"] for e in vm)
 
     def _create_remote_vm_x86_workers(self) -> None:
@@ -742,7 +740,7 @@ class ClusterDeployer():
             if renamed == expected:
                 print(f"\tFound and renamed {renamed} workers")
                 break
-            elif renamed:
+            if renamed:
                 print(f"\tFound and renamed {renamed} workers, but waiting for {expected}, retrying")
                 time.sleep(5)
 
@@ -883,7 +881,7 @@ class ClusterDeployer():
                 d = h.os_release()
                 print(d)
                 skip_boot = d["NAME"] == 'Fedora Linux' and d['VARIANT'] == 'CoreOS'
-            except paramiko.ssh_exception.AuthenticationException as e:
+            except paramiko.ssh_exception.AuthenticationException:
                 print("\tAuthentication failed, will not be able to skip boot")
 
         if skip_boot:
@@ -967,6 +965,5 @@ class ClusterDeployer():
                             h.run(f"sudo podman rmi {image['id']}")
                 except Exception as e:
                     print(e)
-                    pass
 
             time.sleep(10)

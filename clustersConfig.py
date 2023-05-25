@@ -1,21 +1,20 @@
 from os import path, getcwd
-from sys import exit
-from yaml import safe_load, safe_dump
 import logging
 import os
 import io
 import sys
-import jinja2
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
-import host
 import re
 from typing import List
 from typing import Dict
+import jinja2
+from yaml import safe_load, safe_dump
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
+import host
 
 logging.basicConfig(level=logging.INFO,
-        format='%(asctime)s %(levelname)s: %(message)s', datefmt='%H:%M:%S'
-)
+                    format='%(asctime)s %(levelname)s: %(message)s',
+                    datefmt='%H:%M:%S')
 
 
 class ClusterInfo:
@@ -68,7 +67,7 @@ class ClustersConfig():
 
         if not path.exists(yamlPath):
             logging.error(f"could not find config in path: '{yamlPath}'")
-            exit(1)
+            sys.exit(1)
 
         with open(yamlPath, 'r') as f:
             contents = f.read()
@@ -97,15 +96,15 @@ class ClustersConfig():
                 cc["network_api_port"] = "auto"
 
             if "hosts" not in cc:
-              cc["hosts"] = []
+                cc["hosts"] = []
 
             # creates hosts entries for each referenced node name
             all_nodes = cc["masters"] + cc["workers"]
             node_names = set(x["name"] for x in cc["hosts"])
             for h in all_nodes:
-              if h["node"] not in node_names:
-                cc["hosts"].append({"name" : h["node"]})
-                node_names.add(h["node"])
+                if h["node"] not in node_names:
+                    cc["hosts"].append({"name" : h["node"]})
+                    node_names.add(h["node"])
 
             # Set default value for optional parameters for workers.
             for w in cc["workers"]:
@@ -115,14 +114,14 @@ class ClustersConfig():
             # fill-in defaults value for required attributes on
             # all hosts
             for host_config in cc["hosts"]:
-              if "images_path" not in host_config:
-                host_config["images_path"] = f'/home/{cc["name"]}_guests_images'
-              if "username" not in host_config:
-                  host_config["username"] = "core"
-              if "password" not in host_config:
-                  host_config["password"] = None
-              if "network_api_port" not in host_config:
-                  host_config["network_api_port"] = "auto"
+                if "images_path" not in host_config:
+                    host_config["images_path"] = f'/home/{cc["name"]}_guests_images'
+                if "username" not in host_config:
+                    host_config["username"] = "core"
+                if "password" not in host_config:
+                    host_config["password"] = None
+                if "network_api_port" not in host_config:
+                    host_config["network_api_port"] = "auto"
 
     def _apply_jinja(self, contents: str) -> str:
         def worker_number(a):
@@ -207,7 +206,7 @@ class ClustersConfig():
         return [x for x in self.all_nodes() if x["type"] == "vm"]
 
     def worker_vms(self) -> list:
-        return [x for x in self["workers"] if x ["type"] == "vm"]
+        return [x for x in self["workers"] if x["type"] == "vm"]
 
     def local_vms(self) -> list:
         return [x for x in self.all_vms() if x["node"] == "localhost"]
@@ -218,4 +217,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

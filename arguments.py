@@ -10,7 +10,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--secret', dest='secrets_path', default='', action='store', type=str, help='pull_secret.json path (default is in cwd)')
     steps = "pre,masters,workers,post"
     parser.add_argument('-s', '--steps', dest='steps', type=str, default=steps, help=f'Comma-separated list of steps to run (by default: {steps})')
-    parser.add_argument('-d', '--skip-steps', dest='skip_steps', type=str, default="", help=f"CommComma-separated list of steps to skip")
+    parser.add_argument('-d', '--skip-steps', dest='skip_steps', type=str, default="", help="CommComma-separated list of steps to skip")
 
     args = parser.parse_args()
     args.steps = args.steps.split(",")

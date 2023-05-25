@@ -1,11 +1,11 @@
 import os
 import sys
 import json
-from git import Repo
 import shutil
-import host
 from typing import Optional
 import glob
+from git import Repo
+import host
 
 
 def ensure_fcos_exists(dst: str="/root/iso/fedora-coreos.iso") -> None:
@@ -192,4 +192,4 @@ def main():
 
 
 if __name__ == "__main__":
-  main()
+    main()

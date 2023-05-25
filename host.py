@@ -1,10 +1,6 @@
-from ailib import Redfish
 import socket
-from tenacity import retry, stop_after_attempt, wait_fixed
-import paramiko
 import logging
 import subprocess
-from scp import SCPClient
 from collections import namedtuple
 import io
 import os
@@ -14,8 +10,12 @@ import json
 import shlex
 import sys
 from typing import Optional
-import common
 import datetime
+from ailib import Redfish
+from tenacity import retry, stop_after_attempt, wait_fixed
+import paramiko
+from scp import SCPClient
+import common
 
 
 Result = namedtuple("Result", "out err returncode")
@@ -120,9 +120,8 @@ class RemoteHost(Host):
         except (paramiko.ssh_exception.PasswordRequiredException, paramiko.ssh_exception.SSHException):
             if not self._id_ed25519:
                 raise
-            else:
-                pkey = paramiko.Ed25519Key.from_private_key(io.StringIO(
-                    self._id_ed25519))
+            pkey = paramiko.Ed25519Key.from_private_key(io.StringIO(
+                self._id_ed25519))
 
         while True:
             self._username = username
@@ -237,7 +236,6 @@ class RemoteHost(Host):
         except Exception as e:
             print(e)
             print("\t\teject failed, but continuing")
-            pass
         red.insert_iso(iso_path)
         print(f"\t\tinserted iso {iso_path}")
         try:

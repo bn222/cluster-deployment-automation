@@ -1,20 +1,19 @@
-from requests import get as get_url
 import os
 from shutil import rmtree as rmdir
-import yaml
 import json
 import time
-import requests
-import host
 import sys
 import re
+import yaml
+import requests
+from requests import get as get_url
+import host
 
 
 def load_url_or_file(url_or_file: str):
     if url_or_file.startswith("http"):
         return get_url(url_or_file).text
-    else:
-        return open(url_or_file).read()
+    return open(url_or_file).read()
 
 
 """
@@ -69,9 +68,9 @@ class AssistedInstallerService():
         y["data"]["IMAGE_SERVICE_BASE_URL"] = f"http://{self._ip}:8888"
         y["data"]["SERVICE_BASE_URL"] = f"http://{self._ip}:8090"
         # https://gitlab.cee.redhat.com/service/app-interface/-/blob/dc9614663fc64bb5aad2c11c8c24d731f1dfa7e4/data/services/assisted-installer/cicd/target/production/assisted-service.yaml#L46-48
-        y["data"]["INSTALLER_IMAGE"] = f"registry.redhat.io/rhai-tech-preview/assisted-installer-rhel8:v1.0.0-269"
-        y["data"]["CONTROLLER_IMAGE"] = f"registry.redhat.io/rhai-tech-preview/assisted-installer-reporter-rhel8:v1.0.0-340"
-        y["data"]["AGENT_DOCKER_IMAGE"] = f"registry.redhat.io/rhai-tech-preview/assisted-installer-agent-rhel8:v1.0.0-257"
+        y["data"]["INSTALLER_IMAGE"] = "registry.redhat.io/rhai-tech-preview/assisted-installer-rhel8:v1.0.0-269"
+        y["data"]["CONTROLLER_IMAGE"] = "registry.redhat.io/rhai-tech-preview/assisted-installer-reporter-rhel8:v1.0.0-340"
+        y["data"]["AGENT_DOCKER_IMAGE"] = "registry.redhat.io/rhai-tech-preview/assisted-installer-agent-rhel8:v1.0.0-257"
 
         j = json.loads(y["data"]["HW_VALIDATOR_REQUIREMENTS"])
         j[0]["master"]["disk_size_gb"] = 8
@@ -148,7 +147,7 @@ class AssistedInstallerService():
         result = lh.run("podman pod ps --format json")
         if result.err:
             print("Error {result.err}")
-            exit(1)
+            sys.exit(1)
         name = "assisted-installer"
         if name in map(lambda x: x["Name"], json.loads(result.out)):
             print(f"\t{name} already running, stopping it before restarting")
@@ -179,7 +178,7 @@ class AssistedInstallerService():
                 pass
             if count == 10:
                 print("Error: API is down")
-                exit(1)
+                sys.exit(1)
             count += 1
             time.sleep(2)
 
@@ -188,7 +187,7 @@ class AssistedInstallerService():
         result = lh.run("podman pod ps --format json")
         if result.err:
             print("Error {result.err}")
-            exit(1)
+            sys.exit(1)
         name = "assisted-installer"
         if name in map(lambda x: x["Name"], json.loads(result.out)):
             print(f"{name} already running, stopping it before restarting")
