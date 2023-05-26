@@ -217,6 +217,8 @@ class ClusterDeployer():
             if m["node"] != "localhost":
                 host_config = self.local_host_config(m["node"])
                 h.ssh_connect(host_config["username"], host_config["password"])
+                if not host_config['pre_installed']:
+                    h.need_sudo()
 
             images_path = self.local_host_config()["virsh_pool"].images_path()
             name = m["name"]
@@ -285,6 +287,11 @@ class ClusterDeployer():
         if self.need_api_network():
             for m in self._cc.all_hosts():
                 h = host.get_host(m["name"])
+                if h.get_hostname() != "localhost":
+                    host_config = self.local_host_config(h.get_hostname())
+                    h.ssh_connect(host_config["username"], host_config["password"])
+                    if not host_config['pre_installed']:
+                        h.need_sudo()
                 intif = self._validate_api_port(h)
                 if not intif:
                     print("\tcan't find network API port")
@@ -341,7 +348,7 @@ class ClusterDeployer():
     def need_api_network(self):
         return len(self._cc.local_vms()) != len(self._cc.all_nodes())
 
-    def configure_bridge_and_net(self, h) -> None:
+    def configure_bridge_and_net(self, h, api_network) -> None:
         cmd = "sed -e 's/#\\(user\\|group\\) = \".*\"$/\\1 = \"root\"/' -i /etc/libvirt/qemu.conf"
         run_cmd(h, cmd)
 
@@ -350,6 +357,10 @@ class ClusterDeployer():
         run_cmd(h, cmd)
         cmd = "systemctl start libvirtd"
         run_cmd(h, cmd)
+
+        # Not sure why this is needed, but w/o this sleep, libvirt stops and further virsh might fail
+        # Waiting for  systemctl status libvirtd" showing active i not enough
+        time.sleep(4)
 
         # stp must be disabled or it might conflict with default configuration of some physical switches
         # 'bridge' section of network 'default' can't be updated => destroy and recreate
@@ -399,11 +410,21 @@ class ClusterDeployer():
                 print(ret)
                 sys.exit(-1)
 
+            # Fix cases where virsh net-start fails with error "... interface virbr0: File exists"
+            cmd = "ip link delete virbr0"
+            h.run(cmd) # ignore return code - it might fail if virbr did not exist
+
             cmd = f"virsh net-define {bridge_xml}"
             run_cmd(h, cmd)
 
+            # set interface down before starting bridge as otherwise bridge start might fail if interface
+            # already got an IP address in same network as bridge
+            h.run(f"ip link set {api_network} down")
+
             cmd = "virsh net-start default"
             run_cmd(h, cmd)
+
+            h.run(f"ip link set {api_network} up")
 
         cmd = "systemctl restart libvirtd"
         run_cmd(h, cmd)
@@ -429,14 +450,10 @@ class ClusterDeployer():
         interface = interface[0]
         bridge = "virbr0"
 
-        self.configure_bridge_and_net(h)
+        self.configure_bridge_and_net(h, api_network)
         if "master" not in interface:
             print(f"\tNo master set for interface {api_network}, setting it to {bridge}")
-            # set interface down before starting bridge as otherwise bridge start might fail if interface
-            # already got an IP address in same network as bridge
-            h.run(f"ip link set {api_network} down")
             h.run(f"ip link set {api_network} master {bridge}")
-            h.run(f"ip link set {api_network} up")
         elif interface["master"] != bridge:
             print(f"\tIncorrect master set for interface {api_network}")
             sys.exit(-1)
@@ -637,7 +654,12 @@ class ClusterDeployer():
         self._wait_known_state(e["name"] for e in vm)
 
     def _create_remote_vm_x86_workers(self) -> None:
+        def boot_helper(worker, iso):
+            return self.boot_iso_x86(worker, iso)
+
         print("=== Setting up vm x86 workers on remote hosts ===")
+        executor = ThreadPoolExecutor(max_workers=len(self._cc["workers"]))
+        futures = []
         cluster_name = self._cc["name"]
         infra_env = f"{cluster_name}-x86"
         bm_hostnames = set()
@@ -647,12 +669,36 @@ class ClusterDeployer():
                 bms.append(x)
                 bm_hostnames.add(x["node"])
         print(f"\tinfra_env = {infra_env}")
+
         for bm in bms:
             rh = host.get_host(bm["node"])
             host_config = self.local_host_config(bm["node"])
-            rh.ssh_connect(host_config["username"], host_config["password"])
-            cmd = "yum -y install libvirt qemu-img qemu-kvm virt-install"
-            run_cmd(rh, cmd)
+            if not host_config['pre_installed']:
+                coreosBuilder.ensure_fcos_exists(os.path.join(os.getcwd(), "fedora-coreos-libvirt.iso"), False)
+                break
+
+        # If bm is not pre-installed, boot an iso with prepoer packages installed
+        for bm in bms:
+            rh = host.get_host(bm["node"])
+            host_config = self.local_host_config(bm["node"])
+            if not host_config['pre_installed']:
+                print(f"==== Setting up Host {bm['node']} to host vms ====")
+                iso = "fedora-coreos-libvirt.iso"
+                futures.append(executor.submit(boot_helper, bm, iso))
+
+        for f in futures:
+            print(f.result())
+
+        # If bm was pre-installed  (e.g. by beaker), install the necessary packages
+        for bm in bms:
+            rh = host.get_host(bm["node"])
+            host_config = self.local_host_config(bm["node"])
+            if host_config['pre_installed']:
+                rh.ssh_connect(host_config["username"], host_config["password"])
+                cmd = "yum -y install libvirt qemu-img qemu-kvm virt-install"
+                run_cmd(rh, cmd)
+            else:
+                rh.need_sudo()
 
         lh = host.LocalHost()
         vms = []
@@ -780,6 +826,7 @@ class ClusterDeployer():
         h = host.RemoteHostWithBF2(host_name, worker["bmc_ip"], worker["bmc_user"], worker["bmc_password"])
 
         iso = nfs.host_file(os.path.join(os.getcwd(), iso))
+        print(f"\tUsing iso {iso}")
         h.boot_iso_redfish(iso)
         h.ssh_connect("core")
         print(f"{host_name} connected")

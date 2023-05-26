@@ -1,5 +1,6 @@
 import os
 import sys
+import argparse
 import json
 import shutil
 from typing import Optional
@@ -8,14 +9,15 @@ from git import Repo
 import host
 
 
-def ensure_fcos_exists(dst: str="/root/iso/fedora-coreos.iso") -> None:
+def ensure_fcos_exists(dst: str = "/root/iso/fedora-coreos.iso", bf: bool = True) -> None:
     print(f"\tensuring that {dst} exists")
     if os.path.exists(dst):
         print(f"\tfcos found at {dst}, not rebuilding it")
     else:
         print(f"\tfcos not found at {dst}, building it now")
         builder = CoreosBuilder("/tmp/build")
-        builder.build(dst)
+        builder.build(dst, bf)
+
 
 """
 The purpose of coreos builder is to build an image with "kernel-modules-extra" which would contain
@@ -69,14 +71,19 @@ class CoreosBuilder():
     def __init__(self, working_dir: str):
         self._workdir = working_dir
 
-    def build(self, dst: str) -> None:
+    def build(self, dst: str, bf: Optional[bool] = True) -> None:
         fcos_dir = os.path.join(self._workdir, "fcos")
         lh = host.LocalHost()
 
         self._clone_if_not_exists("https://github.com/coreos/coreos-assembler.git")
         config_dir = self._clone_if_not_exists("https://github.com/coreos/fedora-coreos-config")
 
-        contents = "packages:\n  - kernel-modules-extra\n"
+        if bf:
+            contents = "packages:\n  - kernel-modules-extra\n"
+        else:
+            contents = "packages:\n  - python3\n  - libvirt\n  - qemu-img\n  - qemu-kvm\n  - virt-install\n  - netcat\n  - bridge-utils\n  - tcpdump\n"
+            #contents = "packages:\n  - libvirt\n  - qemu-img\n  - qemu-kvm\n  - virt-install\n  - netcat\n  - bridge-utils\n  - tcpdump\n"
+
         custom_yaml = os.path.join(config_dir, 'manifests/custom.yaml')
         print(f"writing {custom_yaml}")
         with open(custom_yaml, 'w') as outfile:
@@ -90,6 +97,25 @@ class CoreosBuilder():
         if new_str not in contents:
             contents = contents.replace("\n  - shared-el9.yaml\n", new_str)
 
+        if bf is False:
+            coreos_yaml = os.path.join(config_dir, 'manifests/fedora-coreos.yaml')
+            print(f"modifying {coreos_yaml}")
+            with open(coreos_yaml, 'r') as f:
+                core_content = f.read()
+            old_str = "- python3\n"
+            if old_str in core_content:
+                core_content = core_content.replace(old_str, "# python3\n")
+            old_str = "- python3-libs\n"
+            if old_str in core_content:
+                core_content = core_content.replace(old_str, "# python3-libs\n")
+            old_str = "- perl\n"
+            if old_str in core_content:
+                core_content = core_content.replace(old_str, "# perl\n")
+            old_str = "- perl-interpreter\n"
+            if old_str in core_content:
+                core_content = core_content.replace(old_str, "# perl-interpreter\n")
+            with open(coreos_yaml, "w") as f:
+                f.write(core_content)
 
         print(os.getcwd())
         manifest_lock = os.path.join(config_dir, "manifest-lock.x86_64.json")
@@ -153,6 +179,27 @@ class CoreosBuilder():
         print(lh.run(f"chmod a+rw {dst}"))
         os.chdir(cur_dir)
 
+        # cleanup
+        if bf is False:
+            coreos_yaml = os.path.join(config_dir, 'manifests/fedora-coreos.yaml')
+            print(f"modifying {coreos_yaml}")
+            with open(coreos_yaml, 'r') as f:
+                core_content = f.read()
+            old_str = "# python3\n"
+            if old_str in core_content:
+                core_content = core_content.replace(old_str, "- python3\n")
+            old_str = "# python3-libs\n"
+            if old_str in core_content:
+                core_content = core_content.replace(old_str, "- python3-libs\n")
+            old_str = "# perl\n"
+            if old_str in core_content:
+                core_content = core_content.replace(old_str, "- perl\n")
+            old_str = "# perl-interpreter\n"
+            if old_str in core_content:
+                core_content = core_content.replace(old_str, "- perl-interpreter\n")
+            with open(coreos_yaml, "w") as f:
+                f.write(core_content)
+
     def _find_iso(self, fcos_dir: str) -> Optional[str]:
         for root, _, files in os.walk(fcos_dir, topdown=False):
             for name in files:
@@ -188,9 +235,17 @@ class CoreosBuilder():
 
 
 def main():
+    parser = argparse.ArgumentParser(description='Build iso.')
+    parser.add_argument('-b', '--bms', dest='bms', action='store_true', help='build iso to boot bms hosting vms')
+    args = parser.parse_args()
+
     builder = CoreosBuilder("/tmp/build")
-    destination = "/root/iso/fedora-coreos.iso"
-    builder.build(destination)
+    if args.bms:
+        destination = "/root/iso/fedora-coreos-libvirt.iso"
+        builder.build(destination, False)
+    else:
+        destination = "/root/iso/fedora-coreos.iso"
+        builder.build(destination, True)
 
 
 if __name__ == "__main__":

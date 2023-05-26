@@ -27,3 +27,4 @@ clusters:
       username: "<core> to connect to bms hosting vms"
       password: "password"
       network_api_port: "<auto> to keep cluster default - <device name> to overwrite cluster default>"
+      pre_installed: "whether bm hosting vms is pre-installed in case of remote vm. Default: True"

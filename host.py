@@ -93,6 +93,7 @@ class RemoteHost(Host):
         self._bmc_user = bmc_user
         self._bmc_password = bmc_password
         self.auto_reconnect = False
+        self.sudo_needed = False
         logger = paramiko.util.logging.getLogger()
         logger.setLevel(logging.WARN)
 
@@ -181,8 +182,12 @@ class RemoteHost(Host):
         except FileNotFoundError:
             pass
 
+    def need_sudo(self):
+        self.sudo_needed = True
 
     def run(self, cmd: str) -> Result:
+        if self.sudo_needed:
+            cmd = "sudo " + cmd
         while True:
             try:
                 now = datetime.datetime.now()

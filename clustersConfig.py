@@ -128,6 +128,8 @@ class ClustersConfig():
                     host_config["password"] = None
                 if "network_api_port" not in host_config:
                     host_config["network_api_port"] = "auto"
+                if "pre_installed" not in host_config:
+                    host_config["pre_installed"] = "True"
 
     def _apply_jinja(self, contents: str) -> str:
         def worker_number(a):
