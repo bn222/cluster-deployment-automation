@@ -47,6 +47,18 @@ def setup_vm(lh, rh, virsh_pool: VirshPool, cfg: dict, iso_path: str):
         cmd = f"virsh net-update default delete ip-dhcp-host \"{host_xml}\" --live --config"
         ret = lh.run(cmd)
 
+    cmd = "virsh net-dhcp-leases default"
+    ret = lh.run(cmd)
+    if name in ret.out:
+        print(f"Error: {name} found in dhcp leases")
+        print("To fix this, run")
+        print("\tvirsh net-destroy default")
+        print("\tRemove wrong entries from /var/lib/libvirt/dnsmasq/virbr0.status")
+        print("\tvirsh net-start default")
+        print("\tsystemctl restart libvirt")
+        sys.exit(-1)
+
+
     host_xml = f"<host mac='{mac}' name='{name}' ip='{ip}'/>"
     print(f"\tCreating static DHCP entry for VM {name}")
     cmd = f"virsh net-update default add ip-dhcp-host \"{host_xml}\" --live --config"
@@ -504,6 +516,8 @@ class ClusterDeployer():
                     self.create_workers()
                 else:
                     print("Skipping worker creation.")
+        else:
+            print("\tNo masters defined")
 
         if "post" in self.args.steps:
             self._postconfig()
