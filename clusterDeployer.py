@@ -46,6 +46,19 @@ def ensure_dhcp_entry(h: host.Host, name: str, ip: str, mac: str):
         cmd = f"virsh net-update default delete ip-dhcp-host \"{host_xml}\" --live --config"
         h.run_or_die(cmd)
 
+    cmd = "virsh net-dhcp-leases default"
+    ret = h.run(cmd)
+    # Look for "{name} " in the output. The space is intended to differentiate between "bm-worker-2 " and e.g. "bm-worker-20"
+    if f"{name} " in ret.out:
+        logger.error(f"Error: {name} found in dhcp leases")
+        logger.error("To fix this, run")
+        logger.error("\tvirsh net-destroy default")
+        logger.error("\tRemove wrong entries from /var/lib/libvirt/dnsmasq/virbr0.status")
+        logger.error("\tvirsh net-start default")
+        logger.error("\tsystemctl restart libvirt")
+        sys.exit(-1)
+
+
     host_xml = f"<host mac='{mac}' name='{name}' ip='{ip}'/>"
     logger.info(f"Creating static DHCP entry for VM {name}")
     cmd = f"virsh net-update default add ip-dhcp-host \"{host_xml}\" --live --config"
