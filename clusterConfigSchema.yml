@@ -19,6 +19,7 @@ clusters:
       bmc_user: "required if physical or bf"
       bmc_password: "required if physical or bf"
       disk_size: "in GB - default = 48 GB"
+      sparse: "False or True"
     # optionally describe additional node attributes
     hosts:
     - name: "A"

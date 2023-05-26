@@ -100,6 +100,9 @@ class ClustersConfig():
             for n in all_nodes:
                 if "disk_size" not in n:
                     n["disk_size"] = 48
+                if "sparse" not in n:
+                    n["sparse"] = False
+
             node_names = set(x["name"] for x in cc["hosts"])
             for h in all_nodes:
               if h["node"] not in node_names:
