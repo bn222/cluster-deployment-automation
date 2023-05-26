@@ -60,6 +60,7 @@ def setup_vm(lh, rh, virsh_pool: VirshPool, cfg: dict, iso_path: str):
     RAM_MB = 32784
     DISK_GB = cfg['disk_size']
     CPU_CORE = 8
+    SPARSE = cfg['sparse']
 
     if hostname == "localhost":
         network = "network=default"
@@ -76,7 +77,7 @@ def setup_vm(lh, rh, virsh_pool: VirshPool, cfg: dict, iso_path: str):
         --network {network},mac={mac} \
         --events on_reboot=restart \
         --cdrom {iso_path} \
-        --disk pool={virsh_pool.name()},size={DISK_GB},sparse=false \
+        --disk pool={virsh_pool.name()},size={DISK_GB},sparse={SPARSE} \
         --wait=-1 """
     print(f"Starting VM {name}")
     ret = rh.run(cmd)
