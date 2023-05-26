@@ -158,7 +158,6 @@ class RemoteHost(Host):
 
         out = []
         for line in iter(stdout.readline, ""):
-            print(f"\t{self._hostname}: {line.strip()}")
             out.append(line)
 
         err = []
