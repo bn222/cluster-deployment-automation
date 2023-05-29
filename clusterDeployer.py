@@ -609,7 +609,7 @@ class ClusterDeployer():
         lh = host.LocalHost()
         nfs = NFS(lh, self._cc["external_port"])
 
-        h = host.RemoteHostWithBF2(host_name, worker["bmc_user"], worker["bmc_password"])
+        h = host.RemoteHostWithBF2(host_name, worker["bmc_ip"], worker["bmc_user"], worker["bmc_password"])
 
         iso = nfs.host_file(f"/root/iso/{iso}")
         h.boot_iso_redfish(iso)
@@ -710,7 +710,7 @@ class ClusterDeployer():
 
         host_name = worker["node"]
         print(f"Preparing BF on host {host_name}")
-        h = host.RemoteHostWithBF2(host_name, worker["bmc_user"], worker["bmc_password"])
+        h = host.RemoteHostWithBF2(host_name, worker["bmc_ip"], worker["bmc_user"], worker["bmc_password"])
         skip_boot = False
         if h.ping():
             try:

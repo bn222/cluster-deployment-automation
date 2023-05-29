@@ -36,7 +36,7 @@ class ExtraConfigBFB:
         iso_url = nfs.host_file("/root/iso/fedora-coreos.iso")
 
         def helper(e) -> None:
-            h = host.RemoteHostWithBF2(e["node"], e["bmc_user"], e["bmc_password"])
+            h = host.RemoteHostWithBF2(e["node"], e["bmc_ip"], e["bmc_user"], e["bmc_password"])
 
             def check(result: host.Result):
                 if result.returncode != 0:

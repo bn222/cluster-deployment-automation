@@ -75,8 +75,9 @@ class LocalHost(Host):
 
 
 class RemoteHost(Host):
-    def __init__(self, hostname: str, bmc_user: Optional[str] = None, bmc_password: Optional[str] = None):
+    def __init__(self, hostname: str, bmc_ip: Optional[str] = None, bmc_user: Optional[str] = None, bmc_password: Optional[str] = None):
         self._hostname = hostname
+        self._bmc_ip = bmc_ip
         self._bmc_user = bmc_user
         self._bmc_password = bmc_password
         self.auto_reconnect = False
@@ -165,10 +166,13 @@ class RemoteHost(Host):
         self._host.close()
 
     def _bmc_url(self) -> str:
-        ip = socket.gethostbyname(self._hostname)
-        octets = ip.split(".")
-        octets[-1] = str(int(octets[-1]) + 1)
-        return ".".join(octets)
+        res_bmc_ip = self._bmc_ip
+        if res_bmc_ip is None:
+            ip = socket.gethostbyname(self._hostname)
+            octets = ip.split(".")
+            octets[-1] = str(int(octets[-1]) + 1)
+            res_bmc_ip = ".".join(octets)
+        return res_bmc_ip
 
     def boot_iso_redfish(self, iso_path: str) -> None:
         self._boot_with_overrides(iso_path)
