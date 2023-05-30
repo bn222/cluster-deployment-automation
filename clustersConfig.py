@@ -107,6 +107,11 @@ class ClustersConfig():
                 cc["hosts"].append({"name" : h["node"]})
                 node_names.add(h["node"])
 
+            # Set default value for optional parameters for workers.
+            for w in cc["workers"]:
+                if "bmc_ip" not in w:
+                    w["bmc_ip"] = None
+
             # fill-in defaults value for required attributes on
             # all hosts
             for host_config in cc["hosts"]:

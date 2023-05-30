@@ -15,7 +15,7 @@ clusters:
       type: "<vm / physical / bf>"
       ip: ""
       node: ""
-      bmc_ip: "required if bmc ip address is not host ip + 1"
+      bmc_ip: "optional if bmc ip address is host ip + 1"
       bmc_user: "required if physical or bf"
       bmc_password: "required if physical or bf"
     # optionally describe additional node attributes
