@@ -264,6 +264,19 @@ class ClusterDeployer():
                 print("\t" + r.err if r.err else "\t" + r.out)
                 removed_macs.append(mac)
 
+        # bring back initial dynamic dhcp range.
+        cmd = "virsh net-dumpxml default"
+        ret = lh.run(cmd)
+        if "range start='192.168.122.129'" in ret.out:
+            host_xml = "<range start='192.168.122.129' end='192.168.122.254'/>"
+            cmd = f"virsh net-update default delete ip-dhcp-range \"{host_xml}\" --live --config"
+            r = lh.run(cmd)
+            print("\t" + r.err if r.err else "\t" + r.out)
+            host_xml = "<range start='192.168.122.2' end='192.168.122.254'/>"
+            cmd = f"virsh net-update default add ip-dhcp-range \"{host_xml}\" --live --config"
+            r = lh.run(cmd)
+            print("\t" + r.err if r.err else "\t" + r.out)
+
         fn = "/var/lib/libvirt/dnsmasq/virbr0.status"
         with open(fn) as f:
             contents = f.read()
@@ -373,6 +386,20 @@ class ClusterDeployer():
         # Not sure why this is needed, but w/o this sleep, libvirt stops and further virsh might fail
         # Waiting for  systemctl status libvirtd" showing active i not enough
         time.sleep(4)
+
+        # restrict dynamic dhcp range: we use static dhcp ip addresses; however, those addresses might have been used
+        # through the dynamic dhcp by any systems such as systems ready to be installed.
+        cmd = "virsh net-dumpxml default"
+        ret = h.run(cmd)
+        if "range start='192.168.122.2'" in ret.out:
+            host_xml = "<range start='192.168.122.2' end='192.168.122.254'/>"
+            cmd = f"virsh net-update default delete ip-dhcp-range \"{host_xml}\" --live --config"
+            r = h.run(cmd)
+            print("\t" + r.err if r.err else "\t" + r.out)
+            host_xml = "<range start='192.168.122.129' end='192.168.122.254'/>"
+            cmd = f"virsh net-update default add ip-dhcp-range \"{host_xml}\" --live --config"
+            r = h.run(cmd)
+            print("\t" + r.err if r.err else "\t" + r.out)
 
         # stp must be disabled or it might conflict with default configuration of some physical switches
         # 'bridge' section of network 'default' can't be updated => destroy and recreate
