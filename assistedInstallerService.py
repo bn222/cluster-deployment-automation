@@ -68,9 +68,10 @@ class AssistedInstallerService():
         y = yaml.safe_load(self.podConfig)
         y["data"]["IMAGE_SERVICE_BASE_URL"] = f"http://{self._ip}:8888"
         y["data"]["SERVICE_BASE_URL"] = f"http://{self._ip}:8090"
-        y["data"]["INSTALLER_IMAGE"] = f"quay.io/edge-infrastructure/assisted-installer:latest"
-        y["data"]["CONTROLLER_IMAGE"] = f"quay.io/edge-infrastructure/assisted-installer-controller:latest"
-        y["data"]["AGENT_DOCKER_IMAGE"] = f"quay.io/edge-infrastructure/assisted-installer-agent:latest"
+        # https://gitlab.cee.redhat.com/service/app-interface/-/blob/dc9614663fc64bb5aad2c11c8c24d731f1dfa7e4/data/services/assisted-installer/cicd/target/production/assisted-service.yaml#L46-48
+        y["data"]["INSTALLER_IMAGE"] = f"registry.redhat.io/rhai-tech-preview/assisted-installer-rhel8:v1.0.0-269"
+        y["data"]["CONTROLLER_IMAGE"] = f"registry.redhat.io/rhai-tech-preview/assisted-installer-reporter-rhel8:v1.0.0-340"
+        y["data"]["AGENT_DOCKER_IMAGE"] = f"registry.redhat.io/rhai-tech-preview/assisted-installer-agent-rhel8:v1.0.0-257"
 
         j = json.loads(y["data"]["HW_VALIDATOR_REQUIREMENTS"])
         j[0]["master"]["disk_size_gb"] = 8
