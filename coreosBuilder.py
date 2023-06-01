@@ -141,7 +141,9 @@ class CoreosBuilder():
         ign = embed_src.replace(".iso", "-embed.ign")
 
         with open(ign, "w") as f:
-            f.write(self.create_ignition())
+            ign = self.create_ignition()
+            print(f"Writing ignition to {ign}")
+            f.write(ign)
 
         if os.path.exists(dst):
             os.remove(dst)
@@ -172,16 +174,16 @@ class CoreosBuilder():
         return repo_dir
 
     def create_ignition(self, public_key_dir: str = "/root/.ssh/") -> str:
+        print("Creating ignition")
         ign = {}
 
         ign["ignition"] = {"version": "3.3.0"}
         ign["passwd"] = {"users": [{"name": "core", "sshAuthorizedKeys": []}]}
-        idx = 0
         for file in glob.glob(f"{public_key_dir}/*.pub"):
+            print(f"appending key from {file}")
             with open(file, 'r') as f:
                 key = " ".join(f.read().split(" ")[:-1])
-                ign["passwd"]["users"][0]["sshAuthorizedKeys"].append(key)
-                idx += 1
+            ign["passwd"]["users"][0]["sshAuthorizedKeys"].append(key)
         return json.dumps(ign)
 
 
