@@ -174,8 +174,8 @@ class CoreosBuilder():
     def create_ignition(self, public_key_dir: str = "/root/.ssh/") -> str:
         ign = {}
 
-        ign["ignition"] = {"version" : "3.3.0"}
-        ign["passwd"] = {"users" : [{"name" : "core", "sshAuthorizedKeys" : []}]}
+        ign["ignition"] = {"version": "3.3.0"}
+        ign["passwd"] = {"users": [{"name": "core", "sshAuthorizedKeys": []}]}
         idx = 0
         for file in glob.glob(f"{public_key_dir}/*.pub"):
             with open(file, 'r') as f:
