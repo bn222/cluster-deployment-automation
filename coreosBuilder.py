@@ -138,9 +138,9 @@ class CoreosBuilder():
         if embed_src is None:
             print("Couldn't find iso")
             sys.exit(-1)
-        ign = embed_src.replace(".iso", "-embed.ign")
+        fn_ign = embed_src.replace(".iso", "-embed.ign")
 
-        with open(ign, "w") as f:
+        with open(fn_ign, "w") as f:
             ign = self.create_ignition()
             print(f"Writing ignition to {ign}")
             f.write(ign)
@@ -148,7 +148,7 @@ class CoreosBuilder():
         if os.path.exists(dst):
             os.remove(dst)
 
-        cmd = f"coreos-installer iso ignition embed -i {ign} -o {dst} {embed_src}"
+        cmd = f"coreos-installer iso ignition embed -i {fn_ign} -o {dst} {embed_src}"
         print(cmd)
         print(lh.run(cmd))
         print(lh.run(f"chmod a+rw {dst}"))
