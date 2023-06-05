@@ -82,11 +82,7 @@ class ExtraConfigSriovOvSHWOL:
             outFile.write(rendered)
         client.oc("create -f /tmp/pci-realloc.yaml")
         logger.info("Waiting for mcp")
-        start = time.time()
-        time.sleep(60)
-        client.oc(f"wait mcp {mcp_name} --for condition=updated --timeout=50m")
-        minutes, seconds = divmod(int(time.time() - start), 60)
-        logger.info(f"It took {minutes}m {seconds}s to for mcp {mcp_name} to update")
+        client.wait_for_mcp(mcp_name, "pci-realloc.yaml")
 
     def ensure_pci_realloc(self, client: K8sClient, mcp_name: str) -> None:
         if self.need_pci_realloc(client):
@@ -157,14 +153,13 @@ class ExtraConfigSriovOvSHWOL:
         self.render_sriov_node_policy(mgmtPolicyName, managementVFsAll, numVfs, managementResourceName, mgmtPolicyFile)
 
         logger.info(client.oc("create -f manifests/nicmode/sriov-pool-config.yaml"))
+        client.wait_for_mcp("sriov", "sriov-pool-config.yaml")
         logger.info(client.oc("create -f " + workloadPolicyFile))
+        client.wait_for_mcp("sriov", "sriov-workload-node-policy.yaml")
         logger.info(client.oc("create -f " + mgmtPolicyFile))
+        client.wait_for_mcp("sriov", "sriov-mgmt-node-policy.yaml")
         logger.info(client.oc("create -f manifests/nicmode/nad.yaml"))
-        start = time.time()
-        time.sleep(60)
-        logger.info(client.oc("wait mcp sriov --for condition=updated --timeout=50m"))
-        minutes, seconds = divmod(int(time.time() - start), 60)
-        logger.info(f"It took {minutes}m {seconds}s to for mcp sriov to update")
+        client.wait_for_mcp("sriov", "nad.yaml")
 
         self.ensure_pci_realloc(client, "sriov")
 
@@ -226,14 +221,13 @@ class ExtraConfigSriovOvSHWOL_NewAPI(ExtraConfigSriovOvSHWOL):
         self.render_sriov_node_policy(mgmtPolicyName, managementVFsAll, numVfs, managementResourceName, mgmtPolicyFile)
 
         logger.info(client.oc("create -f manifests/nicmode/sriov-pool-config.yaml"))
+        client.wait_for_mcp("sriov", "sriov-pool-config.yaml")
         logger.info(client.oc("create -f " + workloadPolicyFile))
+        client.wait_for_mcp("sriov", "sriov-workload-node-policy.yaml")
         logger.info(client.oc("create -f " + mgmtPolicyFile))
+        client.wait_for_mcp("sriov", "sriov-mgmt-node-policy.yaml")
         logger.info(client.oc("create -f manifests/nicmode/nad.yaml"))
-        start = time.time()
-        time.sleep(60)
-        logger.info(client.oc("wait mcp sriov --for condition=updated --timeout=50m"))
-        minutes, seconds = divmod(int(time.time() - start), 60)
-        logger.info(f"It took {minutes}m {seconds}s to for mcp sriov to update")
+        client.wait_for_mcp("sriov", "nad.yaml")
 
         mgmtPortResourceName = "openshift.io/" + managementResourceName
         logger.info(f"Creating Config Map for Hardware Offload with resource name {mgmtPortResourceName}")

@@ -80,8 +80,5 @@ class ExtraConfigSwitchNicMode:
         client.oc("delete -f manifests/nicmode/switch.yaml")
         client.oc("create -f manifests/nicmode/switch.yaml")
         logger.info("Waiting for mcp to update")
-        start = time.time()
-        time.sleep(60)
-        logger.info(client.oc("wait mcp sriov --for condition=updated --timeout=50m"))
-        minutes, seconds = divmod(int(time.time() - start), 60)
-        logger.info(f"It took {minutes}m {seconds}s to for mcp sriov to update")
+        client.wait_for_mcp("sriov", "switch.yaml")
+
