@@ -56,7 +56,7 @@ class AssistedInstallerService():
             yaml.dump(self._customized_configmap(version), out_configmap, sort_keys=False)
 
         with open(self._pod_persistent_path(), 'w') as out_pod:
-            yaml.dump(yaml.safe_load(self.podFile), out_pod, default_flow_style=False)
+            yaml.dump(self._customized_pod_persistent(), out_pod, default_flow_style=False)
 
     def _config_map_path(self) -> str:
         return f'{self.workdir}/configmap.yml'
@@ -84,6 +84,19 @@ class AssistedInstallerService():
         # version, and instantiate AI _only_ with one version, i.e. the
         # version we will be using.
         y["data"]["RELEASE_IMAGES"] = json.dumps([self.prep_version(version)])
+        return y
+
+    def _customized_pod_persistent(self) -> str:
+        y = yaml.safe_load(self.podFile)
+
+        saas_version = "v2.18.4"
+
+        containers = y['spec']['containers']
+        for container in containers:
+            image = container.get('image', '')
+            if image.startswith('quay.io/edge-infrastructure/assisted'):
+                container['image'] = image.replace(':latest', f':{saas_version}')
+        
         return y
 
     def prep_version(self, version):
