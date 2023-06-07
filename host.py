@@ -136,12 +136,12 @@ class RemoteHost(Host):
             logger.info(f"connected to {self._hostname}")
             break
 
-    def _read_output(self, cmd: str) -> Result:
+    def _read_output(self, cmd: str, log_level: int = logging.INFO) -> Result:
         _, stdout, stderr = self._host.exec_command(cmd)
 
         out = []
         for line in iter(stdout.readline, ""):
-            logger.info(f"{self._hostname}: {line.strip()}")
+            logger.log(log_level, f"{self._hostname}: {line.strip()}")
             out.append(line)
 
         err = []
@@ -158,7 +158,7 @@ class RemoteHost(Host):
         while True:
             try:
                 logger.log(log_level, f"running command {cmd}")
-                return self._read_output(cmd)
+                return self._read_output(cmd, log_level)
             except Exception as e:
                 logger.log(log_level, e)
                 logger.log(log_level, f"Connection lost while running command {cmd}, reconnecting...")

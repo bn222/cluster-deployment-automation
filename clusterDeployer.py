@@ -792,7 +792,7 @@ class ClusterDeployer():
                 host.sync_time(lh, h)
 
                 # Workaround: images might become corrupt for an unknown reason. In that case, remove it to allow retries
-                out = h.run("sudo podman images").out
+                out = h.run("sudo podman images", logging.DEBUG).out
                 e = re.search(r".*Top layer (\w+) of image (\w+) not found in layer tree. The storage may be corrupted, consider running", out)
                 if e:
                     logger.warn(f'Removing corrupt image from worker {w["name"]}')
