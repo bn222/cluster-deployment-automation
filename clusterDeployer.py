@@ -63,7 +63,7 @@ def setup_vm(h: host.LocalHost, virsh_pool: VirshPool, cfg: dict, iso_path: str)
         --network=network:{network},mac={mac}
         --events on_reboot=restart
         --cdrom {iso_path}
-        --disk pool={virsh_pool.name()},size={DISK_GB},sparse=false
+        --disk pool={virsh_pool.name()},size={DISK_GB},sparse=false,format=raw
         --wait=-1
     """
     logger.info(f"Starting VM {name}")
@@ -186,6 +186,9 @@ class ClusterDeployer():
             assert m["node"] == "localhost"
             images_path = self.local_host_config()["virsh_pool"].images_path()
             name = m["name"]
+            image = f"/{images_path}/{name}.img"
+            if os.path.exists(image):
+                os.remove(image)
             image = f"/{images_path}/{name}.qcow2"
             if os.path.exists(image):
                 os.remove(image)
