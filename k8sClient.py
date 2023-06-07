@@ -4,6 +4,7 @@ import time
 import host
 import os
 import requests
+import sys
 from typing import List
 from typing import Optional
 from logger import logger
@@ -75,12 +76,16 @@ class K8sClient():
 
     def wait_for_mcp(self, mcp_name: str, resource: str = "resource"):
         time.sleep(60)
-        iteration = 1
+        iteration = 0
+        max_tries = 4
+        start = time.time()
         get_status_cmd = "get mcp sriov -o jsonpath='{.status.conditions[?(@.type==\"Updated\")].status}'"
         while self.oc(get_status_cmd).out != "True":
-            start = time.time()
+            if iteration >= max_tries:
+                logger.error(f"mcp {mcp_name} failed to update for {resource} after {max_tries}, quitting ...")
+                sys.exit(-1)
             logger.info(self.oc(f"wait mcp {mcp_name} --for condition=updated --timeout=50m"))
-            minutes, seconds = divmod(int(time.time() - start), 60)
-            logger.info(f"It took {minutes}m {seconds}s to for {resource} to be applied (attempt: {iteration})")
             iteration = iteration + 1
             time.sleep(60)
+        minutes, seconds = divmod(int(time.time() - start), 60)
+        logger.info(f"It took {minutes}m {seconds}s for {resource} (Total Attempts: {iteration})")
