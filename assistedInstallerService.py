@@ -8,6 +8,7 @@ import requests
 import host
 import sys
 import re
+from logger import logger
 
 
 def load_url_or_file(url_or_file: str):
@@ -48,7 +49,7 @@ class AssistedInstallerService():
         self.workdir = os.path.join(os.getcwd(), "build")
 
     def _configure(self, version) -> None:
-        print("creating working directory")
+        logger.info("creating working directory")
         if os.path.exists(self.workdir):
             rmdir(self.workdir)
         os.mkdir(self.workdir)
@@ -138,7 +139,7 @@ class AssistedInstallerService():
               'version': wa_version,
             }
         else:
-            print(f"Unknown version {version}")
+            logger.info(f"Unknown version {version}")
             sys.exit(-1)
         ret["cpu_architecture"] = "multi"
         if "ec" in version or "nightly" in version:
@@ -160,18 +161,18 @@ class AssistedInstallerService():
         lh = host.LocalHost()
         result = lh.run("podman pod ps --format json")
         if result.err:
-            print("Error {result.err}")
+            logger.info("Error {result.err}")
             exit(1)
         name = "assisted-installer"
         if name in map(lambda x: x["Name"], json.loads(result.out)):
-            print(f"{name} already running, stopping it before restarting")
+            logger.info(f"{name} already running, stopping it before restarting")
             lh.run(f"podman pod stop {name}")
             lh.run(f"podman pod rm {name}")
         else:
-            print(f"{name} not yet running")
+            logger.info(f"{name} not yet running")
         r = lh.run(f"podman play kube --configmap {self._config_map_path()} {self._pod_persistent_path()}")
         if r.returncode != 0:
-            print(r)
+            logger.info(r)
             sys.exit(-1)
 
     def wait_for_api(self) -> None:
@@ -179,19 +180,19 @@ class AssistedInstallerService():
         virbr0_present= list(filter(lambda x: x["ifname"] == "virbr0", lh.all_ports()))
 
         if not virbr0_present:
-            print("Can't find virbr0. Make sure that libvirtd is running.")
+            logger.info("Can't find virbr0. Make sure that libvirtd is running.")
             sys.exit(-1)
 
         url = f"http://{self._ip}:8090/api/assisted-install/v2/clusters"
         response, count = 0, 0
-        print(f"Waiting for API to be ready at {url}...")
+        logger.info(f"Waiting for API to be ready at {url}...")
         while response != 200:
             try:
                 response = get_url(url).status_code
             except Exception:
                 pass
             if count == 10:
-                print("Error: API is down")
+                logger.info("Error: API is down")
                 exit(1)
             count += 1
             time.sleep(2)

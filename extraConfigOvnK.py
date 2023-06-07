@@ -3,6 +3,7 @@ from configOperators import ConfigCVO
 import sys
 from concurrent.futures import Future
 from typing import Dict
+from logger import logger
 
 
 class ExtraConfigOvnK:
@@ -11,16 +12,16 @@ class ExtraConfigOvnK:
 
     def run(self, cfg, futures: Dict[str, Future]) -> None:
         [f.result() for (_, f) in futures.items()]
-        print("Running post config step to load custom OVN-K")
+        logger.info("Running post config step to load custom OVN-K")
         iclient = K8sClient(self._cc["kubeconfig"])
 
         if "image" not in cfg:
-            print("Error image not provided to load custom OVN-K")
+            logger.info("Error image not provided to load custom OVN-K")
             sys.exit(-1)
 
         image = cfg["image"]
 
-        print(f"Image {image} provided to load custom OVN-K")
+        logger.info(f"Image {image} provided to load custom OVN-K")
 
         patch = f"""spec:
   template:

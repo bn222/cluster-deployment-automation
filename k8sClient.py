@@ -6,6 +6,7 @@ import os
 import requests
 from typing import List
 from typing import Optional
+from logger import logger
 
 oc_url = "https://mirror.openshift.com/pub/openshift-v4/clients/ocp/latest/"
 
@@ -31,7 +32,7 @@ class K8sClient():
         return [e.metadata.name for e in self._client.list_node().items]
 
     def wait_ready(self, name: str, cb) -> None:
-        print(f"waiting for {name} to be ready")
+        logger.info(f"waiting for {name} to be ready")
         while True:
             if self.is_ready(name):
                 break
@@ -61,11 +62,11 @@ class K8sClient():
 
     def ensure_oc_binary(self) -> None:
         lh = host.LocalHost()
-        print(f"Current working directory is {os.getcwd()}")
+        logger.info(f"Current working directory is {os.getcwd()}")
         assert os.path.exists("build")
         if not os.path.isfile(os.path.join(os.getcwd(), "build/oc")):
             url = oc_url + "openshift-client-linux.tar.gz"
-            print(f"downloading oc command from {url} since it's missing from {os.getcwd() + '/build'}")
+            logger.info(f"downloading oc command from {url} since it's missing from {os.getcwd() + '/build'}")
             response = requests.get(url)
             open("build/oc.tar.gz", "wb").write(response.content)
             lh.run("tar xf build/oc.tar.gz -C build")

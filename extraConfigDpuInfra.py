@@ -9,17 +9,18 @@ import sys
 import shutil
 from common_patches import apply_common_pathches
 from typing import Dict
+from logger import logger
 
 
 def install_remotely(ip, links):
     try:
         return install_remotelyh(ip, links)
     except Exception as e:
-        print(e)
+        logger.info(e)
 
 
 def install_remotelyh(ip, links):
-    print(f"connecting to {ip}")
+    logger.info(f"connecting to {ip}")
     rh = host.RemoteHost(ip)
     # Eventhough a buggy kernel can cause connections to drop,
     # disconnects are handled seamlessly
@@ -27,32 +28,32 @@ def install_remotelyh(ip, links):
 
     want = "4.18.0-372.35.1.el8_6.mr3440_221116_1544.aarch64"
     if want in rh.run("uname -a").out:
-        print(f"kernel already installed on {ip}, skipping")
+        logger.info(f"kernel already installed on {ip}, skipping")
         return True
     else:
-        print(f"installing kernel on {ip}")
+        logger.info(f"installing kernel on {ip}")
 
     wd = "working_dir"
     rh.run(f"rm -rf {wd}")
     rh.run(f"mkdir -p {wd}")
-    print(links)
+    logger.info(links)
 
     for e in links:
         fn = e.split("/")[-1]
         cmd = f"curl -k {e} --create-dirs > {wd}/{fn}"
         rh.run(cmd)
 
-    print("result:", rh.run("sudo rpm-ostree"))
+    logger.info("result:", rh.run("sudo rpm-ostree"))
 
     cmd = f"sudo rpm-ostree override replace {wd}/*.rpm"
-    print(cmd)
+    logger.info(cmd)
     while True:
         ret = rh.run(cmd).out.strip().split("\n")
         if ret and ret[-1] == 'Run "systemctl reboot" to start a reboot':
             break
         else:
-            print(ret)
-            print("Output was something unexpected")
+            logger.info(ret)
+            logger.info("Output was something unexpected")
 
     rh.run("sudo systemctl reboot")
     time.sleep(10)
@@ -60,7 +61,7 @@ def install_remotelyh(ip, links):
     return want in rh.run("uname -a").out
 
 def install_custom_kernel(lh, client, bf_names, ips):
-    print(f"Installing custom kernel on {ips}")
+    logger.info(f"Installing custom kernel on {ips}")
     links = [
       "https://s3.upshift.redhat.com/DH-PROD-CKI/internal-artifacts/696717272/build%20aarch64/3333360250/artifacts/kernel-core-4.18.0-372.35.1.el8_6.mr3440_221116_1544.aarch64.rpm",
       "https://s3.upshift.redhat.com/DH-PROD-CKI/internal-artifacts/696717272/build%20aarch64/3333360250/artifacts/kernel-4.18.0-372.35.1.el8_6.mr3440_221116_1544.aarch64.rpm",
@@ -79,10 +80,10 @@ def install_custom_kernel(lh, client, bf_names, ips):
 
         results = list(f.result() for f in futures)
         if not all(results):
-            print(f"failed, retried {retry} times uptill now")
-            print(results)
+            logger.info(f"failed, retried {retry} times uptill now")
+            logger.info(results)
         else:
-            print("finished installing custom kernels")
+            logger.info("finished installing custom kernels")
             break
 
     for bf, ip in zip(bf_names, ips):
@@ -100,9 +101,9 @@ def run_dpu_network_operator_git(lh, kc):
     url = "https://github.com/openshift/dpu-network-operator.git"
 
     if os.path.exists(repo_dir):
-        print(f"Repo exists at {repo_dir}, deleting it")
+        logger.info(f"Repo exists at {repo_dir}, deleting it")
         shutil.rmtree(repo_dir)
-    print(f"Cloning repo to {repo_dir}")
+    logger.info(f"Cloning repo to {repo_dir}")
     Repo.clone_from(url, repo_dir, branch='master')
 
     cur_dir = os.getcwd()
@@ -112,15 +113,15 @@ def run_dpu_network_operator_git(lh, kc):
     env["KUBECONFIG"] = kc
     env["IMG"] = "quay.io/wizhao/dpu-network-operator:june6_latest"
     # cleanup first, to make this script idempotent
-    print("running make undeploy")
-    print(lh.run("make undeploy", env))
-    print("running make deploy")
-    print(lh.run("make deploy", env))
+    logger.info("running make undeploy")
+    logger.info(lh.run("make undeploy", env))
+    logger.info("running make deploy")
+    logger.info(lh.run("make deploy", env))
     os.chdir(cur_dir)
 
 
 def restart_ovs_configuration(ips):
-    print("Restarting ovs config")
+    logger.info("Restarting ovs config")
 
     for ip in ips:
         rh = host.RemoteHost(ip)
@@ -160,42 +161,42 @@ class ExtraConfigDpuInfra:
         # workaround, subscription based install broken
         run_dpu_network_operator_git(lh, kc)
 
-        print("Waiting for pod to be in running state")
+        logger.info("Waiting for pod to be in running state")
         while True:
             pods = client._client.list_namespaced_pod("openshift-dpu-network-operator").items
             if len(pods) == 1:
                 if pods[0].status.phase == "Running":
                     break
-                print(f"Pod is in {pods[0].status.phase} state")
+                logger.info(f"Pod is in {pods[0].status.phase} state")
             elif len(pods) > 1:
-                print("unexpected number of pods")
+                logger.info("unexpected number of pods")
                 sys.exit(-1)
             time.sleep(5)
 
-        print("Creating namespace for tenant")
+        logger.info("Creating namespace for tenant")
         client.oc("create -f manifests/infra/tenantcluster-dpu.yaml")
 
-        print("Creating OVNKubeConfig cr")
+        logger.info("Creating OVNKubeConfig cr")
         client.oc("create -f manifests/infra/ovnkubeconfig.yaml")
 
-        print("Patching mcp setting maxUnavailable to 2")
+        logger.info("Patching mcp setting maxUnavailable to 2")
         client.oc("patch mcp dpu --type=json -p=\[\{\"op\":\"replace\",\"path\":\"/spec/maxUnavailable\",\"value\":2\}\]")
 
-        print("Labeling nodes")
+        logger.info("Labeling nodes")
         for b in bf_names:
             client.oc(f"label node {b} node-role.kubernetes.io/dpu-worker=")
 
-        print("Creating config map")
-        print(client.oc("create -f manifests/infra/cm.yaml"))
+        logger.info("Creating config map")
+        logger.info(client.oc("create -f manifests/infra/cm.yaml"))
 
         for b in bf_names:
             client.oc(f"label node {b} network.operator.openshift.io/dpu=")
-        print("Waiting for mcp to be ready")
+        logger.info("Waiting for mcp to be ready")
         start = time.time()
         time.sleep(60)
         client.oc("wait mcp dpu --for condition=updated --timeout=50m")
         minutes, seconds = divmod(int(time.time() - start), 60)
-        print(f"It took {minutes}m {seconds}s to for mcp dpu to update")
+        logger.info(f"It took {minutes}m {seconds}s to for mcp dpu to update")
 
         for b in bf_names:
             ip = client.get_ip(b)
@@ -203,8 +204,8 @@ class ExtraConfigDpuInfra:
             rh.ssh_connect("core")
             result = rh.run("sudo ovs-vsctl show")
             if "c1pf0hpf" not in result.out:
-                print(result.out)
-                print("Did not find interface c1pf0hpf in br-ex. Try to restart ovs-configuration on node.")
+                logger.info(result.out)
+                logger.info("Did not find interface c1pf0hpf in br-ex. Try to restart ovs-configuration on node.")
                 sys.exit(-1)
 
 # VF Management port requires a new API. We need a new extra config class to handle the API changes.
@@ -237,28 +238,28 @@ class ExtraConfigDpuInfra_NewAPI(ExtraConfigDpuInfra):
         # workaround, subscription based install broken
         run_dpu_network_operator_git(lh, kc)
 
-        print("Waiting for pod to be in running state")
+        logger.info("Waiting for pod to be in running state")
         while True:
             pods = client._client.list_namespaced_pod("openshift-dpu-network-operator").items
             if len(pods) == 1:
                 if pods[0].status.phase == "Running":
                     break
-                print(f"Pod is in {pods[0].status.phase} state")
+                logger.info(f"Pod is in {pods[0].status.phase} state")
             elif len(pods) > 1:
-                print("unexpected number of pods")
+                logger.info("unexpected number of pods")
                 sys.exit(-1)
             time.sleep(5)
 
-        print("Creating namespace for tenant")
+        logger.info("Creating namespace for tenant")
         client.oc("create -f manifests/infra/tenantcluster-dpu.yaml")
 
-        print("Creating OVNKubeConfig cr")
+        logger.info("Creating OVNKubeConfig cr")
         client.oc("create -f manifests/infra/ovnkubeconfig.yaml")
 
-        print("Patching mcp setting maxUnavailable to 2")
+        logger.info("Patching mcp setting maxUnavailable to 2")
         client.oc("patch mcp dpu --type=json -p=\[\{\"op\":\"replace\",\"path\":\"/spec/maxUnavailable\",\"value\":2\}\]")
 
-        print("Labeling nodes")
+        logger.info("Labeling nodes")
         for b in bf_names:
             client.oc(f"label node {b} node-role.kubernetes.io/dpu-worker=")
 
@@ -266,12 +267,12 @@ class ExtraConfigDpuInfra_NewAPI(ExtraConfigDpuInfra):
 
         for b in bf_names:
             client.oc(f"label node {b} network.operator.openshift.io/dpu=")
-        print("Waiting for mcp to be ready")
+        logger.info("Waiting for mcp to be ready")
         start = time.time()
         time.sleep(60)
         client.oc("wait mcp dpu --for condition=updated --timeout=50m")
         minutes, seconds = divmod(int(time.time() - start), 60)
-        print(f"It took {minutes}m {seconds}s to for mcp dpu to update")
+        logger.info(f"It took {minutes}m {seconds}s to for mcp dpu to update")
 
         for b in bf_names:
             ip = client.get_ip(b)
@@ -279,8 +280,8 @@ class ExtraConfigDpuInfra_NewAPI(ExtraConfigDpuInfra):
             rh.ssh_connect("core")
             result = rh.run("sudo ovs-vsctl show")
             if "c1pf0hpf" not in result.out:
-                print(result.out)
-                print("Did not find interface c1pf0hpf in br-ex. Try to restart ovs-configuration on node.")
+                logger.info(result.out)
+                logger.info("Did not find interface c1pf0hpf in br-ex. Try to restart ovs-configuration on node.")
                 sys.exit(-1)
 
 def main():

@@ -1,3 +1,6 @@
+from logger import logger
+
+
 class VirshPool:
     def __init__(self, host, name: str, images_path: str):
         self._host = host
@@ -18,19 +21,19 @@ class VirshPool:
         if not self.initialized():
             self.initialize()
         else:
-            print(f"Pool {self._name} already initialized")
+            logger.info(f"Pool {self._name} already initialized")
 
     def remove(self) -> None:
-        print(self._host.run(f"virsh pool-destroy {self._name}"))
-        print(self._host.run(f"virsh pool-undefine {self._name}"))
+        logger.info(self._host.run(f"virsh pool-destroy {self._name}"))
+        logger.info(self._host.run(f"virsh pool-undefine {self._name}"))
 
     def ensure_removed(self) -> None:
         if self.initialized():
             self.remove()
 
     def initialize(self) -> None:
-        print(f"Initializing pool {self._name} at {self._images_path}")
-        print(self._host.run(f"virsh pool-define-as {self._name} dir - - - - {self._images_path}"))
-        print(self._host.run(f"mkdir -p {self._images_path}"))
-        print(self._host.run(f"chmod a+rw {self._images_path}"))
-        print(self._host.run(f"virsh pool-start {self._name}"))
+        logger.info(f"Initializing pool {self._name} at {self._images_path}")
+        logger.info(self._host.run(f"virsh pool-define-as {self._name} dir - - - - {self._images_path}"))
+        logger.info(self._host.run(f"mkdir -p {self._images_path}"))
+        logger.info(self._host.run(f"chmod a+rw {self._images_path}"))
+        logger.info(self._host.run(f"virsh pool-start {self._name}"))

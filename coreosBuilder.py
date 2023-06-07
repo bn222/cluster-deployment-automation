@@ -6,14 +6,15 @@ import shutil
 import host
 from typing import Optional
 import glob
+from logger import logger
 
 
 def ensure_fcos_exists(dst: str="/root/iso/fedora-coreos.iso") -> None:
-    print("ensuring that fcos exists")
+    logger.info("ensuring that fcos exists")
     if os.path.exists(dst):
-        print(f"fcos found at {dst}, not rebuilding it")
+        logger.info(f"fcos found at {dst}, not rebuilding it")
     else:
-        print(f"fcos not found at {dst}, building it now")
+        logger.info(f"fcos not found at {dst}, building it now")
         builder = CoreosBuilder("/tmp/build")
         builder.build(dst)
 
@@ -78,7 +79,7 @@ class CoreosBuilder():
 
         contents = "packages:\n  - kernel-modules-extra\n"
         custom_yaml = os.path.join(config_dir, 'manifests/custom.yaml')
-        print(f"writing {custom_yaml}")
+        logger.info(f"writing {custom_yaml}")
         with open(custom_yaml, 'w') as outfile:
             outfile.write(contents)
 
@@ -91,7 +92,7 @@ class CoreosBuilder():
             contents = contents.replace("\n  - shared-el9.yaml\n", new_str)
 
 
-        print(os.getcwd())
+        logger.info(os.getcwd())
         manifest_lock = os.path.join(config_dir, "manifest-lock.x86_64.json")
         with open(manifest_lock) as f:
             j = json.load(f)
@@ -103,7 +104,7 @@ class CoreosBuilder():
         with open(base_cfg, "w") as f:
             f.write(contents)
 
-        print(f"Clearing dir {fcos_dir}")
+        logger.info(f"Clearing dir {fcos_dir}")
         if os.path.exists(fcos_dir):
             shutil.rmtree(fcos_dir)
         os.makedirs(fcos_dir)
@@ -121,10 +122,10 @@ class CoreosBuilder():
         def run_die(cmd):
             r = lh.run(cmd)
             if r.returncode != 0:
-                print("Building CoreOS failed while running:")
-                print(cmd)
-                print("output was:")
-                print(r)
+                logger.info("Building CoreOS failed while running:")
+                logger.info(cmd)
+                logger.info("output was:")
+                logger.info(r)
                 sys.exit(-1)
 
         run_die(cmd + " init /git")
@@ -136,22 +137,22 @@ class CoreosBuilder():
 
         embed_src = self._find_iso(fcos_dir)
         if embed_src is None:
-            print("Couldn't find iso")
+            logger.info("Couldn't find iso")
             sys.exit(-1)
         fn_ign = embed_src.replace(".iso", "-embed.ign")
 
         with open(fn_ign, "w") as f:
             ign = self.create_ignition()
-            print(f"Writing ignition to {ign}")
+            logger.info(f"Writing ignition to {ign}")
             f.write(ign)
 
         if os.path.exists(dst):
             os.remove(dst)
 
         cmd = f"coreos-installer iso ignition embed -i {fn_ign} -o {dst} {embed_src}"
-        print(cmd)
-        print(lh.run(cmd))
-        print(lh.run(f"chmod a+rw {dst}"))
+        logger.info(cmd)
+        logger.info(lh.run(cmd))
+        logger.info(lh.run(f"chmod a+rw {dst}"))
 
     def _find_iso(self, fcos_dir: str) -> Optional[str]:
         for root, _, files in os.walk(fcos_dir, topdown=False):
@@ -167,20 +168,20 @@ class CoreosBuilder():
 
         repo_dir = os.path.join(self._workdir, dest)
         if os.path.exists(repo_dir):
-            print(f"Repo exists at {repo_dir}, not touching it")
+            logger.info(f"Repo exists at {repo_dir}, not touching it")
         else:
-            print(f"Cloning repo to {repo_dir}")
+            logger.info(f"Cloning repo to {repo_dir}")
             Repo.clone_from(url, repo_dir)
         return repo_dir
 
     def create_ignition(self, public_key_dir: str = "/root/.ssh/") -> str:
-        print("Creating ignition")
+        logger.info("Creating ignition")
         ign = {}
 
         ign["ignition"] = {"version": "3.3.0"}
         ign["passwd"] = {"users": [{"name": "core", "sshAuthorizedKeys": []}]}
         for file in glob.glob(f"{public_key_dir}/*.pub"):
-            print(f"appending key from {file}")
+            logger.info(f"appending key from {file}")
             with open(file, 'r') as f:
                 key = " ".join(f.read().split(" ")[:-1])
             ign["passwd"]["users"][0]["sshAuthorizedKeys"].append(key)

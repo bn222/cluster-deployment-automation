@@ -12,6 +12,7 @@ import sys
 import jinja2
 import re
 import json
+from logger import logger
 
 
 class ExtraConfigDpuTenantMC:
@@ -20,24 +21,24 @@ class ExtraConfigDpuTenantMC:
 
     def run(self, cfg, futures: Dict[str, Future]) -> None:
         [f.result() for (_, f) in futures.items()]
-        print("Running post config step")
+        logger.info("Running post config step")
         tclient = K8sClient("/root/kubeconfig.tenantcluster")
         create_nm_operator(tclient)
         apply_common_pathches(tclient)
-        print("Apply DPU tenant mc")
+        logger.info("Apply DPU tenant mc")
         tclient.oc("create -f manifests/tenant/dputenantmachineconfig.yaml")
         time.sleep(60)
-        print("Waiting for mcp to be updated")
+        logger.info("Waiting for mcp to be updated")
         tclient.oc("wait mcp dpu-host --for condition=updated")
 
-        print("Patching mcp setting maxUnavailable to 2")
+        logger.info("Patching mcp setting maxUnavailable to 2")
         tclient.oc("patch mcp dpu-host --type=json -p=\[\{\"op\":\"replace\",\"path\":\"/spec/maxUnavailable\",\"value\":2\}\]")
 
-        print("Labeling nodes")
+        logger.info("Labeling nodes")
         for e in self._cc["workers"]:
             cmd = f"label node {e['name']} node-role.kubernetes.io/dpu-host="
-            print(tclient.oc(cmd))
-        print("Need to deploy sriov network operator")
+            logger.info(tclient.oc(cmd))
+        logger.info("Need to deploy sriov network operator")
 
 
 class ExtraConfigDpuTenant:
@@ -48,7 +49,7 @@ class ExtraConfigDpuTenant:
         with open("./manifests/tenant/SriovNetworkNodePolicy.yaml.j2") as f:
             j2_template = jinja2.Template(f.read())
             rendered = j2_template.render(policyName=policyname, bf_port=bf_port, bf_addr=bf_addr, numVfs=numvfs, resourceName=resourcename)
-            print(rendered)
+            logger.info(rendered)
 
         with open(outfilename, "w") as outFile:
             outFile.write(rendered)
@@ -71,9 +72,9 @@ class ExtraConfigDpuTenant:
 
     def run(self, cfg, futures: Dict[str, Future]) -> None:
         [f.result() for (_, f) in futures.items()]
-        print("Running post config step")
+        logger.info("Running post config step")
         tclient = K8sClient("/root/kubeconfig.tenantcluster")
-        print("Waiting for mcp dpu-host to become ready")
+        logger.info("Waiting for mcp dpu-host to become ready")
         tclient.oc("wait mcp dpu-host --for condition=updated --timeout=50m")
 
         first_worker = self._cc["workers"][0]['name']
@@ -84,11 +85,11 @@ class ExtraConfigDpuTenant:
         rh.ssh_connect("core")
         bf = [x for x in rh.run("lspci").out.split("\n") if "BlueField" in x]
         if not bf:
-            print(f"Couldn't find BF on {first_worker}")
+            logger.info(f"Couldn't find BF on {first_worker}")
             sys.exit(-1)
         bf = bf[0].split(" ")[0]
 
-        print(f"BF is at {bf}")
+        logger.info(f"BF is at {bf}")
 
         bf_port = None
         for port in rh.all_ports():
@@ -102,9 +103,9 @@ class ExtraConfigDpuTenant:
                 d[key] = value
             if d["bus-info"].endswith(bf):
                 bf_port = port["ifname"]
-        print(bf_port)
+        logger.info(bf_port)
         if bf_port is None:
-            print("Couldn't find bf port")
+            logger.info("Couldn't find bf port")
             sys.exit(-1)
 
         numVfs = 16
@@ -121,24 +122,24 @@ class ExtraConfigDpuTenant:
         self.render_sriov_node_policy(workloadPolicyName, workloadBfPort, bf, numVfs, workloadResourceName, workloadPolicyFile)
         self.render_sriov_node_policy(mgmtPolicyName, mgmtBfPort, bf, numVfs, mgmtResourceName, mgmtPolicyFile)
 
-        print("Creating sriov pool config")
+        logger.info("Creating sriov pool config")
         tclient.oc("create -f manifests/tenant/sriov-pool-config.yaml")
         tclient.oc("create -f " + workloadPolicyFile)
         tclient.oc("create -f " + mgmtPolicyFile)
-        print("Waiting for mcp to be updated")
+        logger.info("Waiting for mcp to be updated")
         time.sleep(60)
         tclient.oc("wait mcp dpu-host --for condition=updated --timeout=50m")
 
-        print("creating config map to put ovn-k into dpu host mode")
+        logger.info("creating config map to put ovn-k into dpu host mode")
         tclient.oc("create -f manifests/tenant/sriovdpuconfigmap.yaml")
-        print("creating mc to disable ovs")
+        logger.info("creating mc to disable ovs")
         tclient.oc("create -f manifests/tenant/disable-ovs.yaml")
-        print("Waiting for mcp")
+        logger.info("Waiting for mcp")
         time.sleep(60)
         tclient.oc("wait mcp dpu-host --for condition=updated --timeout=50m")
 
-        print("setting ovn kube node env-override to set management port")
-        print(os.getcwd())
+        logger.info("setting ovn kube node env-override to set management port")
+        logger.info(os.getcwd())
         contents = open("manifests/tenant/setenvovnkube.yaml").read()
         for e in cfg["mapping"]:
             a = {}
@@ -149,23 +150,23 @@ class ExtraConfigDpuTenant:
                 contents += f"    {k}={v}\n"
         open("/tmp/1.yaml", "w").write(contents)
 
-        print("Running create")
-        print(tclient.oc("create -f /tmp/1.yaml"))
+        logger.info("Running create")
+        logger.info(tclient.oc("create -f /tmp/1.yaml"))
 
         for e in self._cc["workers"]:
             cmd = f"label node {e['name']} network.operator.openshift.io/dpu-host="
-            print(tclient.oc(cmd))
+            logger.info(tclient.oc(cmd))
             rh = host.RemoteHost(tclient.get_ip(e['name']))
             rh.ssh_connect("core")
             # workaround for https://issues.redhat.com/browse/NHE-335
-            print(rh.run("sudo ovs-vsctl del-port br-int ovn-k8s-mp0"))
+            logger.info(rh.run("sudo ovs-vsctl del-port br-int ovn-k8s-mp0"))
 
-        print("Final infrastructure cluster configuration")
+        logger.info("Final infrastructure cluster configuration")
         iclient = K8sClient("/root/kubeconfig.infracluster")
 
         # https://issues.redhat.com/browse/NHE-334
         iclient.oc(f"project tenantcluster-dpu")
-        print(iclient.oc(f"create secret generic tenant-cluster-1-kubeconf --from-file=config={tclient._kc}"))
+        logger.info(iclient.oc(f"create secret generic tenant-cluster-1-kubeconf --from-file=config={tclient._kc}"))
 
         tc_namespace = "tenantcluster-dpu"
         dpu_namespace = "openshift-dpu-network-operator"
@@ -180,8 +181,8 @@ class ExtraConfigDpuTenant:
         patch = json.dumps({"spec":{"kubeConfigFile":"tenant-cluster-1-kubeconf"}})
         r = iclient.oc(
             f"patch --type merge -p '{patch}' OVNKubeConfig ovnkubeconfig-sample -n tenantcluster-dpu")
-        print(r)
-        print("Creating network attachement definition")
+        logger.info(r)
+        logger.info("Creating network attachement definition")
         tclient.oc("create -f manifests/tenant/nad.yaml")
 
         ec = ExtraConfigSriovOvSHWOL(self._cc)
@@ -190,9 +191,9 @@ class ExtraConfigDpuTenant:
 class ExtraConfigDpuTenant_NewAPI(ExtraConfigDpuTenant):
     def run(self, cfg, futures: Dict[str, Future]) -> None:
         [f.result() for (_, f) in futures.items()]
-        print("Running post config step")
+        logger.info("Running post config step")
         tclient = K8sClient("/root/kubeconfig.tenantcluster")
-        print("Waiting for mcp dpu-host to become ready")
+        logger.info("Waiting for mcp dpu-host to become ready")
         tclient.oc("wait mcp dpu-host --for condition=updated --timeout=50m")
 
         first_worker = self._cc["workers"][0]['name']
@@ -203,11 +204,11 @@ class ExtraConfigDpuTenant_NewAPI(ExtraConfigDpuTenant):
         rh.ssh_connect("core")
         bf = [x for x in rh.run("lspci").out.split("\n") if "BlueField" in x]
         if not bf:
-            print(f"Couldn't find BF on {first_worker}")
+            logger.info(f"Couldn't find BF on {first_worker}")
             sys.exit(-1)
         bf = bf[0].split(" ")[0]
 
-        print(f"BF is at {bf}")
+        logger.info(f"BF is at {bf}")
 
         bf_port = None
         for port in rh.all_ports():
@@ -221,9 +222,9 @@ class ExtraConfigDpuTenant_NewAPI(ExtraConfigDpuTenant):
                 d[key] = value
             if d["bus-info"].endswith(bf):
                 bf_port = port["ifname"]
-        print(bf_port)
+        logger.info(bf_port)
         if bf_port is None:
-            print("Couldn't find bf port")
+            logger.info("Couldn't find bf port")
             sys.exit(-1)
 
         numVfs = 16
@@ -240,31 +241,31 @@ class ExtraConfigDpuTenant_NewAPI(ExtraConfigDpuTenant):
         self.render_sriov_node_policy(workloadPolicyName, workloadBfPort, bf, numVfs, workloadResourceName, workloadPolicyFile)
         self.render_sriov_node_policy(mgmtPolicyName, mgmtBfPort, bf, numVfs, mgmtResourceName, mgmtPolicyFile)
 
-        print("Creating sriov pool config")
+        logger.info("Creating sriov pool config")
         tclient.oc("create -f manifests/tenant/sriov-pool-config.yaml")
         tclient.oc("create -f " + workloadPolicyFile)
         tclient.oc("create -f " + mgmtPolicyFile)
-        print("Waiting for mcp to be updated")
+        logger.info("Waiting for mcp to be updated")
         time.sleep(60)
         tclient.oc("wait mcp dpu-host --for condition=updated --timeout=50m")
 
         # DELTA START: We don't create sriovdpuconfigmap.yaml to set dpu-host mode. https://github.com/openshift/cluster-network-operator/pull/1676
         mgmtPortResourceName = "openshift.io/" + mgmtResourceName
-        print(f"Creating Config Map for mgmt port resource name {mgmtPortResourceName}")
+        logger.info(f"Creating Config Map for mgmt port resource name {mgmtPortResourceName}")
         with open('./manifests/tenant/hardware-offload-config.yaml.j2') as f:
             j2_template = jinja2.Template(f.read())
             rendered = j2_template.render(mgmtPortResourceName=mgmtPortResourceName)
-            print(rendered)
+            logger.info(rendered)
 
         with open("/tmp/hardware-offload-config.yaml", "w") as outFile:
             outFile.write(rendered)
 
-        print(tclient.oc("create -f /tmp/hardware-offload-config.yaml"))
+        logger.info(tclient.oc("create -f /tmp/hardware-offload-config.yaml"))
         # DELTA END
 
-        print("creating mc to disable ovs")
+        logger.info("creating mc to disable ovs")
         tclient.oc("create -f manifests/tenant/disable-ovs.yaml")
-        print("Waiting for mcp")
+        logger.info("Waiting for mcp")
         time.sleep(60)
         tclient.oc("wait mcp dpu-host --for condition=updated --timeout=50m")
 
@@ -272,22 +273,22 @@ class ExtraConfigDpuTenant_NewAPI(ExtraConfigDpuTenant):
 
         for e in self._cc["workers"]:
             cmd = f"label node {e['name']} network.operator.openshift.io/dpu-host="
-            print(tclient.oc(cmd))
+            logger.info(tclient.oc(cmd))
             rh = host.RemoteHost(tclient.get_ip(e['name']))
             rh.ssh_connect("core")
             # DELTA: "ovn-k8s-mp0" port is deleted by OVN-K. https://github.com/ovn-org/ovn-kubernetes/pull/3571
             result = rh.run("sudo ovs-vsctl show")
             if "ovn-k8s-mp0" in result.out:
-                print(result.out)
-                print("Unexpected ovn-k8s-mp0 interface found in br-int.")
+                logger.info(result.out)
+                logger.info("Unexpected ovn-k8s-mp0 interface found in br-int.")
                 sys.exit(-1)
 
-        print("Final infrastructure cluster configuration")
+        logger.info("Final infrastructure cluster configuration")
         iclient = K8sClient("/root/kubeconfig.infracluster")
 
         # https://issues.redhat.com/browse/NHE-334
         iclient.oc(f"project tenantcluster-dpu")
-        print(iclient.oc(f"create secret generic tenant-cluster-1-kubeconf --from-file=config={tclient._kc}"))
+        logger.info(iclient.oc(f"create secret generic tenant-cluster-1-kubeconf --from-file=config={tclient._kc}"))
 
         tc_namespace = "tenantcluster-dpu"
         dpu_namespace = "openshift-dpu-network-operator"
@@ -302,23 +303,23 @@ class ExtraConfigDpuTenant_NewAPI(ExtraConfigDpuTenant):
         patch = json.dumps({"spec":{"kubeConfigFile":"tenant-cluster-1-kubeconf"}})
         r = iclient.oc(
             f"patch --type merge -p '{patch}' OVNKubeConfig ovnkubeconfig-sample -n tenantcluster-dpu")
-        print(r)
-        print("Creating network attachement definition")
+        logger.info(r)
+        logger.info("Creating network attachement definition")
         tclient.oc("create -f manifests/tenant/nad.yaml")
 
         ec = ExtraConfigSriovOvSHWOL(self._cc)
         ec.ensure_pci_realloc(tclient, "dpu-host")
 
 def create_nm_operator(client: K8sClient):
-    print("Apply NMO subscription")
+    logger.info("Apply NMO subscription")
     client.oc("create -f manifests/tenant/nmo-subscription.yaml")
 
 def restart_dpu_network_operator(iclient: K8sClient):
     lh = host.LocalHost()
-    print("Restarting dpu-network-operator")
+    logger.info("Restarting dpu-network-operator")
     run_dpu_network_operator_git(lh, "/root/kubeconfig.infracluster")
     iclient.oc("wait deploy/dpu-network-operator-controller-manager --for condition=available -n openshift-dpu-network-operator")
-    print("Creating OVNKubeConfig cr")
+    logger.info("Creating OVNKubeConfig cr")
     iclient.oc("create -f manifests/infra/ovnkubeconfig.yaml")
 
 

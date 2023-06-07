@@ -13,6 +13,8 @@ import shlex
 import sys
 from typing import Optional
 import common
+from logger import logger
+import logging
 
 
 Result = namedtuple("Result", "out err returncode")
@@ -54,10 +56,10 @@ class LocalHost(Host):
         pipe = subprocess.PIPE
         with subprocess.Popen(args, stdout=pipe, stderr=pipe, env=env) as proc:
             if proc.stdout is None:
-                print("Can't find stdout")
+                logger.info("Can't find stdout")
                 sys.exit(-1)
             if proc.stderr is None:
-                print("Can't find stderr")
+                logger.info("Can't find stderr")
                 sys.exit(-1)
             out = proc.stdout.read().decode("utf-8")
             err = proc.stderr.read().decode("utf-8")
@@ -95,9 +97,9 @@ class RemoteHost(Host):
                 self._id_ed25519 = f.read().strip()
         except FileNotFoundError:
             self._id_ed25519 = None
-        print(f"waiting for '{self._hostname}' to respond to ping")
+        logger.info(f"waiting for '{self._hostname}' to respond to ping")
         self.wait_ping()
-        print(f"{self._hostname} responded to ping, trying to connect")
+        logger.info(f"{self._hostname} responded to ping, trying to connect")
         self.ssh_connect_looped(username)
 
     def ssh_connect_looped(self, username: str) -> None:
@@ -120,18 +122,18 @@ class RemoteHost(Host):
                                    pkey=pkey)
             except paramiko.ssh_exception.AuthenticationException as e:
                 if pkey.get_name() != "ssh-ed25519" and self._id_ed25519:
-                    print("Retry connect with es25519.")
+                    logger.info("Retry connect with es25519.")
                     pkey = paramiko.Ed25519Key.from_private_key(io.StringIO(
                         self._id_ed25519))
                     continue
 
-                print(type(e))
+                logger.info(type(e))
                 raise e
             except Exception as e:
-                print(type(e))
+                logger.info(type(e))
                 time.sleep(10)
                 continue
-            print(f"connected to {self._hostname}")
+            logger.info(f"connected to {self._hostname}")
             break
 
     def _read_output(self, cmd: str) -> Result:
@@ -139,7 +141,7 @@ class RemoteHost(Host):
 
         out = []
         for line in iter(stdout.readline, ""):
-            print(f"{self._hostname}: {line.strip()}")
+            logger.info(f"{self._hostname}: {line.strip()}")
             out.append(line)
 
         err = []
@@ -152,14 +154,14 @@ class RemoteHost(Host):
 
         return Result(out, err, exit_code)
 
-    def run(self, cmd: str) -> Result:
+    def run(self, cmd: str, log_level: int = logging.INFO) -> Result:
         while True:
             try:
-                print(f"running command {cmd}")
+                logger.log(log_level, f"running command {cmd}")
                 return self._read_output(cmd)
             except Exception as e:
-                print(e)
-                print("Connection lost while running command {cmd}, reconnecting...")
+                logger.log(log_level, e)
+                logger.log(log_level, f"Connection lost while running command {cmd}, reconnecting...")
                 self.ssh_connect_looped(self._username)
 
     def close(self) -> None:
@@ -208,26 +210,26 @@ class RemoteHost(Host):
     """
     @retry(stop=stop_after_attempt(10), wait=wait_fixed(60))
     def _boot_with_overrides(self, iso_path: str) -> None:
-        print(f"Trying to boot '{self._hostname}' through {self._bmc_url()}")
+        logger.info(f"Trying to boot '{self._hostname}' through {self._bmc_url()}")
         red = self._redfish()
         try:
             red.eject_iso()
         except Exception as e:
-            print(e)
-            print("eject failed, but continuing")
+            logger.info(e)
+            logger.info("eject failed, but continuing")
             pass
         red.insert_iso(iso_path)
-        print(f"inserted iso {iso_path}")
+        logger.info(f"inserted iso {iso_path}")
         try:
             red.set_iso_once()
         except Exception as e:
-            print(e)
+            logger.info(e)
             raise e
 
-        print("setting to boot from iso")
+        logger.info("setting to boot from iso")
         red.restart()
         time.sleep(10)
-        print(f"Finished sending boot to {self._bmc_url()}")
+        logger.info(f"Finished sending boot to {self._bmc_url()}")
 
     def stop(self) -> None:
         red = self._redfish()
@@ -271,7 +273,7 @@ class RemoteHost(Host):
 class RemoteHostWithBF2(RemoteHost):
     def run_in_container(self, cmd: str, interactive: bool = False) -> Result:
         name = "bf"
-        print("starting container")
+        logger.info("starting container")
         setup = f"sudo podman run --pull always --replace --pid host --network host --user 0 --name {name} -dit --privileged -v /dev:/dev quay.io/bnemeth/bf"
         r = self.run(setup)
         if r.returncode != 0:
@@ -282,16 +284,16 @@ class RemoteHostWithBF2(RemoteHost):
     def bf_pxeboot(self, nfs_iso: str, nfs_key: str) -> Result:
         cmd = "sudo killall python3"
         self.run(cmd)
-        print("starting pxe server and booting bf")
+        logger.info("starting pxe server and booting bf")
         cmd = f"/pxeboot {nfs_iso} -w {nfs_key}"
         return self.run_in_container(cmd, True)
 
     def bf_firmware_upgrade(self) -> Result:
-        print("Upgrading firmware")
+        logger.info("Upgrading firmware")
         return self.run_in_container("/fwup")
 
     def bf_firmware_defaults(self) -> Result:
-        print("Setting firmware config to defaults")
+        logger.info("Setting firmware config to defaults")
         return self.run_in_container("/fwdefaults")
 
     def bf_set_mode(self, mode: str) -> Result:
@@ -304,5 +306,5 @@ class RemoteHostWithBF2(RemoteHost):
         return self.run_in_container("fwversion")
 
     def bf_load_bfb(self) -> Result:
-        print("Loading BFB image")
+        logger.info("Loading BFB image")
         return self.run_in_container("/bfb")

@@ -1,7 +1,6 @@
 from os import path, getcwd
 from sys import exit
 from yaml import safe_load, safe_dump
-import logging
 import os
 import io
 import sys
@@ -12,10 +11,7 @@ import host
 import re
 from typing import List
 from typing import Dict
-
-logging.basicConfig(level=logging.INFO,
-        format='%(asctime)s %(levelname)s: %(message)s', datefmt='%H:%M:%S'
-)
+from logger import logger
 
 
 class ClusterInfo:
@@ -27,7 +23,7 @@ class ClusterInfo:
 
 
 def read_sheet() -> list:
-    print("Downloading sheet from Google")
+    logger.info("Downloading sheet from Google")
     scopes = [
         'https://www.googleapis.com/auth/spreadsheets',
         'https://www.googleapis.com/auth/drive'
@@ -41,7 +37,7 @@ def read_sheet() -> list:
         if os.path.exists(e):
             cred_path = e
     if cred_path is None:
-        print("Missing credentials.json while using templated config file")
+        logger.info("Missing credentials.json while using templated config file")
         sys.exit(-1)
     credentials = ServiceAccountCredentials.from_json_keyfile_name(cred_path, scopes)
     file = gspread.authorize(credentials)
@@ -154,7 +150,7 @@ class ClustersConfig():
     def _load_clusters(self) -> Dict[str, ClusterInfo]:
         cluster = None
         ret = []
-        print("loading cluster information")
+        logger.info("loading cluster information")
         for e in read_sheet():
             if e[0].startswith("Cluster"):
                 if cluster is not None:
@@ -175,18 +171,15 @@ class ClustersConfig():
     def _validate_clusters(self) -> None:
         for _, v in self._clusters.items():
             if v.provision_host == "":
-                print(f"Provision host missing for cluster {v.name}")
+                logger.info(f"Provision host missing for cluster {v.name}")
                 sys.exit(-1)
             if v.network_api_port == "":
-                print(f"Network api port missing for cluster {v.name}")
+                logger.info(f"Network api port missing for cluster {v.name}")
                 sys.exit(-1)
             for e in v.workers:
                 if e == "":
-                    print("Unnamed worker found for cluster {c.name}")
+                    logger.info("Unnamed worker found for cluster {c.name}")
                     sys.exit(-1)
-
-    def print(self) -> None:
-        print(safe_dump(self.fullConfig))
 
     def __getitem__(self, key):
         return self.fullConfig["clusters"][0][key]

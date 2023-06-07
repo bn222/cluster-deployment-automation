@@ -5,6 +5,7 @@ import json
 import ipaddress
 import requests
 import common
+from logger import logger
 
 class AssistedClientAutomation(AssistedClient):
     def __init__(self, url):
@@ -14,18 +15,18 @@ class AssistedClientAutomation(AssistedClient):
         return any(name == x["name"] for x in self.list_clusters())
 
     def ensure_cluster_deleted(self, name: str):
-        print(f"Ensuring that cluster {name} is not present")
+        logger.info(f"Ensuring that cluster {name} is not present")
         while self.cluster_exists(name):
             try:
                 self.delete_cluster(name)
             except Exception:
-                print("failed to delete cluster, will retry..")
+                logger.info("failed to delete cluster, will retry..")
                 pass
             time.sleep(5)
 
     def ensure_infraenv_created(self, name: str, cfg):
         if name not in map(lambda x: x["name"], self.list_infra_envs()):
-            print(f"Creating infraenv {name}")
+            logger.info(f"Creating infraenv {name}")
             self.create_infra_env(name, cfg)
 
 
@@ -34,8 +35,8 @@ class AssistedClientAutomation(AssistedClient):
             self.delete_infra_env(name)
 
     def download_iso_with_retry(self, infra_env: str):
-        print(self.info_iso(infra_env, {}))
-        print("Downloading iso (will retry if not ready)...")
+        logger.info(self.info_iso(infra_env, {}))
+        logger.info("Downloading iso (will retry if not ready)...")
         while True:
             try:
                 self.download_iso(infra_env, os.getcwd())
@@ -44,12 +45,12 @@ class AssistedClientAutomation(AssistedClient):
                 time.sleep(30)
 
     def wait_cluster_ready(self, cluster_name: str):
-        print("Waiting for cluster state to be ready")
+        logger.info("Waiting for cluster state to be ready")
         cur_state = None
         while True:
             new_state = self.cluster_state(cluster_name)
             if new_state != cur_state:
-                print(f"Cluster state schanged to {new_state}")
+                logger.info(f"Cluster state schanged to {new_state}")
             cur_state = new_state
             if cur_state == "ready":
                 break
@@ -61,7 +62,7 @@ class AssistedClientAutomation(AssistedClient):
 
     def start_until_success(self, cluster_name: str):
         self.wait_cluster_ready(cluster_name)
-        print(f"Starting cluster {cluster_name} (will retry until success)")
+        logger.info(f"Starting cluster {cluster_name} (will retry until success)")
         tries = 0
         while True:
             try:
@@ -74,11 +75,11 @@ class AssistedClientAutomation(AssistedClient):
             status = cluster[0]["status"]
 
             if status == "installing":
-                print(f"Cluster {cluster_name} is in state installing")
+                logger.info(f"Cluster {cluster_name} is in state installing")
                 break
             else:
                 time.sleep(10)
-        print(f"Took {tries} tries to start cluster {cluster_name}")
+        logger.info(f"Took {tries} tries to start cluster {cluster_name}")
 
     def get_ai_host(self, name: str):
         for h in filter(lambda x: "inventory" in x, self.list_hosts()):

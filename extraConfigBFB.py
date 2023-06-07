@@ -9,6 +9,7 @@ from concurrent.futures import Future
 from typing import Dict
 import time
 import sys
+from logger import logger
 
 """
 The "ExtraConfigBFB" is used to put the BF2 in a known good state. This is achieved by
@@ -30,7 +31,7 @@ class ExtraConfigBFB:
 
     def run(self, _, futures: Dict[str, Future]) -> None:
         coreosBuilder.ensure_fcos_exists()
-        print("Loading BF-2 with BFB image on all workers")
+        logger.info("Loading BF-2 with BFB image on all workers")
         lh = host.LocalHost()
         nfs = NFS(lh, self._cc["external_port"])
         iso_url = nfs.host_file("/root/iso/fedora-coreos.iso")
@@ -40,7 +41,7 @@ class ExtraConfigBFB:
 
             def check(result: host.Result):
                 if result.returncode != 0:
-                    print(result)
+                    logger.info(result)
                     sys.exit(-1)
 
             h.boot_iso_redfish(iso_url)
@@ -59,7 +60,7 @@ class ExtraConfigBFB:
             futures[e["name"]].result()
             f = executor.submit(helper, e)
             futures[e["name"]] = f
-        print("BFB setup complete")
+        logger.info("BFB setup complete")
 
 
 class ExtraConfigSwitchNicMode:
@@ -74,13 +75,13 @@ class ExtraConfigSwitchNicMode:
 
         # label nodes
         for e in self._cc["workers"]:
-            print(client.oc(f'label node {e["name"]} --overwrite=true feature.node.kubernetes.io/network-sriov.capable=true'))
+            logger.info(client.oc(f'label node {e["name"]} --overwrite=true feature.node.kubernetes.io/network-sriov.capable=true'))
 
         client.oc("delete -f manifests/nicmode/switch.yaml")
         client.oc("create -f manifests/nicmode/switch.yaml")
-        print("Waiting for mcp to update")
+        logger.info("Waiting for mcp to update")
         start = time.time()
         time.sleep(60)
-        print(client.oc("wait mcp sriov --for condition=updated --timeout=50m"))
+        logger.info(client.oc("wait mcp sriov --for condition=updated --timeout=50m"))
         minutes, seconds = divmod(int(time.time() - start), 60)
-        print(f"It took {minutes}m {seconds}s to for mcp sriov to update")
+        logger.info(f"It took {minutes}m {seconds}s to for mcp sriov to update")

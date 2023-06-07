@@ -10,6 +10,7 @@ import shutil
 import jinja2
 import sys
 from typing import Dict
+from logger import logger
 
 
 class ExtraConfigSriov:
@@ -26,7 +27,7 @@ class ExtraConfigSriov:
         if os.path.exists(repo_dir):
             shutil.rmtree(repo_dir)
 
-        print(f"Cloning repo to {repo_dir}")
+        logger.info(f"Cloning repo to {repo_dir}")
         Repo.clone_from(url, repo_dir, branch='master')
 
         cur_dir = os.getcwd()
@@ -36,12 +37,12 @@ class ExtraConfigSriov:
 
         if "image" in cfg:
             image = cfg["image"]
-            print(f"Image {image} provided to load custom sriov-network-operator")
+            logger.info(f"Image {image} provided to load custom sriov-network-operator")
             env["SRIOV_NETWORK_OPERATOR_IMAGE"] = image
 
         # cleanup first, to make this script idempotent
-        print("running make undeploy")
-        print(lh.run("make undeploy", env))
+        logger.info("running make undeploy")
+        logger.info(lh.run("make undeploy", env))
 
         # Workaround PSA issues. https://issues.redhat.com/browse/OCPBUGS-1005
         client.oc("create namespace openshift-sriov-network-operator")
@@ -50,8 +51,8 @@ class ExtraConfigSriov:
                   "pod-security.kubernetes.io/enforce-version=v1.24 "
                   "security.openshift.io/scc.podSecurityLabelSync=false")
 
-        print("running make deploy-setup")
-        print(lh.run("make deploy-setup", env))
+        logger.info("running make deploy-setup")
+        logger.info(lh.run("make deploy-setup", env))
         time.sleep(60)
         os.chdir(cur_dir)
 
@@ -67,25 +68,25 @@ class ExtraConfigSriovOvSHWOL:
             rh = host.RemoteHost(ip)
             rh.ssh_connect("core")
             if "switchdev-configuration-before-nm.service" in rh.run("systemctl list-units --state=failed --plain --no-legend").out:
-                print(f"switchdev-configuration is failing in {e['name']}, additional machine configuration is required")
+                logger.info(f"switchdev-configuration is failing in {e['name']}, additional machine configuration is required")
                 return True
         return False
 
     def enable_pci_realloc(self, client: K8sClient, mcp_name: str) -> None:
-        print("Applying pci-realloc machine config")
+        logger.info("Applying pci-realloc machine config")
         with open('./manifests/nicmode/pci-realloc.yaml.j2') as f:
             j2_template = jinja2.Template(f.read())
         rendered = j2_template.render(MCPName=mcp_name)
-        print(rendered)
+        logger.info(rendered)
         with open("/tmp/pci-realloc.yaml", "w") as outFile:
             outFile.write(rendered)
         client.oc("create -f /tmp/pci-realloc.yaml")
-        print("Waiting for mcp")
+        logger.info("Waiting for mcp")
         start = time.time()
         time.sleep(60)
         client.oc(f"wait mcp {mcp_name} --for condition=updated --timeout=50m")
         minutes, seconds = divmod(int(time.time() - start), 60)
-        print(f"It took {minutes}m {seconds}s to for mcp {mcp_name} to update")
+        logger.info(f"It took {minutes}m {seconds}s to for mcp {mcp_name} to update")
 
     def ensure_pci_realloc(self, client: K8sClient, mcp_name: str) -> None:
         if self.need_pci_realloc(client):
@@ -95,7 +96,7 @@ class ExtraConfigSriovOvSHWOL:
         with open('./manifests/nicmode/sriov-node-policy.yaml.j2') as f:
             j2_template = jinja2.Template(f.read())
             rendered = j2_template.render(policyName=policyname, pfNamesAll=pfnames, numVfs=numvfs, resourceName=resourcename)
-            print(rendered)
+            logger.info(rendered)
 
         with open(outfilename, "w") as outFile:
             outFile.write(rendered)
@@ -113,8 +114,8 @@ class ExtraConfigSriovOvSHWOL:
         managementResourceName = "mgmtvf"
         for e in self._cc["workers"]:
             name = e["name"]
-            print(client.oc(f'label node {name} --overwrite=true feature.node.kubernetes.io/network-sriov.capable=true'))
-            print(client.oc(f'label node {name} --overwrite=true network.operator.openshift.io/smart-nic='))
+            logger.info(client.oc(f'label node {name} --overwrite=true feature.node.kubernetes.io/network-sriov.capable=true'))
+            logger.info(client.oc(f'label node {name} --overwrite=true network.operator.openshift.io/smart-nic='))
             # Find out what the PF attached to br-ex is (uplink port). We only do HWOL on uplink ports.
             ip = client.get_ip(name)
             if ip is None:
@@ -123,16 +124,16 @@ class ExtraConfigSriovOvSHWOL:
             rh.ssh_connect("core")
             result = rh.run("cat /var/lib/ovnk/iface_default_hint").out.strip()
             if result:
-                print(f"Found PF Name {result} on node {name}")
+                logger.info(f"Found PF Name {result} on node {name}")
             else:
-                print(f"Cannot find PF Name on node {name} using hint")
+                logger.info(f"Cannot find PF Name on node {name} using hint")
                 interface_list = rh.run("sudo ovs-vsctl list-ifaces br-ex").out.strip().split("\n")
                 result = [x for x in interface_list if "patch" not in x]
                 result = result[0]
                 if result:
-                    print(f"Found PF Name {result} on node {name}")
+                    logger.info(f"Found PF Name {result} on node {name}")
                 else:
-                    print(f"Cannot find PF Name on node {name} using ovs-vsctl")
+                    logger.info(f"Cannot find PF Name on node {name} using ovs-vsctl")
             if result:
                 # Reserve VF(s) for management port(s).
                 workloadVFs = result + f"#{numMgmtVfs}-{numVfs-1}"
@@ -144,7 +145,7 @@ class ExtraConfigSriovOvSHWOL:
 
         # We error out if we can't find any PFs.
         if not workloadVFsAll:
-            print(f"PF Name is not found on any nodes.")
+            logger.info(f"PF Name is not found on any nodes.")
             sys.exit(-1)
 
         workloadPolicyName = "sriov-workload-node-policy"
@@ -155,15 +156,15 @@ class ExtraConfigSriovOvSHWOL:
         mgmtPolicyFile = "/tmp/" + mgmtPolicyName + ".yaml"
         self.render_sriov_node_policy(mgmtPolicyName, managementVFsAll, numVfs, managementResourceName, mgmtPolicyFile)
 
-        print(client.oc("create -f manifests/nicmode/sriov-pool-config.yaml"))
-        print(client.oc("create -f " + workloadPolicyFile))
-        print(client.oc("create -f " + mgmtPolicyFile))
-        print(client.oc("create -f manifests/nicmode/nad.yaml"))
+        logger.info(client.oc("create -f manifests/nicmode/sriov-pool-config.yaml"))
+        logger.info(client.oc("create -f " + workloadPolicyFile))
+        logger.info(client.oc("create -f " + mgmtPolicyFile))
+        logger.info(client.oc("create -f manifests/nicmode/nad.yaml"))
         start = time.time()
         time.sleep(60)
-        print(client.oc("wait mcp sriov --for condition=updated --timeout=50m"))
+        logger.info(client.oc("wait mcp sriov --for condition=updated --timeout=50m"))
         minutes, seconds = divmod(int(time.time() - start), 60)
-        print(f"It took {minutes}m {seconds}s to for mcp sriov to update")
+        logger.info(f"It took {minutes}m {seconds}s to for mcp sriov to update")
 
         self.ensure_pci_realloc(client, "sriov")
 
@@ -182,8 +183,8 @@ class ExtraConfigSriovOvSHWOL_NewAPI(ExtraConfigSriovOvSHWOL):
         managementResourceName = "mgmtvf"
         for e in self._cc["workers"]:
             name = e["name"]
-            print(client.oc(f'label node {name} --overwrite=true feature.node.kubernetes.io/network-sriov.capable=true'))
-            print(client.oc(f'label node {name} --overwrite=true network.operator.openshift.io/smart-nic='))
+            logger.info(client.oc(f'label node {name} --overwrite=true feature.node.kubernetes.io/network-sriov.capable=true'))
+            logger.info(client.oc(f'label node {name} --overwrite=true network.operator.openshift.io/smart-nic='))
             # Find out what the PF attached to br-ex is (uplink port). We only do HWOL on uplink ports.
             ip = client.get_ip(name)
             if ip is None:
@@ -192,16 +193,16 @@ class ExtraConfigSriovOvSHWOL_NewAPI(ExtraConfigSriovOvSHWOL):
             rh.ssh_connect("core")
             result = rh.run("cat /var/lib/ovnk/iface_default_hint").out.strip()
             if result:
-                print(f"Found PF Name {result} on node {name}")
+                logger.info(f"Found PF Name {result} on node {name}")
             else:
-                print(f"Cannot find PF Name on node {name} using hint")
+                logger.info(f"Cannot find PF Name on node {name} using hint")
                 interface_list = rh.run("sudo ovs-vsctl list-ifaces br-ex").out.strip().split("\n")
                 result = [x for x in interface_list if "patch" not in x]
                 result = result[0]
                 if result:
-                    print(f"Found PF Name {result} on node {name}")
+                    logger.info(f"Found PF Name {result} on node {name}")
                 else:
-                    print(f"Cannot find PF Name on node {name} using ovs-vsctl")
+                    logger.info(f"Cannot find PF Name on node {name} using ovs-vsctl")
             if result:
                 # Reserve VF(s) for management port(s).
                 workloadVFs = result + f"#{numMgmtVfs}-{numVfs-1}"
@@ -213,7 +214,7 @@ class ExtraConfigSriovOvSHWOL_NewAPI(ExtraConfigSriovOvSHWOL):
 
         # We error out if we can't find any PFs.
         if not workloadVFsAll:
-            print(f"PF Name is not found on any nodes.")
+            logger.info(f"PF Name is not found on any nodes.")
             sys.exit(-1)
 
         workloadPolicyName = "sriov-workload-node-policy"
@@ -224,27 +225,27 @@ class ExtraConfigSriovOvSHWOL_NewAPI(ExtraConfigSriovOvSHWOL):
         mgmtPolicyFile = "/tmp/" + mgmtPolicyName + ".yaml"
         self.render_sriov_node_policy(mgmtPolicyName, managementVFsAll, numVfs, managementResourceName, mgmtPolicyFile)
 
-        print(client.oc("create -f manifests/nicmode/sriov-pool-config.yaml"))
-        print(client.oc("create -f " + workloadPolicyFile))
-        print(client.oc("create -f " + mgmtPolicyFile))
-        print(client.oc("create -f manifests/nicmode/nad.yaml"))
+        logger.info(client.oc("create -f manifests/nicmode/sriov-pool-config.yaml"))
+        logger.info(client.oc("create -f " + workloadPolicyFile))
+        logger.info(client.oc("create -f " + mgmtPolicyFile))
+        logger.info(client.oc("create -f manifests/nicmode/nad.yaml"))
         start = time.time()
         time.sleep(60)
-        print(client.oc("wait mcp sriov --for condition=updated --timeout=50m"))
+        logger.info(client.oc("wait mcp sriov --for condition=updated --timeout=50m"))
         minutes, seconds = divmod(int(time.time() - start), 60)
-        print(f"It took {minutes}m {seconds}s to for mcp sriov to update")
+        logger.info(f"It took {minutes}m {seconds}s to for mcp sriov to update")
 
         mgmtPortResourceName = "openshift.io/" + managementResourceName
-        print(f"Creating Config Map for Hardware Offload with resource name {mgmtPortResourceName}")
+        logger.info(f"Creating Config Map for Hardware Offload with resource name {mgmtPortResourceName}")
         with open('./manifests/nicmode/hardware-offload-config.yaml.j2') as f:
             j2_template = jinja2.Template(f.read())
             rendered = j2_template.render(mgmtPortResourceName=mgmtPortResourceName)
-            print(rendered)
+            logger.info(rendered)
 
         with open("/tmp/hardware-offload-config.yaml", "w") as outFile:
             outFile.write(rendered)
 
-        print(client.oc("create -f /tmp/hardware-offload-config.yaml"))
+        logger.info(client.oc("create -f /tmp/hardware-offload-config.yaml"))
 
         self.ensure_pci_realloc(client, "sriov")
 
