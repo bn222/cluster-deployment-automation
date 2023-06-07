@@ -50,7 +50,7 @@ class AssistedClientAutomation(AssistedClient):
         while True:
             new_state = self.cluster_state(cluster_name)
             if new_state != cur_state:
-                logger.info(f"Cluster state schanged to {new_state}")
+                logger.info(f"Cluster state changed to {new_state}")
             cur_state = new_state
             if cur_state == "ready":
                 break

@@ -32,8 +32,15 @@ class VirshPool:
             self.remove()
 
     def initialize(self) -> None:
+        def run_and_log(cmd):
+            r = self._host.run(cmd)
+            logger.debug(cmd)
+            if r.returncode:
+                logger.warn(f"Ran {cmd} and got error: {r}")
+
         logger.info(f"Initializing pool {self._name} at {self._images_path}")
-        logger.info(self._host.run(f"virsh pool-define-as {self._name} dir - - - - {self._images_path}"))
-        logger.info(self._host.run(f"mkdir -p {self._images_path}"))
-        logger.info(self._host.run(f"chmod a+rw {self._images_path}"))
-        logger.info(self._host.run(f"virsh pool-start {self._name}"))
+        run_and_log(f"virsh pool-define-as {self._name} dir - - - - {self._images_path}")
+        run_and_log(f"mkdir -p {self._images_path}")
+        run_and_log(f"chmod a+rw {self._images_path}")
+        run_and_log(f"virsh pool-start {self._name}")
+        logger.info("Pool initialized")
