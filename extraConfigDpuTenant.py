@@ -27,9 +27,9 @@ class ExtraConfigDpuTenantMC:
         apply_common_pathches(tclient)
         logger.info("Apply DPU tenant mc")
         tclient.oc("create -f manifests/tenant/dputenantmachineconfig.yaml")
-        time.sleep(60)
+
         logger.info("Waiting for mcp to be updated")
-        tclient.oc("wait mcp dpu-host --for condition=updated")
+        tclient.wait_for_mcp("dpu-host", "dputenantmachineconfig.yaml")
 
         logger.info("Patching mcp setting maxUnavailable to 2")
         tclient.oc("patch mcp dpu-host --type=json -p=\[\{\"op\":\"replace\",\"path\":\"/spec/maxUnavailable\",\"value\":2\}\]")
@@ -75,7 +75,7 @@ class ExtraConfigDpuTenant:
         logger.info("Running post config step")
         tclient = K8sClient("/root/kubeconfig.tenantcluster")
         logger.info("Waiting for mcp dpu-host to become ready")
-        tclient.oc("wait mcp dpu-host --for condition=updated --timeout=50m")
+        tclient.wait_for_mcp("dpu-host")
 
         first_worker = self._cc["workers"][0]['name']
         ip = tclient.get_ip(first_worker)
@@ -127,16 +127,14 @@ class ExtraConfigDpuTenant:
         tclient.oc("create -f " + workloadPolicyFile)
         tclient.oc("create -f " + mgmtPolicyFile)
         logger.info("Waiting for mcp to be updated")
-        time.sleep(60)
-        tclient.oc("wait mcp dpu-host --for condition=updated --timeout=50m")
+        tclient.wait_for_mcp("dpu-host", "sriov pool")
 
         logger.info("creating config map to put ovn-k into dpu host mode")
         tclient.oc("create -f manifests/tenant/sriovdpuconfigmap.yaml")
         logger.info("creating mc to disable ovs")
         tclient.oc("create -f manifests/tenant/disable-ovs.yaml")
         logger.info("Waiting for mcp")
-        time.sleep(60)
-        tclient.oc("wait mcp dpu-host --for condition=updated --timeout=50m")
+        tclient.wait_for_mcp("dpu-host", "dpu host mode")
 
         logger.info("setting ovn kube node env-override to set management port")
         logger.info(os.getcwd())
@@ -194,7 +192,7 @@ class ExtraConfigDpuTenant_NewAPI(ExtraConfigDpuTenant):
         logger.info("Running post config step")
         tclient = K8sClient("/root/kubeconfig.tenantcluster")
         logger.info("Waiting for mcp dpu-host to become ready")
-        tclient.oc("wait mcp dpu-host --for condition=updated --timeout=50m")
+        tclient.wait_for_mcp("dpu-host")
 
         first_worker = self._cc["workers"][0]['name']
         ip = tclient.get_ip(first_worker)
@@ -246,8 +244,7 @@ class ExtraConfigDpuTenant_NewAPI(ExtraConfigDpuTenant):
         tclient.oc("create -f " + workloadPolicyFile)
         tclient.oc("create -f " + mgmtPolicyFile)
         logger.info("Waiting for mcp to be updated")
-        time.sleep(60)
-        tclient.oc("wait mcp dpu-host --for condition=updated --timeout=50m")
+        tclient.wait_for_mcp("dpu-host", "sriov pool")
 
         # DELTA START: We don't create sriovdpuconfigmap.yaml to set dpu-host mode. https://github.com/openshift/cluster-network-operator/pull/1676
         mgmtPortResourceName = "openshift.io/" + mgmtResourceName
@@ -266,8 +263,7 @@ class ExtraConfigDpuTenant_NewAPI(ExtraConfigDpuTenant):
         logger.info("creating mc to disable ovs")
         tclient.oc("create -f manifests/tenant/disable-ovs.yaml")
         logger.info("Waiting for mcp")
-        time.sleep(60)
-        tclient.oc("wait mcp dpu-host --for condition=updated --timeout=50m")
+        tclient.wait_for_mcp("dpu-host", "disable-ovs.yaml")
 
         # DELTA: We don't create env-override to set management port. https://github.com/ovn-org/ovn-kubernetes/pull/3467
 

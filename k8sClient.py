@@ -72,3 +72,15 @@ class K8sClient():
             lh.run("tar xf build/oc.tar.gz -C build")
             lh.run("rm build/oc.tar.gz")
         self.oc_bin = os.path.join(os.getcwd(), "build/oc")
+
+    def wait_for_mcp(self, mcp_name: str, resource: str = "resource"):
+        time.sleep(60)
+        iteration = 1
+        get_status_cmd = "get mcp sriov -o jsonpath='{.status.conditions[?(@.type==\"Updated\")].status}'"
+        while self.oc(get_status_cmd).out != "True":
+            start = time.time()
+            logger.info(self.oc(f"wait mcp {mcp_name} --for condition=updated --timeout=50m"))
+            minutes, seconds = divmod(int(time.time() - start), 60)
+            logger.info(f"It took {minutes}m {seconds}s to for {resource} to be applied (attempt: {iteration})")
+            iteration = iteration + 1
+            time.sleep(60)
