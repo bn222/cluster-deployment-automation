@@ -22,7 +22,7 @@ class ExtraConfigSriov:
         client = K8sClient(self._cc["kubeconfig"])
         lh = host.LocalHost()
         repo_dir = "/root/sriov-network-operator"
-        url = "https://github.com/bn222/sriov-network-operator"
+        url = "https://github.com/openshift/sriov-network-operator.git"
 
         if os.path.exists(repo_dir):
             shutil.rmtree(repo_dir)
