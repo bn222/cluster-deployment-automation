@@ -1,0 +1,10 @@
+apiVersion: dpu.openshift.io/v1alpha1
+kind: DpuClusterConfig
+metadata:
+  name: dpuclusterconfig-sample
+  namespace: tenantcluster-dpu
+spec:
+  poolName: dpu
+  nodeSelector:
+    matchLabels:
+      node-role.kubernetes.io/dpu-worker: ""
