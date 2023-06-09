@@ -79,7 +79,7 @@ class K8sClient():
         iteration = 0
         max_tries = 4
         start = time.time()
-        get_status_cmd = "get mcp sriov -o jsonpath='{.status.conditions[?(@.type==\"Updated\")].status}'"
+        get_status_cmd = "get mcp " + mcp_name + " -o jsonpath='{.status.conditions[?(@.type==\"Updated\")].status}'"
         while self.oc(get_status_cmd).out != "True":
             if iteration >= max_tries:
                 logger.error(f"mcp {mcp_name} failed to update for {resource} after {max_tries}, quitting ...")
@@ -88,4 +88,4 @@ class K8sClient():
             iteration = iteration + 1
             time.sleep(60)
         minutes, seconds = divmod(int(time.time() - start), 60)
-        logger.info(f"It took {minutes}m {seconds}s for {resource} (Total Attempts: {iteration})")
+        logger.info(f"It took {minutes}m {seconds}s for {resource} (attempts: {iteration})")
