@@ -178,7 +178,7 @@ class ExtraConfigDpuTenant:
 
         patch = json.dumps({"spec":{"kubeConfigFile":"tenant-cluster-1-kubeconf"}})
         r = iclient.oc(
-            f"patch --type merge -p '{patch}' OVNKubeConfig ovnkubeconfig-sample -n tenantcluster-dpu")
+            f"patch --type merge -p '{patch}' DpuClusterConfig dpuclusterconfig-sample -n tenantcluster-dpu")
         logger.info(r)
         logger.info("Creating network attachement definition")
         tclient.oc("create -f manifests/tenant/nad.yaml")
@@ -298,7 +298,7 @@ class ExtraConfigDpuTenant_NewAPI(ExtraConfigDpuTenant):
 
         patch = json.dumps({"spec":{"kubeConfigFile":"tenant-cluster-1-kubeconf"}})
         r = iclient.oc(
-            f"patch --type merge -p '{patch}' OVNKubeConfig ovnkubeconfig-sample -n tenantcluster-dpu")
+            f"patch --type merge -p '{patch}' DpuClusterConfig dpuclusterconfig-sample -n tenantcluster-dpu")
         logger.info(r)
         logger.info("Creating network attachement definition")
         tclient.oc("create -f manifests/tenant/nad.yaml")
@@ -315,8 +315,8 @@ def restart_dpu_network_operator(iclient: K8sClient):
     logger.info("Restarting dpu-network-operator")
     run_dpu_network_operator_git(lh, "/root/kubeconfig.infracluster")
     iclient.oc("wait deploy/dpu-network-operator-controller-manager --for condition=available -n openshift-dpu-network-operator")
-    logger.info("Creating OVNKubeConfig cr")
-    iclient.oc("create -f manifests/infra/ovnkubeconfig.yaml")
+    logger.info("Creating DpuClusterConfig cr")
+    iclient.oc("create -f manifests/infra/dpuclusterconfig.yaml")
 
 
 def main():

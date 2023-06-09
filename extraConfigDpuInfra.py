@@ -111,7 +111,7 @@ def run_dpu_network_operator_git(lh, kc):
     lh.run("rm -rf bin")
     env = os.environ.copy()
     env["KUBECONFIG"] = kc
-    env["IMG"] = "quay.io/wizhao/dpu-network-operator:june6_latest"
+    env["IMG"] = "quay.io/wizhao/dpu-network-operator:june9_latest"
     # cleanup first, to make this script idempotent
     logger.info("running make undeploy")
     logger.info(lh.run("make undeploy", env))
@@ -176,8 +176,8 @@ class ExtraConfigDpuInfra:
         logger.info("Creating namespace for tenant")
         client.oc("create -f manifests/infra/tenantcluster-dpu.yaml")
 
-        logger.info("Creating OVNKubeConfig cr")
-        client.oc("create -f manifests/infra/ovnkubeconfig.yaml")
+        logger.info("Creating DpuClusterConfig cr")
+        client.oc("create -f manifests/infra/dpuclusterconfig.yaml")
 
         logger.info("Patching mcp setting maxUnavailable to 2")
         client.oc("patch mcp dpu --type=json -p=\[\{\"op\":\"replace\",\"path\":\"/spec/maxUnavailable\",\"value\":2\}\]")
@@ -249,8 +249,8 @@ class ExtraConfigDpuInfra_NewAPI(ExtraConfigDpuInfra):
         logger.info("Creating namespace for tenant")
         client.oc("create -f manifests/infra/tenantcluster-dpu.yaml")
 
-        logger.info("Creating OVNKubeConfig cr")
-        client.oc("create -f manifests/infra/ovnkubeconfig.yaml")
+        logger.info("Creating DpuClusterConfig cr")
+        client.oc("create -f manifests/infra/dpuclusterconfig.yaml")
 
         logger.info("Patching mcp setting maxUnavailable to 2")
         client.oc("patch mcp dpu --type=json -p=\[\{\"op\":\"replace\",\"path\":\"/spec/maxUnavailable\",\"value\":2\}\]")
