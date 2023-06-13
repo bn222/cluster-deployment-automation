@@ -801,7 +801,7 @@ class ClusterDeployer():
                     out = h.run("sudo podman images --format json", logging.DEBUG).out
                     podman_images = json.loads(out)
                     for image in podman_images:
-                        inspect_output = h.run(f"sudo podman image inspect {image['Id']}").out
+                        inspect_output = h.run(f"sudo podman image inspect {image['Id']}", logging.DEBUG).out
                         if "A storage corruption might have occurred" in inspect_output:
                             logger.warn("Corrupt image found")
                             h.run(f"sudo podman rmi {image['id']}")
