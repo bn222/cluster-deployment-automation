@@ -721,7 +721,6 @@ class ClusterDeployer():
             try:
                 h.ssh_connect("core")
                 d = h.os_release()
-                logger.info(d)
                 skip_boot = d["NAME"] == 'Fedora Linux' and d['VARIANT'] == 'CoreOS'
             except paramiko.ssh_exception.AuthenticationException as e:
                 logger.info("Authentication failed, will not be able to skip boot")

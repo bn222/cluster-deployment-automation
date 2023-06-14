@@ -258,9 +258,9 @@ class RemoteHost(Host):
         r = lh.run(ping_cmd)
         return r.returncode == 0
 
-    def os_release(self) -> dict:
+    def os_release(self, log_level: int = logging.DEBUG) -> dict:
         d = {}
-        for e in self.run("cat /etc/os-release").out.split("\n"):
+        for e in self.run("cat /etc/os-release", log_level).out.split("\n"):
             e = e.split("=", maxsplit=1)
             if len(e) != 2:
                 continue
