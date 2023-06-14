@@ -273,20 +273,24 @@ class ClusterDeployer():
         return None
 
     def _validate_api_port(self, lh) -> Optional[str]:
-        if self._cc["network_api_port"] == "auto":
-            def carrier_no_addr(intf):
-                return not intf["addr_info"] and "NO-CARRIER" not in intf["flags"]
+        def carrier_no_addr(intf):
+            return not intf["addr_info"] and "NO-CARRIER" not in intf["flags"]
 
+        if self._cc["network_api_port"] == "auto":
             intif = common.first(carrier_no_addr, lh.ipa())
             if not intif:
                 return None
             self._cc["network_api_port"] = intif["ifname"]
 
-        intif = self._cc["network_api_port"]
-        if lh.port_exists(intif):
-            logger.info(f"Using {intif} as network API port")
-            return intif
-        return None
+        port = self._cc["network_api_port"]
+        logger.info(f'Validating API network port {port}')
+        if not lh.port_exists(port):
+            logger.error(f"Can't find API network port {port}")
+            return None
+        if not lh.port_has_carrier(port):
+            logger.error(f"API network port {port} doesn't have a carrier")
+            return None
+        return port
 
     def _preconfig(self) -> None:
         for e in self._cc["preconfig"]:
@@ -336,25 +340,9 @@ class ClusterDeployer():
         return len(self._cc["masters"]) == 1 and len(self._cc["workers"]) == 0
 
     def deploy(self) -> None:
+        self._validate()
+
         if self._cc["masters"]:
-            if self._is_sno_configuration():
-                logger.info("Setting up a Single Node OpenShift (SNO) environment.")
-                self._cc["api_ip"] = self._cc["masters"][0]["ip"]
-                self._cc["ingress_ip"] = self._cc["masters"][0]["ip"]
-
-            lh = host.LocalHost()
-            min_cores = 32
-            cc = int(lh.run("nproc").out)
-            if cc < min_cores:
-                logger.info(f"{cc} cores on localhost but need at least {min_cores}")
-                sys.exit(-1)
-            if self.need_external_network() and not self._validate_external_port(lh):
-                logger.info(f"Can't find a valid external port, config is {self._cc['external_port']}")
-                sys.exit(-1)
-            if self.need_api_network() and not self._validate_api_port(lh):
-                logger.info(f"Can't find a valid network API port, config is {self._cc['network_api_port']}")
-                sys.exit(-1)
-
             if "pre" in self.args.steps:
                 self._preconfig()
             else:
@@ -378,6 +366,27 @@ class ClusterDeployer():
             self._postconfig()
         else:
             logger.info("Skipping post configuration.")
+
+    def _validate(self):
+        if self._is_sno_configuration():
+            logger.info("Setting up a Single Node OpenShift (SNO) environment")
+            self._cc["api_ip"] = self._cc["masters"][0]["ip"]
+            self._cc["ingress_ip"] = self._cc["masters"][0]["ip"]
+
+        lh = host.LocalHost()
+        min_cores = 32
+        cc = int(lh.run("nproc").out)
+        if cc < min_cores:
+            logger.info(f"Detected {cc} cores on localhost, but need at least {min_cores} cores")
+            sys.exit(-1)
+        if self.need_external_network() and not self._validate_external_port(lh):
+            logger.info(f"Can't find a valid external port, config is {self._cc['external_port']}")
+            sys.exit(-1)
+        if self.need_api_network() and not self._validate_api_port(lh):
+            logger.info(f"Can't find a valid network API port, config is {self._cc['network_api_port']}")
+            sys.exit(-1)
+        else:
+            logger.info(f"Using {self._cc['network_api_port']} as network API port")
 
     def client(self) -> K8sClient:
         if self._client is None:
@@ -571,10 +580,14 @@ class ClusterDeployer():
         def addr_ok(a):
             return common.ip_in_subnet(a, subnet)
 
+        any_worker_bad = False
         for w, h in zip(self._cc["workers"], hosts):
             if all(not addr_ok(a) for a in addresses(h)):
-                logger.info(f'Worker {w["name"]} doesn\'t have an IP in {subnet}.')
-                sys.exit(-1)
+                logger.info(f"Worker {w['name']} doesn't have an IP in {subnet}.")
+                any_worker_bad = True
+
+        if any_worker_bad:
+            sys.exit(-1)
 
         logger.info("Connectivity established to all workers, renaming them in Assited installer")
         logger.info(f"looking for workers with ip {[w['ip'] for w in self._cc['workers']]}")
