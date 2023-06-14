@@ -736,7 +736,7 @@ class ClusterDeployer():
         nfs_iso = nfs.host_file(f"/root/iso/{iso}")
         nfs_key = nfs.host_file("/root/iso/ssh_priv_key")
         output = h.bf_pxeboot(nfs_iso, nfs_key)
-        logger.info(output)
+        logger.debug(output)
         if output.returncode:
             logger.info(f"Failed to run pxeboot on bf {host_name}")
             sys.exit(-1)
