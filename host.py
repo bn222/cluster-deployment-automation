@@ -277,6 +277,48 @@ class RemoteHost(Host):
 
 
 class RemoteHostWithBF2(RemoteHost):
+    def connect_to_bf(self, bf_addr: str):
+        private_key = open("/root/.ssh/id_rsa", "r").read().strip()
+        key_file_obj = io.StringIO(private_key)
+        pkey = paramiko.RSAKey.from_private_key(key_file_obj)
+
+        prov_host = paramiko.SSHClient()
+        prov_host.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        prov_host.connect(self._hostname, username=self._username, pkey=pkey)
+
+        logger.info(f"Connecting to BF through host {self._hostname}")
+
+        jumpbox_private_addr = '172.31.100.1'  # TODO
+
+        transport = prov_host.get_transport()
+        if transport is None:
+            return
+        src_addr = (jumpbox_private_addr, 22)
+        dest_addr = (bf_addr, 22)
+        chan = transport.open_channel("direct-tcpip", dest_addr, src_addr)
+
+        self._bf_host = paramiko.SSHClient()
+        self._bf_host.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        self._bf_host.connect(bf_addr, username='core', pkey=pkey, sock=chan)
+
+    def run_on_bf(self, cmd: str, log_level: int = logging.DEBUG) -> Result:
+        _, stdout, stderr = self._bf_host.exec_command(cmd)
+
+        out = []
+        for line in iter(stdout.readline, ""):
+            logger.log(log_level, f"{self._hostname} -> BF: {line.strip()}")
+            out.append(line)
+
+        err = []
+        for line in iter(stderr.readline, ""):
+            err.append(line)
+
+        exit_code = stdout.channel.recv_exit_status()
+        out = "".join(out)
+        err = "".join(err)
+
+        return Result(out, err, exit_code)
+
     def run_in_container(self, cmd: str, interactive: bool = False) -> Result:
         name = "bf"
         logger.info("starting container")

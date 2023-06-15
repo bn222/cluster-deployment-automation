@@ -756,20 +756,31 @@ class ClusterDeployer():
         else:
             logger.info(f"succesfully ran pxeboot on bf {host_name}")
 
-        ipa = json.loads(output.out.strip().split("\n")[-1].strip())
-        detected = common.extract_interfaces(ipa)
+        h.connect_to_bf("172.31.100.11")  # TODO
+        tries = 3
         bf_interfaces = ["enp3s0f0", "enp3s0f0np0"]
-        found = [x for x in bf_interfaces if x in detected]
-        if len(found) != 1:
-            logger.info("Failed to find any of {bf_interfaces} on bf {host_name}")
-            logger.info(f"Output was: {ipa}")
-        found = found[0]
-        try:
-            ip = common.extract_ip(ipa, found)
-            logger.info(ip)
-        except Exception:
-            ip = None
-            logger.info(f"Failed to find ip on {found}, output was {ipa}")
+        ipa = json.loads(h.run_on_bf("ip -json a").out)
+        detected = common.extract_interfaces(ipa)
+        found = list(set(detected).intersection(set(bf_interfaces)))
+        logger.info(f'Will try {tries} times to get an IP on {"or".join(bf_interfaces)}')
+        ip = None
+        for _ in range(tries):
+            ipa = json.loads(h.run_on_bf("ip -json a").out)
+            if len(found) != 1:
+                logger.error(f"Failed to find expected number of interfaces on bf {host_name}")
+                logger.error(f"Output was: {ipa}")
+                sys.exit(-1)
+
+            found = found[0]
+            try:
+                ip = common.extract_ip(ipa, found)
+                logger.info(ip)
+                break
+            except Exception:
+                ip = None
+                logger.info(f"Failed to find ip on {found}, output was {ipa}")
+
+        if ip is None:
             sys.exit(-1)
         return ip
 
@@ -821,4 +832,4 @@ class ClusterDeployer():
                     logger.info(e)
                     pass
 
-            time.sleep(10)
+            time.sleep(30)
