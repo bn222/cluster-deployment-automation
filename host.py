@@ -89,7 +89,6 @@ class RemoteHost(Host):
         self._bmc_ip = bmc_ip
         self._bmc_user = bmc_user
         self._bmc_password = bmc_password
-        self.auto_reconnect = False
 
     def ssh_connect(self, username: str, id_rsa_path: Optional[str] = None,
                     id_ed25519_path: Optional[str] = None) -> None:
