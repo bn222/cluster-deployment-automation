@@ -762,7 +762,7 @@ class ClusterDeployer():
         ipa = json.loads(h.run_on_bf("ip -json a").out)
         detected = common.extract_interfaces(ipa)
         found = list(set(detected).intersection(set(bf_interfaces)))
-        logger.info(f'Will try {tries} times to get an IP on {"or".join(bf_interfaces)}')
+        logger.info(f'Will try {tries} times to get an IP on {" or ".join(bf_interfaces)}')
         ip = None
         for _ in range(tries):
             ipa = json.loads(h.run_on_bf("ip -json a").out)
@@ -774,7 +774,6 @@ class ClusterDeployer():
             found = found[0]
             try:
                 ip = common.extract_ip(ipa, found)
-                logger.info(ip)
                 break
             except Exception:
                 ip = None
@@ -782,6 +781,7 @@ class ClusterDeployer():
 
         if ip is None:
             sys.exit(-1)
+        logger.info(f"Detected ip {ip}")
         return ip
 
     def wait_for_workers(self) -> None:
