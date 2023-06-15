@@ -1,7 +1,7 @@
 import os
 import argparse
 import sys
-from logger import logger
+from logger import logger, configure_logger
 import logging
 
 
@@ -28,6 +28,7 @@ def parse_args() -> argparse.Namespace:
         'critical': logging.CRITICAL
     }
     args.verbosity = log_levels[args.verbosity]
+    configure_logger(args.verbosity)
 
     if not args.secrets_path:
         args.secrets_path = os.path.join(os.getcwd(), "pull_secret.json")
