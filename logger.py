@@ -11,11 +11,16 @@ def configure_logger(lvl):
     formatter = logging.Formatter(fmt, datefmt)
 
     handler = logging.StreamHandler()
-    handler.setLevel(logging.DEBUG)
+    handler.setLevel(lvl)
     handler.setFormatter(formatter)
 
+    global prev_handler
+    if prev_handler is not None:
+        logger.removeHandler(prev_handler)
+    prev_handler = handler
     logger.addHandler(handler)
 
 
+prev_handler = None
 logger = None
-configure_logger(logging.DEBUG)
+configure_logger(logging.INFO)
