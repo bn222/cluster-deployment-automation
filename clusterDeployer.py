@@ -759,13 +759,12 @@ class ClusterDeployer():
         h.connect_to_bf("172.31.100.11")  # TODO
         tries = 3
         bf_interfaces = ["enp3s0f0", "enp3s0f0np0"]
-        ipa = json.loads(h.run_on_bf("ip -json a").out)
-        detected = common.extract_interfaces(ipa)
-        found = list(set(detected).intersection(set(bf_interfaces)))
         logger.info(f'Will try {tries} times to get an IP on {" or ".join(bf_interfaces)}')
         ip = None
         for _ in range(tries):
             ipa = json.loads(h.run_on_bf("ip -json a").out)
+            detected = common.extract_interfaces(ipa)
+            found = list(set(detected).intersection(set(bf_interfaces)))
             if len(found) != 1:
                 logger.error(f"Failed to find expected number of interfaces on bf {host_name}")
                 logger.error(f"Output was: {ipa}")
@@ -778,6 +777,7 @@ class ClusterDeployer():
             except Exception:
                 ip = None
                 logger.info(f"Failed to find ip on {found}, output was {ipa}")
+            time.sleep(10)
 
         if ip is None:
             sys.exit(-1)
