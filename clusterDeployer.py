@@ -564,7 +564,8 @@ class ClusterDeployer():
             rh = host.RemoteHost(w['ip'])
             rh.ssh_connect("core")
             hosts.append(rh)
-        logger.info("Connectivity established to all workers, now checking that they have an IP in 192.168.122/24")
+        subnet = "192.168.122.0/24"
+        logger.info(f"Connectivity established to all workers; checking that they have an IP in {subnet}")
 
         def addresses(h):
             ret = []
@@ -574,8 +575,6 @@ class ClusterDeployer():
                 for k in e["addr_info"]:
                     ret.append(k["local"])
             return ret
-
-        subnet = "192.168.122.0/24"
 
         def addr_ok(a):
             return common.ip_in_subnet(a, subnet)
@@ -615,8 +614,9 @@ class ClusterDeployer():
 
                 if w["ip"] in addresses:
                     name = w["name"]
-                    self._ai.update_host(h["id"], {"name": name})
-                    logger.info(f"renamed {name}")
+                    if h["name"] != name:
+                        self._ai.update_host(h["id"], {"name": name})
+                        logger.info(f"renamed {name}")
                     renamed += 1
         return renamed
 
