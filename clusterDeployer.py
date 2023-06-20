@@ -756,7 +756,9 @@ class ClusterDeployer():
         else:
             logger.info(f"succesfully ran pxeboot on bf {host_name}")
 
-        h.connect_to_bf("172.31.100.11")  # TODO
+        # ip is printed as the last thing when bf is pxeboot'ed
+        bf_ip = output.out.strip().split("\n")[-1].strip()
+        h.connect_to_bf(bf_ip)
         tries = 3
         bf_interfaces = ["enp3s0f0", "enp3s0f0np0"]
         logger.info(f'Will try {tries} times to get an IP on {" or ".join(bf_interfaces)}')
