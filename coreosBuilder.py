@@ -87,10 +87,9 @@ class CoreosBuilder():
         with open(base_cfg, 'r') as f:
             contents = f.read()
 
-        new_str = "\n  - shared-el9.yaml\n  - custom.yaml\n"
-        if new_str not in contents:
-            contents = contents.replace("\n  - shared-el9.yaml\n", new_str)
-
+        include_start = contents.index("include:")
+        include_end = contents.index("\n", include_start)
+        contents = contents[:include_end] + "\n  - custom.yaml" + contents[include_end:]
 
         logger.info(os.getcwd())
         manifest_lock = os.path.join(config_dir, "manifest-lock.x86_64.json")
