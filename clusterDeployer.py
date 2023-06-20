@@ -614,9 +614,8 @@ class ClusterDeployer():
 
                 if w["ip"] in addresses:
                     name = w["name"]
-                    if h["name"] != name:
-                        self._ai.update_host(h["id"], {"name": name})
-                        logger.info(f"renamed {name}")
+                    self._ai.update_host(h["id"], {"name": name})
+                    logger.info(f"renamed {name}")
                     renamed += 1
         return renamed
 
