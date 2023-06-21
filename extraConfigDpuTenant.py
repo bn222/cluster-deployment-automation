@@ -277,7 +277,9 @@ class ExtraConfigDpuTenant_NewAPI(ExtraConfigDpuTenant):
             if "ovn-k8s-mp0" in result.out:
                 logger.info(result.out)
                 logger.info("Unexpected ovn-k8s-mp0 interface found in br-int.")
-                sys.exit(-1)
+                # FIXME: The above patch did not seem to entirely work. We will need to investigate further
+                # For now we will delete the port.
+                logger.info(rh.run("sudo ovs-vsctl del-port br-int ovn-k8s-mp0"))
 
         logger.info("Final infrastructure cluster configuration")
         iclient = K8sClient("/root/kubeconfig.infracluster")
