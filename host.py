@@ -321,7 +321,7 @@ class RemoteHostWithBF2(RemoteHost):
 
     def run_in_container(self, cmd: str, interactive: bool = False) -> Result:
         name = "bf"
-        setup = f"sudo podman run --pull always --replace --pid host --network host --user 0 --name {name} -dit --privileged -v /dev:/dev -v /lib:/lib quay.io/bnemeth/bf"
+        setup = f"sudo podman run --pull always --replace --pid host --network host --user 0 --name {name} -dit --privileged -v /dev:/dev quay.io/bnemeth/bf"
         r = self.run(setup, logging.DEBUG)
         if r.returncode != 0:
             return r

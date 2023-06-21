@@ -476,6 +476,18 @@ class ClusterDeployer():
                 sys.exit(-1)
             cb()
             time.sleep(5)
+    
+    def _verify_package_is_installed(self, worker, package: str) -> bool:
+        ai_ip = self._ai.get_ai_ip(worker["name"])
+        rh = host.RemoteHost(ai_ip)
+        rh.ssh_connect("core")
+        ret = rh.run(f"rpm -qa | grep {package}")
+        return not ret.returncode
+
+    def _perform_worker_health_check(self, workers) -> None:
+        for w in workers:
+            err_str = "Required rpm 'kernel-modules-extra' is not installed"
+            assert self._verify_package_is_installed(w, "kernel-modules-extra"), err_str
 
     def create_workers(self) -> None:
         for e in self._cc["workers"]:
@@ -497,6 +509,8 @@ class ClusterDeployer():
             rh = host.RemoteHost(ai_ip)
             rh.ssh_connect("core")
             rh.run("echo root:redhat | sudo chpasswd")
+        
+        self._perform_worker_health_check(self._cc["workers"])
 
     def _create_physical_x86_workers(self) -> None:
         def boot_helper(worker, iso):
