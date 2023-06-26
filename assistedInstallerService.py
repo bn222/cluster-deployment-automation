@@ -1,6 +1,6 @@
 from requests import get as get_url
 import os
-from shutil import rmtree as rmdir
+import shutil
 import yaml
 import json
 import time
@@ -9,6 +9,7 @@ import host
 import sys
 import re
 from logger import logger
+import filecmp
 
 
 def load_url_or_file(url_or_file: str):
@@ -49,10 +50,7 @@ class AssistedInstallerService():
         self.workdir = os.path.join(os.getcwd(), "build")
 
     def _configure(self, version) -> None:
-        logger.info("creating working directory")
-        if os.path.exists(self.workdir):
-            rmdir(self.workdir)
-        os.mkdir(self.workdir)
+        os.makedirs(self.workdir, exist_ok=True)
         with open(self._config_map_path(), 'w') as out_configmap:
             yaml.dump(self._customized_configmap(version), out_configmap, sort_keys=False)
 
@@ -64,6 +62,12 @@ class AssistedInstallerService():
 
     def _pod_persistent_path(self) -> str:
         return f'{self.workdir}/pod-persistent.yml'
+
+    def _last_run_cm(self) -> str:
+        return f'{self.workdir}/configmap-last.yml'
+
+    def _last_run_pod(self) -> str:
+        return f'{self.workdir}/pod-persistent-last.yml'
 
     def _customized_configmap(self, version):
         y = yaml.safe_load(self.podConfig)
@@ -97,7 +101,7 @@ class AssistedInstallerService():
             image = container.get('image', '')
             if image.startswith('quay.io/edge-infrastructure/assisted'):
                 container['image'] = image.replace(':latest', f':{saas_version}')
-        
+
         return y
 
     def prep_version(self, version):
@@ -139,7 +143,7 @@ class AssistedInstallerService():
               'version': wa_version,
             }
         else:
-            logger.info(f"Unknown version {version}")
+            logger.error(f"Unknown version {version}")
             sys.exit(-1)
         ret["cpu_architecture"] = "multi"
         if "ec" in version or "nightly" in version:
@@ -157,30 +161,52 @@ class AssistedInstallerService():
     def get_normal_pullspec(self, version) -> str:
         return f"quay.io/openshift-release-dev/ocp-release:{version}-multi"
 
-    def _ensure_pod_started(self) -> None:
+    def ai_running(self) -> bool:
         lh = host.LocalHost()
         result = lh.run("podman pod ps --format json")
         if result.err:
-            logger.info("Error {result.err}")
+            logger.error(f"Error {result.err}")
             exit(1)
         name = "assisted-installer"
-        if name in map(lambda x: x["Name"], json.loads(result.out)):
-            logger.info(f"{name} already running, stopping it before restarting")
-            lh.run(f"podman pod stop {name}")
-            lh.run(f"podman pod rm {name}")
+        return any(name == x["Name"] for x in json.loads(result.out))
+
+    def check_if_start_needed(self) -> bool:
+        lh = host.LocalHost()
+        name = "assisted-installer"
+        if self.ai_running():
+            cm_same = os.path.exists(self._last_run_cm()) and filecmp.cmp(self._config_map_path(), self._last_run_cm())
+            pod_same = os.path.exists(self._last_run_pod()) and filecmp.cmp(self._pod_persistent_path(), self._last_run_pod())
+            if cm_same and pod_same:
+                logger.info(f"{name} already running with the same configmap and pod config, will not restart it")
+                return False
+            else:
+                logger.info(f"{name} already running with a different configmap, stopping it")
+                lh.run(f"podman pod stop {name}")
+                lh.run(f"podman pod rm {name}")
+                return True
         else:
             logger.info(f"{name} not yet running")
-        r = lh.run(f"podman play kube --configmap {self._config_map_path()} {self._pod_persistent_path()}")
-        if r.returncode != 0:
-            logger.info(r)
-            sys.exit(-1)
+            return True
+
+    def _ensure_pod_started(self) -> None:
+        if self.check_if_start_needed():
+            shutil.copy(self._config_map_path(), self._last_run_cm())
+            shutil.copy(self._pod_persistent_path(), self._last_run_pod())
+            r = self._play_kube(self._last_run_cm(), self._last_run_pod())
+            if r.returncode != 0:
+                logger.error(r)
+                sys.exit(-1)
+
+    def _play_kube(self, cm, pod) -> host.Result:
+        lh = host.LocalHost()
+        r = lh.run(f"podman play kube --configmap {cm} {pod}")
+        return r
 
     def wait_for_api(self) -> None:
         lh = host.LocalHost()
-        virbr0_present= list(filter(lambda x: x["ifname"] == "virbr0", lh.all_ports()))
 
-        if not virbr0_present:
-            logger.info("Can't find virbr0. Make sure that libvirtd is running.")
+        if all(x["ifname"] != "virbr0" for x in lh.all_ports()):
+            logger.error("Can't find virbr0. Make sure that libvirtd is running.")
             sys.exit(-1)
 
         url = f"http://{self._ip}:8090/api/assisted-install/v2/clusters"
