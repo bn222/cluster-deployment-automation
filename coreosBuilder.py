@@ -9,13 +9,11 @@ import glob
 from logger import logger
 
 
-def ensure_fcos_exists(dst: str="/root/iso/fedora-coreos.iso") -> None:
+def ensure_fcos_exists(dst: str = "/root/iso/fedora-coreos.iso") -> None:
     logger.info("ensuring that fcos exists")
-    if os.path.exists(dst):
-        logger.info(f"fcos found at {dst}, not rebuilding it")
-    else:
-        logger.info(f"fcos not found at {dst}, building it now")
-        builder = CoreosBuilder("/tmp/build")
+    builder = CoreosBuilder("/tmp/build")
+    if not builder.already_built(dst):
+        logger.info(f"fcos missing from {dst} or embedded ign is wrong")
         builder.build(dst)
 
 """
@@ -71,6 +69,7 @@ class CoreosBuilder():
         self._workdir = working_dir
 
     def build(self, dst: str) -> None:
+        logger.info(f"Building FCOS and will store it at {dst}")
         fcos_dir = os.path.join(self._workdir, "fcos")
         lh = host.LocalHost()
 
@@ -185,6 +184,15 @@ class CoreosBuilder():
                 key = " ".join(f.read().split(" ")[:-1])
             ign["passwd"]["users"][0]["sshAuthorizedKeys"].append(key)
         return json.dumps(ign)
+
+    def already_built(self, dst: str) -> bool:
+        if os.path.exists(dst):
+            logger.info(f"fcos found at {dst}, checking embedded key")
+            lh = host.LocalHost()
+            r = lh.run(f"coreos-installer iso ignition show {dst}")
+            return r.out == self.create_ignition()
+        else:
+            return False
 
 
 def main():
