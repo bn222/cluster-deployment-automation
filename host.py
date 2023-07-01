@@ -56,7 +56,7 @@ class Host():
 
 class LocalHost(Host):
     def __init__(self):
-        pass
+        self._hostname = "localhost"
 
     def run(self, cmd: str, env: dict = os.environ.copy()) -> Result:
         args = shlex.split(cmd)
