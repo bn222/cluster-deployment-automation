@@ -129,6 +129,13 @@ class AssistedInstallerService():
               'url': self.get_nightly_pullspec(version),
               'version': version,
             }
+        elif re.search(r'4\.13\.[0-9]+', version):
+            ret = {
+              'openshift_version': '4.13-multi',
+              'cpu_architectures': ['x86_64', 'arm64', 'ppc64le', 's390x'],
+              'url': self.get_normal_pullspec(version),
+              'version': version,
+            }
         elif re.search(r'4\.14\.0-ec.[0-9]+', version):
             # workaround: if openshift_version == 4.14-multi, and
             # version == "4.14.0" nightly, it errors out. Instead
