@@ -180,7 +180,7 @@ class RemoteHost(Host):
             octets = ip.split(".")
             octets[-1] = str(int(octets[-1]) + 1)
             res_bmc_ip = ".".join(octets)
-        return res_bmc_ip
+        return f"https://{res_bmc_ip}/redfish/v1/Systems/System.Embedded.1"
 
     def boot_iso_redfish(self, iso_path: str) -> None:
         self._boot_with_overrides(iso_path)
