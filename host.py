@@ -275,6 +275,10 @@ class RemoteHost(Host):
             d[k] = v
         return d
 
+    def running_fcos(self):
+        d = self.os_release()
+        return d["NAME"], d["VARIANT"] == 'Fedora Linux', 'CoreOS'
+
 
 class RemoteHostWithBF2(RemoteHost):
     def connect_to_bf(self, bf_addr: str):

@@ -98,20 +98,21 @@ def install_custom_kernel(lh, client, bf_names, ips):
 
 def run_dpu_network_operator_git(lh, kc):
     repo_dir = "/root/dpu-network-operator"
-    url = "https://github.com/openshift/dpu-network-operator.git"
+    # url = "https://github.com/openshift/dpu-network-operator.git"
+    url = "https://github.com/bn222/dpu-network-operator"
 
     if os.path.exists(repo_dir):
         logger.info(f"Repo exists at {repo_dir}, deleting it")
         shutil.rmtree(repo_dir)
     logger.info(f"Cloning repo to {repo_dir}")
-    Repo.clone_from(url, repo_dir, branch='master')
+    Repo.clone_from(url, repo_dir, branch='tenant-mode')
 
     cur_dir = os.getcwd()
     os.chdir(repo_dir)
     lh.run("rm -rf bin")
     env = os.environ.copy()
     env["KUBECONFIG"] = kc
-    env["IMG"] = "quay.io/bnemeth/dpu-network-operator:98"
+    env["IMG"] = "quay.io/bnemeth/dpu-network-operator:128"
     # cleanup first, to make this script idempotent
     logger.info("running make undeploy")
     logger.info(lh.run("make undeploy", env))
@@ -247,7 +248,7 @@ class ExtraConfigDpuInfra_NewAPI(ExtraConfigDpuInfra):
             time.sleep(5)
 
         logger.info("Creating namespace for tenant")
-        client.oc("create -f manifests/infra/tenantcluster-dpu.yaml")
+        client.oc("create -f manifests/infra/ns.yaml")
 
         logger.info("Creating DpuClusterConfig cr")
         client.oc("create -f manifests/infra/dpuclusterconfig.yaml")

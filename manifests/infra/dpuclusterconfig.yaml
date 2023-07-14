@@ -2,7 +2,7 @@ apiVersion: dpu.openshift.io/v1alpha1
 kind: DpuClusterConfig
 metadata:
   name: dpuclusterconfig-sample
-  namespace: tenantcluster-dpu
+  namespace: two-cluster-design
 spec:
   poolName: dpu
   nodeSelector:

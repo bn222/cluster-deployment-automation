@@ -734,6 +734,10 @@ class ClusterDeployer():
         if not found:
             with open("/etc/hosts", "a") as f:
                 f.write(f"{api_ip} {api_name}\n")
+        # libvirtd also runs dnsmasq, and dnsmasq reads /etc/hosts.
+        # For that reason, restart libvirtd to re-read the changes.
+        lh = host.LocalHost()
+        lh.run("systemctl restart libvirtd")
 
     def boot_iso_bf(self, worker: dict, iso: str) -> str:
         lh = host.LocalHost()
@@ -747,7 +751,7 @@ class ClusterDeployer():
             try:
                 h.ssh_connect("core")
                 d = h.os_release()
-                skip_boot = d["NAME"] == 'Fedora Linux' and d['VARIANT'] == 'CoreOS'
+                skip_boot = h.running_fcos()
             except paramiko.ssh_exception.AuthenticationException as e:
                 logger.info("Authentication failed, will not be able to skip boot")
 
@@ -758,6 +762,10 @@ class ClusterDeployer():
             h.boot_iso_redfish(nfs_file)
             time.sleep(10)
             h.ssh_connect("core")
+
+        if not h.running_fcos():
+            logger.error("Expected FCOS after booting host {host_name} but booted something else")
+            sys.exit(-1)
 
         nfs_iso = nfs.host_file(f"/root/iso/{iso}")
         nfs_key = nfs.host_file("/root/iso/ssh_priv_key")

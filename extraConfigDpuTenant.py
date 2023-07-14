@@ -1,7 +1,5 @@
 from k8sClient import K8sClient
-import os
 import host
-import time
 from common_patches import apply_common_pathches
 from concurrent.futures import Future
 from extraConfigDpuInfra import run_dpu_network_operator_git
@@ -10,7 +8,6 @@ from extraConfigSriov import ExtraConfigSriovOvSHWOL
 from typing import Dict
 import sys
 import jinja2
-import re
 import json
 from logger import logger
 
@@ -70,7 +67,7 @@ class ExtraConfigDpuTenant:
         open(f"/tmp/envoverrides-{ns}.yaml", "w").write(contents)
         return f"/tmp/envoverrides-{ns}.yaml"
 
-    def run(self, cfg, futures: Dict[str, Future]) -> None:
+    def run(self, _, futures: Dict[str, Future]) -> None:
         [f.result() for (_, f) in futures.items()]
         logger.info("Running post config step")
         tclient = K8sClient("/root/kubeconfig.tenantcluster")
@@ -136,21 +133,6 @@ class ExtraConfigDpuTenant:
         logger.info("Waiting for mcp")
         tclient.wait_for_mcp("dpu-host", "dpu host mode")
 
-        logger.info("setting ovn kube node env-override to set management port")
-        logger.info(os.getcwd())
-        contents = open("manifests/tenant/setenvovnkube.yaml").read()
-        for e in cfg["mapping"]:
-            a = {}
-            mp = re.sub('np\d$', '', bf_port)
-            a["OVNKUBE_NODE_MGMT_PORT_NETDEV"] = f"{mp}v0"
-            contents += f"  {e['worker']}: |\n"
-            for (k, v) in a.items():
-                contents += f"    {k}={v}\n"
-        open("/tmp/1.yaml", "w").write(contents)
-
-        logger.info("Running create")
-        logger.info(tclient.oc("create -f /tmp/1.yaml"))
-
         for e in self._cc["workers"]:
             cmd = f"label node {e['name']} network.operator.openshift.io/dpu-host="
             logger.info(tclient.oc(cmd))
@@ -165,23 +147,14 @@ class ExtraConfigDpuTenant:
         # https://issues.redhat.com/browse/NHE-334
         iclient.oc(f"project tenantcluster-dpu")
         logger.info(iclient.oc(f"create secret generic tenant-cluster-1-kubeconf --from-file=config={tclient._kc}"))
-
-        tc_namespace = "tenantcluster-dpu"
-        dpu_namespace = "openshift-dpu-network-operator"
-        file = self.render_envoverrides_cm(iclient, cfg, tc_namespace)
-        iclient.oc(f"create -f {file}")
-        file = self.render_envoverrides_cm(iclient, cfg, dpu_namespace)
-        iclient.oc(f"create -f {file}")
-
-        # Restart DPU network operator to apply env-overrides cm
-        restart_dpu_network_operator(iclient)
-
         patch = json.dumps({"spec":{"kubeConfigFile":"tenant-cluster-1-kubeconf"}})
         r = iclient.oc(
-            f"patch --type merge -p '{patch}' DpuClusterConfig dpuclusterconfig-sample -n tenantcluster-dpu")
+            f"patch --type merge -p '{patch}' DpuClusterConfig dpuclusterconfig-sample -n two-cluster-design")
         logger.info(r)
         logger.info("Creating network attachement definition")
         tclient.oc("create -f manifests/tenant/nad.yaml")
+        tclient.approve_csr()
+        iclient.approve_csr()
 
         ec = ExtraConfigSriovOvSHWOL(self._cc)
         ec.ensure_pci_realloc(tclient, "dpu-host")
@@ -193,6 +166,15 @@ class ExtraConfigDpuTenant_NewAPI(ExtraConfigDpuTenant):
         tclient = K8sClient("/root/kubeconfig.tenantcluster")
         logger.info("Waiting for mcp dpu-host to become ready")
         tclient.wait_for_mcp("dpu-host")
+
+        lh = host.LocalHost()
+        run_dpu_network_operator_git(lh , "/root/kubeconfig.tenantcluster")
+
+        logger.info("Creating namespace for tenant")
+        tclient.oc("create -f manifests/infra/ns.yaml")
+        logger.info("Creating DpuClusterConfig cr")
+        tclient.oc("create -f manifests/tenant/dpuclusterconfig.yaml")
+
 
         first_worker = self._cc["workers"][0]['name']
         ip = tclient.get_ip(first_worker)
@@ -285,22 +267,11 @@ class ExtraConfigDpuTenant_NewAPI(ExtraConfigDpuTenant):
         iclient = K8sClient("/root/kubeconfig.infracluster")
 
         # https://issues.redhat.com/browse/NHE-334
-        iclient.oc(f"project tenantcluster-dpu")
-        logger.info(iclient.oc(f"create secret generic tenant-cluster-1-kubeconf --from-file=config={tclient._kc}"))
-
-        tc_namespace = "tenantcluster-dpu"
-        dpu_namespace = "openshift-dpu-network-operator"
-        file = self.render_envoverrides_cm(iclient, cfg, tc_namespace)
-        iclient.oc(f"create -f {file}")
-        file = self.render_envoverrides_cm(iclient, cfg, dpu_namespace)
-        iclient.oc(f"create -f {file}")
-
-        # Restart DPU network operator to apply env-overrides cm
-        restart_dpu_network_operator(iclient)
+        logger.info(iclient.oc(f"create secret generic tenant-cluster-1-kubeconf --from-file=config={tclient._kc} --namespace=two-cluster-design"))
 
         patch = json.dumps({"spec":{"kubeConfigFile":"tenant-cluster-1-kubeconf"}})
         r = iclient.oc(
-            f"patch --type merge -p '{patch}' DpuClusterConfig dpuclusterconfig-sample -n tenantcluster-dpu")
+            f"patch --type merge -p '{patch}' DpuClusterConfig dpuclusterconfig-sample -n two-cluster-design")
         logger.info(r)
         logger.info("Creating network attachement definition")
         tclient.oc("create -f manifests/tenant/nad.yaml")

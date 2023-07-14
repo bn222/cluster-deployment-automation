@@ -1,5 +1,5 @@
 from k8sClient import K8sClient
-
+from logger import logger
 
 class ConfigCVO:
     def scaleDown(self, client: K8sClient) -> None:

@@ -1,6 +1,0 @@
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: env-overrides
-  namespace: openshift-ovn-kubernetes
-data:

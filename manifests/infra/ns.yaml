@@ -7,4 +7,5 @@ metadata:
     pod-security.kubernetes.io/warn: privileged
     security.openshift.io/scc.podSecurityLabelSync: "false"
     openshift.io/run-level: "0"
-  name: tenantcluster-dpu
+  name: two-cluster-design
+
