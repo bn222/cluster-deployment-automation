@@ -87,10 +87,14 @@ class CoreosBuilder():
         base_cfg = os.path.join(config_dir, "manifests/fedora-coreos-base.yaml")
         with open(base_cfg, 'r') as f:
             contents = f.read()
+        to_include = "\n  - custom.yaml"
 
         include_start = contents.index("include:")
         include_end = contents.index("\n", include_start)
-        contents = contents[:include_end] + "\n  - custom.yaml" + contents[include_end:]
+        before = contents[:include_end]
+        after = contents[include_end:]
+        if not after.startswith(to_include):
+            contents = before + to_include + after
 
         logger.info(os.getcwd())
         manifest_lock = os.path.join(config_dir, "manifest-lock.x86_64.json")
