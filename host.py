@@ -24,67 +24,17 @@ def sync_time(src, dst):
     date = src.run("date").out.strip()
     return dst.run(f"sudo date -s \"{date}\"")
 
-class Host():
-    def vm_is_running(self, name: str) -> bool:
-        ret = self.run(f"virsh dominfo {name}")
-        return not ret.returncode and re.search("State:.*running", ret.out)
 
-    def ipa(self) -> dict:
-        return json.loads(self.run("ip -json a").out)
-
-    def ipr(self) -> dict:
-        return json.loads(self.run("ip -json r").out)
-
-    def all_ports(self) -> dict:
-        return json.loads(self.run("ip -json link").out)
-
-    def ip(self, port_name: str) -> str:
-        return common.extract_ip(self.ipa(), port_name)
-
-    def port_from_route(self, route: str) -> str:
-        return common.extract_port(self.ipr(), route)
-
-    def port_exists(self, port_name: str) -> bool:
-        return self.run(f"ip link show {port_name}").returncode == 0
-
-    def port_has_carrier(self, port_name: str) -> bool:
-        ports = {x["ifname"]: x for x in self.ipa()}
-        if port_name not in ports:
-            return False
-        return "NO-CARRIER" not in ports[port_name]["flags"]
+def LocalHost():
+    return Host("localhost")
 
 
-class LocalHost(Host):
-    def __init__(self):
-        self._hostname = "localhost"
-
-    def run(self, cmd: str, env: dict = os.environ.copy()) -> Result:
-        args = shlex.split(cmd)
-        pipe = subprocess.PIPE
-        with subprocess.Popen(args, stdout=pipe, stderr=pipe, env=env) as proc:
-            if proc.stdout is None:
-                logger.info("Can't find stdout")
-                sys.exit(-1)
-            if proc.stderr is None:
-                logger.info("Can't find stderr")
-                sys.exit(-1)
-            out = proc.stdout.read().decode("utf-8")
-            err = proc.stderr.read().decode("utf-8")
-            proc.communicate()
-            ret = proc.returncode
-        return Result(out, err, ret)
-
-    def write(self, fn, contents):
-        with open(fn, "w") as f:
-            f.write(contents)
-
-    def read_file(self, file_name: str) -> str:
-        with open(file_name) as f:
-            return f.read()
+def RemoteHost(ip: str):
+    return Host(ip)
 
 
-class RemoteHost(Host):
-    def __init__(self, hostname: str, bmc_ip: Optional[str] = None, bmc_user: Optional[str] = None, bmc_password: Optional[str] = None):
+class Host:
+    def __init__(self, hostname: str, bmc_ip: Optional[str] = None, bmc_user: str = "root", bmc_password: str = "calvin"):
         self._hostname = hostname
         self._bmc_ip = bmc_ip
         self._bmc_user = bmc_user
@@ -92,6 +42,7 @@ class RemoteHost(Host):
 
     def ssh_connect(self, username: str, id_rsa_path: Optional[str] = None,
                     id_ed25519_path: Optional[str] = None) -> None:
+        assert self._hostname != "localhost"
         if id_rsa_path is None:
             id_rsa_path = os.path.join(os.environ["HOME"], ".ssh/id_rsa")
         if id_ed25519_path is None:
@@ -160,15 +111,31 @@ class RemoteHost(Host):
 
         return Result(out, err, exit_code)
 
-    def run(self, cmd: str, log_level: int = logging.INFO) -> Result:
-        while True:
-            try:
-                logger.log(log_level, f"running command {cmd}")
-                return self._read_output(cmd, log_level)
-            except Exception as e:
-                logger.log(log_level, e)
-                logger.log(log_level, f"Connection lost while running command {cmd}, reconnecting...")
-                self.ssh_connect_looped(self._username)
+    def run(self, cmd: str, log_level: int = logging.INFO, env: dict = os.environ.copy()) -> Result:
+        if self._hostname == "localhost":
+            args = shlex.split(cmd)
+            pipe = subprocess.PIPE
+            with subprocess.Popen(args, stdout=pipe, stderr=pipe, env=env) as proc:
+                if proc.stdout is None:
+                    logger.info("Can't find stdout")
+                    sys.exit(-1)
+                if proc.stderr is None:
+                    logger.info("Can't find stderr")
+                    sys.exit(-1)
+                out = proc.stdout.read().decode("utf-8")
+                err = proc.stderr.read().decode("utf-8")
+                proc.communicate()
+                ret = proc.returncode
+            return Result(out, err, ret)
+        else:
+            while True:
+                try:
+                    logger.log(log_level, f"running command {cmd}")
+                    return self._read_output(cmd, log_level)
+                except Exception as e:
+                    logger.log(log_level, e)
+                    logger.log(log_level, f"Connection lost while running command {cmd}, reconnecting...")
+                    self.ssh_connect_looped(self._username)
 
     def close(self) -> None:
         self._host.close()
@@ -259,7 +226,7 @@ class RemoteHost(Host):
             pass
 
     def ping(self) -> bool:
-        lh = LocalHost()
+        lh = Host("localhost")
         ping_cmd = f"timeout 1 ping -4 -c 1 {self._hostname}"
         r = lh.run(ping_cmd)
         return r.returncode == 0
@@ -279,8 +246,49 @@ class RemoteHost(Host):
         d = self.os_release()
         return d["NAME"], d["VARIANT"] == 'Fedora Linux', 'CoreOS'
 
+    def vm_is_running(self, name: str) -> bool:
+        ret = self.run(f"virsh dominfo {name}")
+        return not ret.returncode and re.search("State:.*running", ret.out) is not None
 
-class RemoteHostWithBF2(RemoteHost):
+    def ipa(self) -> dict:
+        return json.loads(self.run("ip -json a").out)
+
+    def ipr(self) -> dict:
+        return json.loads(self.run("ip -json r").out)
+
+    def all_ports(self) -> dict:
+        return json.loads(self.run("ip -json link").out)
+
+    def ip(self, port_name: str) -> str:
+        return common.extract_ip(self.ipa(), port_name)
+
+    def port_from_route(self, route: str) -> str:
+        return common.extract_port(self.ipr(), route)
+
+    def port_exists(self, port_name: str) -> bool:
+        return self.run(f"ip link show {port_name}").returncode == 0
+
+    def port_has_carrier(self, port_name: str) -> bool:
+        ports = {x["ifname"]: x for x in self.ipa()}
+        if port_name not in ports:
+            return False
+        return "NO-CARRIER" not in ports[port_name]["flags"]
+
+    def write(self, fn, contents):
+        if self._hostname == "localhost":
+            with open(fn, "w") as f:
+                f.write(contents)
+        else:
+            raise Exception("Not implemented")
+
+    def read_file(self, file_name: str) -> str:
+        if self._hostname == "localhost":
+            with open(file_name) as f:
+                return f.read()
+        else:
+            raise Exception("Not implemented")
+
+class HostWithBF2(Host):
     def connect_to_bf(self, bf_addr: str):
         private_key = open("/root/.ssh/id_rsa", "r").read().strip()
         key_file_obj = io.StringIO(private_key)

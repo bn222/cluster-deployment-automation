@@ -2,7 +2,6 @@ import logging
 
 
 def configure_logger(lvl):
-    global logger
     logger = logging.getLogger("CDA")
     logger.setLevel(lvl)
 
@@ -19,8 +18,8 @@ def configure_logger(lvl):
         logger.removeHandler(prev_handler)
     prev_handler = handler
     logger.addHandler(handler)
+    return logger
 
 
 prev_handler = None
-logger = None
-configure_logger(logging.INFO)
+logger = configure_logger(logging.INFO)

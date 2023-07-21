@@ -7,7 +7,7 @@ NFS is needed in many cases to network mount the folder that contains
 ISO files such that Red Fish Virtual Media managers can load the image.
 """
 class NFS:
-    def __init__(self, host: host.LocalHost, port: str):
+    def __init__(self, host: host.Host, port: str):
         self._host = host
         self._port = port
         pass

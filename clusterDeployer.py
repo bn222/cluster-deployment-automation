@@ -31,7 +31,7 @@ from logger import logger
 import logging
 
 
-def setup_vm(h: host.LocalHost, virsh_pool: VirshPool, cfg: dict, iso_path: str):
+def setup_vm(h: host.Host, virsh_pool: VirshPool, cfg: dict, iso_path: str):
     name = cfg["name"]
     ip = cfg["ip"]
     mac = "52:54:"+":".join(re.findall("..", secrets.token_hex()[:8]))
@@ -75,7 +75,7 @@ def setup_vm(h: host.LocalHost, virsh_pool: VirshPool, cfg: dict, iso_path: str)
     return ret
 
 
-def setup_all_vms(h: host.LocalHost, vms, iso_path, virsh_pool) -> list:
+def setup_all_vms(h: host.Host, vms, iso_path, virsh_pool) -> list:
     if not vms:
         return []
 
@@ -131,10 +131,7 @@ class ClusterDeployer():
 
         pool_name = f"{self._cc['name']}_guest_images"
         for e in self._cc["hosts"]:
-            if e["name"] == "localhost":
-                h = host.LocalHost()
-            else:
-                h = host.RemoteHost(e["name"])
+            h = host.Host(e["name"])
 
             e["virsh_pool"] = VirshPool(h, pool_name, e["images_path"])
 
@@ -476,7 +473,7 @@ class ClusterDeployer():
                 sys.exit(-1)
             cb()
             time.sleep(5)
-    
+
     def _verify_package_is_installed(self, worker, package: str) -> bool:
         ai_ip = self._ai.get_ai_ip(worker["name"])
         rh = host.RemoteHost(ai_ip)
@@ -640,7 +637,7 @@ class ClusterDeployer():
         lh = host.LocalHost()
         nfs = NFS(lh, self._cc["external_port"])
 
-        h = host.RemoteHostWithBF2(host_name, worker["bmc_ip"], worker["bmc_user"], worker["bmc_password"])
+        h = host.HostWithBF2(host_name, worker["bmc_ip"], worker["bmc_user"], worker["bmc_password"])
 
         iso = nfs.host_file(f"/root/iso/{iso}")
         h.boot_iso_redfish(iso)
@@ -745,12 +742,11 @@ class ClusterDeployer():
 
         host_name = worker["node"]
         logger.info(f"Preparing BF on host {host_name}")
-        h = host.RemoteHostWithBF2(host_name, worker["bmc_ip"], worker["bmc_user"], worker["bmc_password"])
+        h = host.HostWithBF2(host_name, worker["bmc_ip"], worker["bmc_user"], worker["bmc_password"])
         skip_boot = False
         if h.ping():
             try:
                 h.ssh_connect("core")
-                d = h.os_release()
                 skip_boot = h.running_fcos()
             except paramiko.ssh_exception.AuthenticationException as e:
                 logger.info("Authentication failed, will not be able to skip boot")
@@ -824,7 +820,7 @@ class ClusterDeployer():
                     ai_ip = self._ai.get_ai_ip(e["name"])
                     if ai_ip is None:
                         continue
-                    h = host.RemoteHost(ai_ip, None, None)
+                    h = host.Host(ai_ip)
                     h.ssh_connect("core")
                     logger.info(f'connected to {e["name"]}, setting user:pw')
                     h.run("echo root:redhat | sudo chpasswd")

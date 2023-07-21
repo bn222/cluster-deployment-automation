@@ -112,7 +112,7 @@ def run_dpu_network_operator_git(lh, kc):
     lh.run("rm -rf bin")
     env = os.environ.copy()
     env["KUBECONFIG"] = kc
-    env["IMG"] = "quay.io/bnemeth/dpu-network-operator:128"
+    env["IMG"] = "quay.io/bnemeth/dpu-network-operator:131"
     # cleanup first, to make this script idempotent
     logger.info("running make undeploy")
     logger.info(lh.run("make undeploy", env))
@@ -197,6 +197,9 @@ class ExtraConfigDpuInfra:
 
         for b in bf_names:
             ip = client.get_ip(b)
+            if ip is None:
+                logger.error("Failed to get ip for {b}")
+                sys.exit(-1)
             rh = host.RemoteHost(ip)
             rh.ssh_connect("core")
             result = rh.run("sudo ovs-vsctl show")

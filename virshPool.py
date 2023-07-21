@@ -1,8 +1,9 @@
 from logger import logger
+import host
 
 
 class VirshPool:
-    def __init__(self, host, name: str, images_path: str):
+    def __init__(self, host: host.Host, name: str, images_path: str):
         self._host = host
         self._name = name
         self._images_path = images_path

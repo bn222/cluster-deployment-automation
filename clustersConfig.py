@@ -63,7 +63,7 @@ class ClustersConfig():
         self._current_host = lh.run("hostname").out.strip().split(".")[0]
 
         if not path.exists(yamlPath):
-            logging.error(f"could not find config in path: '{yamlPath}'")
+            logger.error(f"could not find config in path: '{yamlPath}'")
             exit(1)
 
         with open(yamlPath, 'r') as f:
