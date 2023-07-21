@@ -1,5 +1,6 @@
 dnf install -y python3 pip
 pip3 install --upgrade pip
+pip3 install PyYAML==5.4.1 --ignore-installed
 cat <<EOF | sudo tee /etc/yum.repos.d/kubernetes.repo
 [kubernetes]
 name=Kubernetes
