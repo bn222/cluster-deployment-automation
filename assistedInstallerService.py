@@ -195,9 +195,14 @@ class AssistedInstallerService():
 
         return any(expected(x) for x in json.loads(result.out))
 
-    def check_if_start_needed(self) -> bool:
+    def check_if_start_needed(self, force) -> bool:
         lh = host.LocalHost()
         name = "assisted-installer"
+        if force and self.ai_running():
+            logger.info(f"{name} already running and stopping since force requested")
+            lh.run(f"podman pod stop {name}")
+            lh.run(f"podman pod rm {name}")
+            return True
         if self.ai_running():
             cm_same = os.path.exists(self._last_run_cm()) and filecmp.cmp(self._config_map_path(), self._last_run_cm())
             pod_same = os.path.exists(self._last_run_pod()) and filecmp.cmp(self._pod_persistent_path(), self._last_run_pod())
@@ -213,8 +218,8 @@ class AssistedInstallerService():
             logger.info(f"{name} not yet running")
             return True
 
-    def _ensure_pod_started(self) -> None:
-        if self.check_if_start_needed():
+    def _ensure_pod_started(self, force) -> None:
+        if self.check_if_start_needed(force):
             shutil.copy(self._config_map_path(), self._last_run_cm())
             shutil.copy(self._pod_persistent_path(), self._last_run_pod())
             r = self._play_kube(self._last_run_cm(), self._last_run_pod())
@@ -275,7 +280,37 @@ class AssistedInstallerService():
         else:
             logger.debug(f"{name} not yet running")
 
-    def start(self, version) -> None:
+    def start(self, version, force=False) -> None:
         self._configure(version)
-        self._ensure_pod_started()
+        self._ensure_pod_started(force)
         self.wait_for_api()
+
+    def export_snapshot(self, path) -> None:
+        lh = host.LocalHost()
+
+        def export_vol(path, vol_name):
+            nested = f"tar -czf /export_data/{vol_name}.tar.gz -C /source_data ."
+            cmd = f"podman run -it --name snapshot --privileged -v {vol_name}:/source_data -v {path}:/export_data alpine sh -c '{nested}'"
+            logger.info(cmd)
+            logger.info(lh.run(cmd))
+            logger.info(lh.run("podman rm snapshot"))
+
+        target = ["ai-service-data", "ai-db-data"]
+        logger.info(f"exporting {target} to {path}")
+        for e in target:
+            export_vol(path, e)
+
+    def import_snapshot(self, path) -> None:
+        lh = host.LocalHost()
+
+        def import_vol(path, vol_name):
+            nested = f"tar -xzf /export_data/{vol_name}.tar.gz -C /source_data"
+            cmd = f"podman run -it --name snapshot --privileged -v {vol_name}:/source_data -v {path}:/export_data alpine sh -c '{nested}'"
+            logger.info(cmd)
+            logger.info(lh.run(cmd))
+            logger.info(lh.run("podman rm snapshot"))
+
+        target = ["ai-service-data", "ai-db-data"]
+        logger.info(f"importing {target} from {path}")
+        for e in target:
+            import_vol(path, e)
