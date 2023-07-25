@@ -1,6 +1,6 @@
 from os import path, getcwd
 from sys import exit
-from yaml import safe_load, safe_dump
+from yaml import safe_load
 import os
 import io
 import sys
@@ -50,10 +50,10 @@ def read_sheet() -> list:
         ret.append(list(e.values()))
     return ret
 
+
 class ClustersConfig():
     def __init__(self, yamlPath: str):
         self._clusters = {}  # type: Dict[str, ClusterInfo]
-
 
         lh = host.LocalHost()
         # Run the hostname command and only take the first part. For example
@@ -93,7 +93,7 @@ class ClustersConfig():
                 cc["network_api_port"] = "auto"
 
             if "hosts" not in cc:
-              cc["hosts"] = []
+                cc["hosts"] = []
 
             # creates hosts entries for each referenced node name
             all_nodes = cc["masters"] + cc["workers"]
@@ -105,9 +105,9 @@ class ClustersConfig():
 
             node_names = set(x["name"] for x in cc["hosts"])
             for h in all_nodes:
-              if h["node"] not in node_names:
-                cc["hosts"].append({"name" : h["node"]})
-                node_names.add(h["node"])
+                if h["node"] not in node_names:
+                    cc["hosts"].append({"name": h["node"]})
+                    node_names.add(h["node"])
 
             # Set default value for optional parameters for workers.
             for node in cc["workers"] + cc["masters"]:
@@ -117,8 +117,8 @@ class ClustersConfig():
             # fill-in defaults value for required attributes on
             # all hosts
             for host_config in cc["hosts"]:
-              if "images_path" not in host_config:
-                host_config["images_path"] = f'/home/{cc["name"]}_guests_images'
+                if "images_path" not in host_config:
+                    host_config["images_path"] = f'/home/{cc["name"]}_guests_images'
 
     def _apply_jinja(self, contents: str) -> str:
         def worker_number(a):
@@ -215,6 +215,6 @@ class ClustersConfig():
 def main():
     pass
 
+
 if __name__ == "__main__":
     main()
-
