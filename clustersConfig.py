@@ -1,18 +1,16 @@
 from os import path, getcwd
-from sys import exit
-from yaml import safe_load
 import os
 import io
 import sys
-import jinja2
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
-import host
 import re
 from typing import List
 from typing import Dict
+import jinja2
+from yaml import safe_load
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
+import host
 from logger import logger
-from typing import Optional
 
 
 class ClusterInfo:
@@ -65,7 +63,7 @@ class ClustersConfig():
 
         if not path.exists(yamlPath):
             logger.error(f"could not find config in path: '{yamlPath}'")
-            exit(1)
+            sys.exit(1)
 
         with open(yamlPath, 'r') as f:
             contents = f.read()

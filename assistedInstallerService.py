@@ -1,23 +1,22 @@
-from requests import get as get_url
 import os
 import shutil
-import yaml
 import json
 import time
-import requests
-import host
 import sys
 import re
-from logger import logger
 import filecmp
 from typing import Optional
+import yaml
+import requests
+from requests import get as get_url
+from logger import logger
+import host
 
 
 def load_url_or_file(url_or_file: str):
     if url_or_file.startswith("http"):
         return get_url(url_or_file).text
-    else:
-        return open(url_or_file).read()
+    return open(url_or_file).read()
 
 
 """
@@ -113,38 +112,38 @@ class AssistedInstallerService():
             # for 4.12. CDA hides this and simply expect 4.12.0 from the user
             # since that follows the same versioning scheme
             ret = {
-              'openshift_version': f'{version}',
-              'cpu_architectures': ['x86_64', 'arm64', 'ppc64le', 's390x'],
-              'url': self.get_normal_pullspec(version.rstrip("-multi")),
-              'version': version,
+                'openshift_version': f'{version}',
+                'cpu_architectures': ['x86_64', 'arm64', 'ppc64le', 's390x'],
+                'url': self.get_normal_pullspec(version.rstrip("-multi")),
+                'version': version,
             }
         elif re.search(r'4\.12\.0-nightly', version):
             ret = {
-              'openshift_version': '4.12-multi',
-              'cpu_architectures': ['x86_64', 'arm64', 'ppc64le', 's390x'],
-              'url': self.get_nightly_pullspec(version),
-              'version': version,
+                'openshift_version': '4.12-multi',
+                'cpu_architectures': ['x86_64', 'arm64', 'ppc64le', 's390x'],
+                'url': self.get_nightly_pullspec(version),
+                'version': version,
             }
         elif re.search(r'4\.13\.0-ec.[0-9]+', version):
             ret = {
-              'openshift_version': '4.13-multi',
-              'cpu_architectures': ['x86_64', 'arm64', 'ppc64le', 's390x'],
-              'url': self.get_normal_pullspec(version),
-              'version': version,
+                'openshift_version': '4.13-multi',
+                'cpu_architectures': ['x86_64', 'arm64', 'ppc64le', 's390x'],
+                'url': self.get_normal_pullspec(version),
+                'version': version,
             }
         elif re.search(r'4\.13\.0-nightly', version):
             ret = {
-              'openshift_version': '4.13-multi',
-              'cpu_architectures': ['x86_64', 'arm64', 'ppc64le', 's390x'],
-              'url': self.get_nightly_pullspec(version),
-              'version': version,
+                'openshift_version': '4.13-multi',
+                'cpu_architectures': ['x86_64', 'arm64', 'ppc64le', 's390x'],
+                'url': self.get_nightly_pullspec(version),
+                'version': version,
             }
         elif re.search(r'4\.13\.[0-9]+', version):
             ret = {
-              'openshift_version': '4.13-multi',
-              'cpu_architectures': ['x86_64', 'arm64', 'ppc64le', 's390x'],
-              'url': self.get_normal_pullspec(version),
-              'version': version,
+                'openshift_version': '4.13-multi',
+                'cpu_architectures': ['x86_64', 'arm64', 'ppc64le', 's390x'],
+                'url': self.get_normal_pullspec(version),
+                'version': version,
             }
         elif re.search(r'4\.14\.0-ec.[0-9]+', version):
             # workaround: if openshift_version == 4.14-multi, and
@@ -153,19 +152,19 @@ class AssistedInstallerService():
             # pullspec
             wa_version = version.replace("4.14", "4.13")
             ret = {
-              'openshift_version': '4.13-multi',
-              'cpu_architectures': ['x86_64', 'arm64', 'ppc64le', 's390x'],
-              'url': self.get_normal_pullspec(version),
-              'version': wa_version,
+                'openshift_version': '4.13-multi',
+                'cpu_architectures': ['x86_64', 'arm64', 'ppc64le', 's390x'],
+                'url': self.get_normal_pullspec(version),
+                'version': wa_version,
             }
         elif re.search(r'4\.14\.0-nightly', version):
             wa_version = "4.13.0-nighty"
 
             ret = {
-              'openshift_version': '4.13-multi',
-              'cpu_architectures': ['x86_64', 'arm64', 'ppc64le', 's390x'],
-              'url': self.get_nightly_pullspec(version),
-              'version': wa_version,
+                'openshift_version': '4.13-multi',
+                'cpu_architectures': ['x86_64', 'arm64', 'ppc64le', 's390x'],
+                'url': self.get_nightly_pullspec(version),
+                'version': wa_version,
             }
         else:
             logger.error(f"Unknown version {version}")
@@ -191,7 +190,7 @@ class AssistedInstallerService():
         result = lh.run("podman pod ps --format json")
         if result.err:
             logger.error(f"Error {result.err}")
-            exit(1)
+            sys.exit(1)
         for x in json.loads(result.out):
             if x["Name"] == name:
                 return x
@@ -216,17 +215,15 @@ class AssistedInstallerService():
         if force:
             logger.info(f"{name} already running but force requested")
             return True
-        else:
-            if ai_pod["Status"] != "Running":
-                logger.info(f'{name} already exists but status is {ai_pod["Status"]}')
-                return True
+        if ai_pod["Status"] != "Running":
+            logger.info(f'{name} already exists but status is {ai_pod["Status"]}')
+            return True
 
-            if self.last_cm_is_same() and self.last_pod_is_same():
-                logger.info(f"{name} already running with the same configmap and pod config")
-                return False
-            else:
-                logger.info(f"{name} already running with a different configmap")
-                return True
+        if self.last_cm_is_same() and self.last_pod_is_same():
+            logger.info(f"{name} already running with the same configmap and pod config")
+            return False
+        logger.info(f"{name} already running with a different configmap")
+        return True
 
     def _ensure_pod_started(self, force) -> None:
         if self.stop_needed(force):
@@ -272,7 +269,7 @@ class AssistedInstallerService():
                 pass
             if count == 10:
                 logger.info("Error: API is down")
-                exit(1)
+                sys.exit(1)
             count += 1
             time.sleep(2)
 

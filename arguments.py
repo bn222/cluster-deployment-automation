@@ -1,8 +1,8 @@
 import os
 import argparse
 import sys
-from logger import logger, configure_logger
 import logging
+from logger import logger, configure_logger
 
 
 def parse_args() -> argparse.Namespace:

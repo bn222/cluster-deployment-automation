@@ -8,15 +8,17 @@ from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import Future
 from typing import Optional
 from typing import Dict
-from assistedInstaller import AssistedClientAutomation
-from clustersConfig import ClustersConfig
-import host
 import secrets
 import re
+import socket
+import glob
+import logging
+import paramiko
+from assistedInstaller import AssistedClientAutomation
+import host
+from clustersConfig import ClustersConfig
 from k8sClient import K8sClient
 from nfs import NFS
-import requests
-import socket
 import coreosBuilder
 from extraConfigBFB import ExtraConfigBFB, ExtraConfigSwitchNicMode
 from extraConfigSriov import ExtraConfigSriov, ExtraConfigSriovOvSHWOL, ExtraConfigSriovOvSHWOL_NewAPI
@@ -26,11 +28,8 @@ from extraConfigOvnK import ExtraConfigOvnK
 from extraConfigCNO import ExtraConfigCNO
 from extraConfigRT import ExtraConfigRT
 from extraConfigDualStack import ExtraConfigDualStack
-import paramiko
 import common
-import glob
 from logger import logger
-import logging
 
 
 def ensure_dhcp_entry(h: host.Host, name: str, ip: str, mac: str):
@@ -126,7 +125,6 @@ def setup_all_vms(h: host.Host, vms, iso_path) -> list:
     futures = []
     for e in vms:
         futures.append(executor.submit(setup_vm, h, e, iso_path))
-
         while not h.vm_is_running(e["name"]) and not futures[-1].done():
             time.sleep(1)
 
@@ -354,8 +352,7 @@ class ClusterDeployer():
                 if "hostname" in entry and entry["hostname"] in names:
                     logger.info(f'Removed host with name {entry["hostname"]}')
                     continue
-                else:
-                    logger.info(f'Kept entry {entry}')
+                logger.info(f'Kept entry {entry}')
                 filtered.append(entry)
 
             logger.info(lh.run("virsh net-destroy default"))
@@ -740,7 +737,7 @@ class ClusterDeployer():
             if renamed == expected:
                 logger.info(f"Found and renamed {renamed} workers")
                 break
-            elif renamed:
+            if renamed:
                 logger.info(f"Found and renamed {renamed} workers, but waiting for {expected}, retrying")
                 time.sleep(5)
 
@@ -881,7 +878,7 @@ class ClusterDeployer():
             try:
                 h.ssh_connect("core")
                 skip_boot = h.running_fcos()
-            except paramiko.ssh_exception.AuthenticationException as e:
+            except paramiko.ssh_exception.AuthenticationException:
                 logger.info("Authentication failed, will not be able to skip boot")
 
         if skip_boot:
@@ -970,18 +967,17 @@ class ClusterDeployer():
                 out = h.run("sudo podman images", logging.DEBUG).out
                 e = re.search(r".*Top layer (\w+) of image (\w+) not found in layer tree. The storage may be corrupted, consider running", out)
                 if e:
-                    logger.warn(f'Removing corrupt image from worker {w["name"]}')
-                    logger.warn(h.run(f"sudo podman rmi {e.group(2)}"))
+                    logger.warning(f'Removing corrupt image from worker {w["name"]}')
+                    logger.warning(h.run(f"sudo podman rmi {e.group(2)}"))
                 try:
                     out = h.run("sudo podman images --format json", logging.DEBUG).out
                     podman_images = json.loads(out)
                     for image in podman_images:
                         inspect_output = h.run(f"sudo podman image inspect {image['Id']}", logging.DEBUG).out
                         if "A storage corruption might have occurred" in inspect_output:
-                            logger.warn("Corrupt image found")
+                            logger.warning("Corrupt image found")
                             h.run(f"sudo podman rmi {image['id']}")
                 except Exception as e:
                     logger.info(e)
-                    pass
 
             time.sleep(30)
