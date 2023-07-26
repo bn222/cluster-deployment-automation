@@ -316,7 +316,7 @@ class ClusterDeployer():
         lh = host.LocalHost()
         interface = list(filter(lambda x: x["ifname"] == api_network, lh.all_ports()))
         if not interface:
-            logger.info("Missing API network interface {api_network}")
+            logger.info(f"Missing API network interface {api_network}")
             sys.exit(-1)
 
         interface = interface[0]
