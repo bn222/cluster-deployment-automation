@@ -21,12 +21,6 @@ source ocp-venv/bin/activate
 systemctl enable libvirtd
 ```
 
-## Configure qemu user an group to be root
-```
-sed -e 's/#\(user\|group\) = ".*"$/\1 = "root"/' -i /etc/libvirt/qemu.conf
-systemctl restart libvirtd
-```
-
 ## Activate and deactivate Python virtual environment
 ```
 source ocp-venv/bin/activate
