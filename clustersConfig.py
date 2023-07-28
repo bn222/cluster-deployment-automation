@@ -212,6 +212,9 @@ class ClustersConfig():
     def all_nodes(self) -> list:
         return self["masters"] + self["workers"]
 
+    def all_hosts(self) -> list:
+        return self["hosts"]
+
     def all_vms(self) -> list:
         return [x for x in self.all_nodes() if x["type"] == "vm"]
 
