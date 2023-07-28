@@ -104,9 +104,9 @@ class ClustersConfig():
                 node_names.add(h["node"])
 
             # Set default value for optional parameters for workers.
-            for w in cc["workers"]:
-                if "bmc_ip" not in w:
-                    w["bmc_ip"] = None
+            for node in cc["workers"] + cc["masters"]:
+                if "bmc_ip" not in node:
+                    node["bmc_ip"] = None
 
             # fill-in defaults value for required attributes on
             # all hosts
@@ -194,7 +194,10 @@ class ClustersConfig():
         return [x for x in self.all_nodes() if x["type"] == "vm"]
 
     def worker_vms(self) -> list:
-        return [x for x in self["workers"] if x ["type"] == "vm"]
+        return [x for x in self["workers"] if x["type"] == "vm"]
+
+    def master_vms(self) -> list:
+        return [x for x in self["masters"] if x["type"] == "vm"]
 
     def local_vms(self) -> list:
         return [x for x in self.all_vms() if x["node"] == "localhost"]

@@ -330,8 +330,13 @@ class ClusterDeployer():
             sys.exit(-1)
 
     def need_external_network(self) -> bool:
-        return ("workers" in self.args.steps) and \
-               (len(self._cc["workers"]) > len(self._cc.worker_vms()))
+        remote_workers = len(self._cc["workers"]) - len(self._cc.worker_vms())
+        remote_masters = len(self._cc["masters"]) - len(self._cc.master_vms())
+        if "workers" not in self.args.steps:
+            remote_workers = 0
+        if "masters" not in self.args.steps:
+            remote_masters = 0
+        return remote_masters != 0 or remote_workers != 0
 
     def _is_sno_configuration(self) -> bool:
         return len(self._cc["masters"]) == 1 and len(self._cc["workers"]) == 0
@@ -371,7 +376,7 @@ class ClusterDeployer():
             self._cc["ingress_ip"] = self._cc["masters"][0]["ip"]
 
         lh = host.LocalHost()
-        min_cores = 32
+        min_cores = 28
         cc = int(lh.run("nproc").out)
         if cc < min_cores:
             logger.info(f"Detected {cc} cores on localhost, but need at least {min_cores} cores")
@@ -379,6 +384,8 @@ class ClusterDeployer():
         if self.need_external_network() and not self._validate_external_port(lh):
             logger.info(f"Can't find a valid external port, config is {self._cc['external_port']}")
             sys.exit(-1)
+        else:
+            logger.info("Don't need external network so will not set it up")
         if self.need_api_network() and not self._validate_api_port(lh):
             logger.info(f"Can't find a valid network API port, config is {self._cc['network_api_port']}")
             sys.exit(-1)
@@ -432,6 +439,7 @@ class ClusterDeployer():
                                     os.path.join(os.getcwd(), f"{infra_env}.iso"),
                                     self.local_host_config()["virsh_pool"])
         else:
+            self._create_physical_x86_nodes(self._cc["masters"])
             futures = []
 
         def cb():
@@ -514,23 +522,23 @@ class ClusterDeployer():
         
         self._perform_worker_health_check(self._cc["workers"])
 
-    def _create_physical_x86_workers(self) -> None:
+    def _create_physical_x86_nodes(self, nodes) -> None:
         def boot_helper(worker, iso):
             return self.boot_iso_x86(worker, iso)
 
-        executor = ThreadPoolExecutor(max_workers=len(self._cc["workers"]))
+        executor = ThreadPoolExecutor(max_workers=len(nodes))
         futures = []
 
-        workers = list(x for x in self._cc["workers"] if x["type"] == "physical")
+        nodes = list(x for x in nodes if x["type"] == "physical")
         cluster_name = self._cc["name"]
         infra_env_name = f"{cluster_name}-x86"
-        for h in workers:
+        for h in nodes:
             futures.append(executor.submit(boot_helper, h, f"{infra_env_name}.iso"))
 
         for f in futures:
             logger.info(f.result())
 
-        for w in workers:
+        for w in nodes:
             w["ip"] = socket.gethostbyname(w["node"])
 
     def _create_vm_x86_workers(self) -> None:
@@ -565,7 +573,7 @@ class ClusterDeployer():
         os.makedirs(self._iso_path, exist_ok=True)
         self._download_iso(infra_env_name, self._iso_path)
 
-        self._create_physical_x86_workers()
+        self._create_physical_x86_nodes(self._cc["workers"])
         self._create_vm_x86_workers()
 
         logger.info("renaming workers")
