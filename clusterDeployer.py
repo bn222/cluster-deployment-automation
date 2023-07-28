@@ -57,8 +57,9 @@ def setup_vm(h: host.Host, virsh_pool: VirshPool, cfg: dict, iso_path: str):
 
     OS_VARIANT = "rhel8.5"
     RAM_MB = 32784
-    DISK_GB = 48
+    DISK_GB = cfg['disk_size']
     CPU_CORE = 8
+    SPARSE = cfg['sparse']
     network = "default"
 
     cmd = f"""
@@ -72,7 +73,7 @@ def setup_vm(h: host.Host, virsh_pool: VirshPool, cfg: dict, iso_path: str):
         --network=network:{network},mac={mac}
         --events on_reboot=restart
         --cdrom {iso_path}
-        --disk pool={virsh_pool.name()},size={DISK_GB},sparse=false,format=raw
+        --disk pool={virsh_pool.name()},size={DISK_GB},sparse={SPARSE},format=raw
         --wait=-1
     """
     logger.info(f"Starting VM {name}")
@@ -150,6 +151,9 @@ def configure_bridge(h: host.Host) -> None:
         cmd = "systemctl restart libvirtd"
         h.run_or_die(cmd)
 
+        # Not sure why/whether this is needed. But we saw failures w/o it.
+        # We need to investigate how to remove the sleep to speed up
+        time.sleep(5)
 
 class ExtraConfigRunner():
     def __init__(self, cc: ClustersConfig):
@@ -382,6 +386,8 @@ class ClusterDeployer():
         bridge = "virbr0"
 
         configure_bridge(lh)
+        cmd = "sed -e 's/#\\(user\\|group\\) = \".*\"$/\\1 = \"root\"/' -i /etc/libvirt/qemu.conf"
+        lh.run(cmd)
 
         if "master" not in interface:
             logger.info(f"No master set for interface {api_network}, setting it to {bridge}")
