@@ -31,20 +31,29 @@ from logger import logger
 import logging
 
 
+def ensure_dhcp_entry(h: host.Host, name: str, ip: str, mac: str):
+    # If adding a worker node fails, one might want to retry w/o tearing down the whole cluster
+    # In that case, the DHCP entry might already be present, with wrong mac -> remove it
+
+    cmd = "virsh net-dumpxml default"
+    ret = h.run_or_die(cmd)
+    if name in ret.out:
+        logger.info(f"{name} already configured as static DHCP entry - removing before adding back with proper configuration")
+        host_xml = f"<host name='{name}'/>"
+        cmd = f"virsh net-update default delete ip-dhcp-host \"{host_xml}\" --live --config"
+        h.run_or_die(cmd)
+
+    host_xml = f"<host mac='{mac}' name='{name}' ip='{ip}'/>"
+    logger.info(f"Creating static DHCP entry for VM {name}")
+    cmd = f"virsh net-update default add ip-dhcp-host \"{host_xml}\" --live --config"
+    h.run_or_die(cmd)
+
+
 def setup_vm(h: host.Host, virsh_pool: VirshPool, cfg: dict, iso_path: str):
     name = cfg["name"]
     ip = cfg["ip"]
     mac = "52:54:"+":".join(re.findall("..", secrets.token_hex()[:8]))
-    host_xml = f"<host mac='{mac}' name='{name}' ip='{ip}'/>"
-    logger.info(f"Creating static DHCP entry for VM {name}")
-    cmd = f"virsh net-update default add ip-dhcp-host \"{host_xml}\" --live --config"
-    ret = h.run(cmd)
-    if ret.err:
-        logger.info(cmd)
-        logger.info(ret.err)
-        sys.exit(-1)
-    else:
-        logger.info(ret.out.strip())
+    ensure_dhcp_entry(h, name, ip, mac)
 
     OS_VARIANT = "rhel8.5"
     RAM_MB = 32784
@@ -90,6 +99,56 @@ def setup_all_vms(h: host.Host, vms, iso_path, virsh_pool) -> list:
             time.sleep(1)
 
     return futures
+
+def ensure_bridge_is_started(h: host.Host, bridge_xml: str):
+    cmd = "virsh net-destroy default"
+    h.run(cmd) # ignore return code - it might fail if net was not started
+
+    cmd = "virsh net-undefine default"
+    ret = h.run(cmd)
+    if ret.returncode != 0 and "Network not found" not in ret.err:
+        logger.error(ret)
+        sys.exit(-1)
+
+    cmd = f"virsh net-define {bridge_xml}"
+    h.run_or_die(cmd)
+
+    cmd = "virsh net-start default"
+    h.run_or_die(cmd)
+
+def configure_bridge(h: host.Host) -> None:
+    cmd = "systemctl enable libvirtd"
+    h.run_or_die(cmd)
+    cmd = "systemctl start libvirtd"
+    h.run_or_die(cmd)
+
+    # stp must be disabled or it might conflict with default configuration of some physical switches
+    # 'bridge' section of network 'default' can't be updated => destroy and recreate
+    # check that default exists and contains stp=off
+    cmd = "virsh net-dumpxml default"
+    ret = h.run(cmd)
+
+    if "stp='off'" not in ret.out:
+        logger.logger("Destoying and recreating bridge")
+        logger.logger("creating default-net.xml on localhost")
+        contents = """
+<network>
+  <name>default</name>
+  <forward mode='nat'/>
+  <bridge name='virbr0' stp='off' delay='0'/>
+  <ip address='192.168.122.1' netmask='255.255.0.0'>
+    <dhcp>
+      <range start='192.168.122.2' end='192.168.122.254'/>
+    </dhcp>
+  </ip>
+</network>
+"""
+        bridge_xml = os.path.join("/tmp", 'vir_bridge.xml')
+        h.write(bridge_xml, contents)
+        ensure_bridge_is_started(h, bridge_xml)
+
+        cmd = "systemctl restart libvirtd"
+        h.run_or_die(cmd)
 
 
 class ExtraConfigRunner():
@@ -316,11 +375,13 @@ class ClusterDeployer():
         lh = host.LocalHost()
         interface = list(filter(lambda x: x["ifname"] == api_network, lh.all_ports()))
         if not interface:
-            logger.info("Missing API network interface {api_network}")
+            logger.info(f"Missing API network interface {api_network}")
             sys.exit(-1)
 
         interface = interface[0]
         bridge = "virbr0"
+
+        configure_bridge(lh)
 
         if "master" not in interface:
             logger.info(f"No master set for interface {api_network}, setting it to {bridge}")
