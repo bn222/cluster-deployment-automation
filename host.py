@@ -42,6 +42,7 @@ class Host:
         self._bmc_ip = bmc_ip
         self._bmc_user = bmc_user
         self._bmc_password = bmc_password
+        self.sudo_needed = False
 
     @lru_cache(maxsize=None)
     def is_localhost(self):
@@ -122,7 +123,42 @@ class Host:
 
         return Result(out, err, exit_code)
 
+    def remove(self, source):
+        if self.is_localhost():
+            if os.path.exists(source):
+                os.remove(source)
+        else:
+            try:
+                sftp = self._host.open_sftp()
+                sftp.remove(source)
+            except FileNotFoundError:
+                pass
+
+    # Copying local_file to "Host", which can be local or remote
+    def copy_to(self, local_file, remote_file):
+        if self.is_localhost():
+            shutil.copy(local_file, remote_file)
+        else:
+            while True:
+                try:
+                    sftp = self._host.open_sftp()
+                    if not os.path.exists(local_file):
+                        logger.error(f"Can't tranfer missing local {local_file} to {self._hostname}")
+                        sys.exit(-1)
+                    sftp.put(local_file, remote_file)
+                    break
+                except Exception as e:
+                    logger.info(e)
+                    logger.info(f"Connection lost while trying to open sftpd connection, reconnecting...")
+                    self.ssh_connect_looped(self._username, self._password)
+
+    def need_sudo(self):
+        self.sudo_needed = True
+
     def run(self, cmd: str, log_level: int = logging.INFO, env: dict = os.environ.copy()) -> Result:
+        if self.sudo_needed:
+            cmd = "sudo " + cmd
+
         if self.is_localhost():
             args = shlex.split(cmd)
             pipe = subprocess.PIPE
@@ -298,7 +334,10 @@ class Host:
             with open(fn, "w") as f:
                 f.write(contents)
         else:
-            raise Exception("Not implemented")
+            tmp_file = os.path.join("/tmp", fn)
+            with open(tmp_file, "w") as f:
+                f.write(contents)
+            self.copy_to(tmp_file, fn)
 
     def read_file(self, file_name: str) -> str:
         if self.is_localhost():
@@ -319,12 +358,8 @@ class Host:
             return ret.out.strip().split("\n")
         raise Exception(f"Error listing dir {path}")
 
-    def copy(self, src, dst):
-        if self.is_localhost():
-            shutil.copy(src, dst)
-        else:
-            self.run(f"cp {src} {dst}")
-
+    def hostname(self) -> str:
+        return self._hostname
 
 class HostWithBF2(Host):
     def connect_to_bf(self, bf_addr: str):
