@@ -189,8 +189,11 @@ class AssistedInstallerService():
         if result.err:
             logger.error(f"Error {result.err}")
             exit(1)
-        name = "assisted-installer"
-        return any(name == x["Name"] for x in json.loads(result.out))
+
+        def expected(x):
+            return x["Name"], x["Status"] == "assisted-installer", "Running"
+
+        return any(expected(x) for x in json.loads(result.out))
 
     def check_if_start_needed(self) -> bool:
         lh = host.LocalHost()
