@@ -47,7 +47,8 @@ class Host:
     def is_localhost(self):
         return self._hostname in ("localhost", socket.gethostname())
 
-    def ssh_connect(self, username: str, id_rsa_path: Optional[str] = None,
+    def ssh_connect(self, username: str, password: Optional[str] = None,
+                    id_rsa_path: Optional[str] = None,
                     id_ed25519_path: Optional[str] = None) -> None:
         assert not self.is_localhost()
         if id_rsa_path is None:
@@ -66,10 +67,10 @@ class Host:
             self._id_ed25519 = None
         logger.info(f"waiting for '{self._hostname}' to respond to ping")
         self.wait_ping()
-        logger.info(f"{self._hostname} responded to ping, trying to connect")
-        self.ssh_connect_looped(username)
+        logger.info(f"{self._hostname} responded to ping, trying to connect uing {username}")
+        self.ssh_connect_looped(username, password)
 
-    def ssh_connect_looped(self, username: str) -> None:
+    def ssh_connect_looped(self, username: str, password: str) -> None:
         try:
             pkey = paramiko.RSAKey.from_private_key(io.StringIO(self._id_rsa))
         except (paramiko.ssh_exception.PasswordRequiredException, paramiko.ssh_exception.SSHException):
@@ -80,12 +81,13 @@ class Host:
 
         while True:
             self._username = username
+            self._password = password
             self._host = paramiko.SSHClient()
             self._host.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
             try:
                 self._host.connect(self._hostname, username=username,
-                                   pkey=pkey)
+                                   pkey=pkey, password=password)
             except paramiko.ssh_exception.AuthenticationException as e:
                 if pkey.get_name() != "ssh-ed25519" and self._id_ed25519:
                     logger.info("Retry connect with es25519.")
@@ -99,7 +101,7 @@ class Host:
                 logger.info(type(e))
                 time.sleep(10)
                 continue
-            logger.info(f"connected to {self._hostname}")
+            logger.info(f"connected to {self._hostname} with {self._username}")
             break
 
     def _read_output(self, cmd: str, log_level: int = logging.DEBUG) -> Result:
@@ -143,7 +145,7 @@ class Host:
             except Exception as e:
                 logger.log(log_level, e)
                 logger.log(log_level, f"Connection lost while running command {cmd}, reconnecting...")
-                self.ssh_connect_looped(self._username)
+                self.ssh_connect_looped(self._username, self._password)
 
     def run_or_die(self, cmd: str) -> Result:
         ret = self.run(cmd)
