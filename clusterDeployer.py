@@ -425,9 +425,14 @@ class ClusterDeployer():
         self._ai.download_iso_with_retry(infra_env)
 
         lh = host.LocalHost()
-        futures = setup_all_vms(lh, self._cc["masters"],
-                                os.path.join(os.getcwd(), f"{infra_env}.iso"),
-                                self.local_host_config()["virsh_pool"])
+        # TODO: clean this up. Currently just skipping this
+        # since self.local_host_config() is not present if no local vms
+        if self._cc.local_vms():
+            futures = setup_all_vms(lh, self._cc["masters"],
+                                    os.path.join(os.getcwd(), f"{infra_env}.iso"),
+                                    self.local_host_config()["virsh_pool"])
+        else:
+            futures = []
 
         def cb():
             finished = [p for p in futures if p.done()]
@@ -534,9 +539,12 @@ class ClusterDeployer():
         vm = list(x for x in self._cc["workers"] if x["type"] == "vm")
         logger.info(infra_env)
         lh = host.LocalHost()
-        futures = setup_all_vms(lh, vm,
-                                os.path.join(os.getcwd(), f"{infra_env}.iso"),
-                                self.local_host_config()["virsh_pool"])
+        # TODO: clean this up. Currently just skipping this
+        # since self.local_host_config() is not present if no local vms
+        if self._cc.local_vms():
+            _ = setup_all_vms(lh, vm,
+                                     os.path.join(os.getcwd(), f"{infra_env}.iso"),
+                                     self.local_host_config()["virsh_pool"])
         self._wait_known_state(e["name"] for e in vm)
 
     def _create_x86_workers(self) -> None:
