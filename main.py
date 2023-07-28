@@ -32,10 +32,12 @@ def main():
     ai = AssistedClientAutomation(f"{args.url}:8090")
     cd = ClusterDeployer(cc, ai, args, args.secrets_path)
 
-    if args.teardown:
+    if args.teardown or args.teardown_full:
         cd.teardown()
     else:
         cd.deploy()
+    if args.teardown_full:
+        ais.stop()
 
 
 if __name__ == "__main__":

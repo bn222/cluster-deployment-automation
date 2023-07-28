@@ -245,6 +245,20 @@ class AssistedInstallerService():
             count += 1
             time.sleep(2)
 
+    def stop(self) -> None:
+        lh = host.LocalHost()
+        result = lh.run("podman pod ps --format json")
+        if result.err:
+            logger.error(f"Error {result.err}")
+            exit(1)
+        name = "assisted-installer"
+        if name in map(lambda x: x["Name"], json.loads(result.out)):
+            logger.info(f"{name} already running, stopping it before restarting")
+            lh.run(f"podman pod stop {name}")
+            lh.run(f"podman pod rm {name}")
+        else:
+            logger.debug(f"{name} not yet running")
+
     def start(self, version) -> None:
         self._configure(version)
         self._ensure_pod_started()
