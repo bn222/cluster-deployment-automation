@@ -28,6 +28,7 @@ from extraConfigOvnK import ExtraConfigOvnK
 from extraConfigCNO import ExtraConfigCNO
 from extraConfigRT import ExtraConfigRT
 from extraConfigDualStack import ExtraConfigDualStack
+from typing import Tuple
 import common
 from logger import logger
 
@@ -59,17 +60,20 @@ def ensure_dhcp_entry(h: host.Host, name: str, ip: str, mac: str):
 
 
     host_xml = f"<host mac='{mac}' name='{name}' ip='{ip}'/>"
-    logger.info(f"Creating static DHCP entry for VM {name}")
+    logger.info(f"Creating static DHCP entry for VM {name}, ip {ip} mac {mac}")
     cmd = f"virsh net-update default add ip-dhcp-host \"{host_xml}\" --live --config"
     h.run_or_die(cmd)
 
-
-def setup_vm(h: host.Host, cfg: dict, iso_or_image_path: str):
+def setup_dhcp_entry(h: host.Host, cfg: dict):
     name = cfg["name"]
     ip = cfg["ip"]
     mac = "52:54:"+":".join(re.findall("..", secrets.token_hex()[:8]))
+    cfg["mac"] = mac
     ensure_dhcp_entry(h, name, ip, mac)
 
+def setup_vm(h: host.Host, cfg: dict, iso_or_image_path: str):
+    name = cfg["name"]
+    mac = cfg["mac"]
     disk_size_gb = 48
     if iso_or_image_path.endswith(".iso"):
         options = "-o preallocation="
@@ -91,8 +95,10 @@ def setup_vm(h: host.Host, cfg: dict, iso_or_image_path: str):
     OS_VARIANT = "rhel8.6"
     RAM_MB = 32784
     CPU_CORE = 8
-    network = "default"
-
+    if h.is_localhost():
+        network = "network=default"
+    else:
+        network = "bridge=virbr0"
     cmd = f"""
     virt-install
         --connect qemu:///system
@@ -102,12 +108,13 @@ def setup_vm(h: host.Host, cfg: dict, iso_or_image_path: str):
         --vcpus {CPU_CORE}
         --os-variant={OS_VARIANT}
         --import
-        --network=network:{network},mac={mac}
+        --network {network},mac={mac}
         --events on_reboot=restart
         {cdrom_line}
         --disk path={cfg["image_path"]}
         {append}
     """
+
     logger.info(f"Starting VM {name}")
     ret = h.run(cmd)
     if ret.returncode != 0:
@@ -120,6 +127,9 @@ def setup_vm(h: host.Host, cfg: dict, iso_or_image_path: str):
 def setup_all_vms(h: host.Host, vms, iso_path) -> list:
     if not vms:
         return []
+
+    hostname = h.hostname()
+    logger.debug(f"Setting up vms on {hostname}")
 
     executor = ThreadPoolExecutor(max_workers=len(vms))
     futures = []
@@ -173,7 +183,27 @@ def limit_dhcp_range(h: host.Host, old_range: str, new_range: str) -> None:
         r = h.run(cmd)
         logger.debug(r.err if r.err else r.out)
 
+def network_xml(ip: str, dhcp_range: Optional[Tuple[str, str]] = None):
+    if dhcp_range is None:
+        dhcp_part = ""
+    else:
+        dhcp_part = f"""<dhcp>
+  <range start='{dhcp_range[0]}' end='{dhcp_range[1]}'/>
+  </dhcp>"""
+        
+    return f"""
+<network>
+  <name>default</name>
+  <forward mode='nat'/>
+  <bridge name='virbr0' stp='off' delay='0'/>
+  <ip address='{ip}' netmask='255.255.0.0'>
+    {dhcp_part}
+  </ip>
+</network>
+  """
+
 def configure_bridge(h: host.Host, api_network: str) -> None:
+    hostname = h.hostname()
     cmd = "systemctl enable libvirtd"
     h.run_or_die(cmd)
     cmd = "systemctl start libvirtd"
@@ -187,21 +217,18 @@ def configure_bridge(h: host.Host, api_network: str) -> None:
 
     if "stp='off'" not in ret.out:
         logger.info("Destoying and recreating bridge")
-        logger.info("creating default-net.xml on localhost")
-        contents = """
-<network>
-  <name>default</name>
-  <forward mode='nat'/>
-  <bridge name='virbr0' stp='off' delay='0'/>
-  <ip address='192.168.122.1' netmask='255.255.0.0'>
-    <dhcp>
-      <range start='192.168.122.129' end='192.168.122.254'/>
-    </dhcp>
-  </ip>
-</network>
-"""
+        logger.info(f"creating default-net.xml on {hostname}")
+        if hostname == "localhost":
+            contents = network_xml('192.168.122.1', ('192.168.122.129', '192.168.122.254'))
+        else:
+            contents = network_xml('192.168.123.250')
+
         bridge_xml = os.path.join("/tmp", 'vir_bridge.xml')
         h.write(bridge_xml, contents)
+        # Not sure why/whether this is needed. But we saw failures w/o it.
+        # Without this, net-undefine within ensure_bridge_is_started fails as libvirtd fails to restart
+        # We need to investigate how to remove the sleep to speed up
+        time.sleep(5)
         ensure_bridge_is_started(h, api_network, bridge_xml)
 
         limit_dhcp_range(h, "192.168.122.2", "192.168.122.129")
@@ -440,13 +467,14 @@ class ClusterDeployer():
             sys.exit(-1)
 
     def need_external_network(self) -> bool:
+        vm_bm = list(x for x in self._cc["workers"] if x["type"] == "vm" and x["node"] != 'localhost')
         remote_workers = len(self._cc["workers"]) - len(self._cc.worker_vms())
         remote_masters = len(self._cc["masters"]) - len(self._cc.master_vms())
         if "workers" not in self.args.steps:
             remote_workers = 0
         if "masters" not in self.args.steps:
             remote_masters = 0
-        return remote_masters != 0 or remote_workers != 0
+        return remote_masters != 0 or remote_workers != 0 or len(vm_bm) != 0
 
     def deploy(self) -> None:
         self._validate()
@@ -546,6 +574,8 @@ class ClusterDeployer():
         # TODO: clean this up. Currently just skipping this
         # since self.local_host_config() is not present if no local vms
         if self._cc.local_vms():
+            for e in self._cc["masters"]:
+                setup_dhcp_entry(lh, e)
             futures = setup_all_vms(lh, self._cc["masters"],
                                     os.path.join(os.getcwd(), f"{infra_env}.iso"))
         else:
@@ -659,14 +689,64 @@ class ClusterDeployer():
     def _create_vm_x86_workers(self) -> None:
         cluster_name = self._cc["name"]
         infra_env = f"{cluster_name}-x86"
-        vm = list(x for x in self._cc["workers"] if x["type"] == "vm")
+        vm = list(x for x in self._cc["workers"] if x["type"] == "vm" and x["node"] == 'localhost')
         logger.info(infra_env)
         lh = host.LocalHost()
         # TODO: clean this up. Currently just skipping this
         # since self.local_host_config() is not present if no local vms
         if self._cc.local_vms():
+            for e in vm:
+                setup_dhcp_entry(lh, e)
             _ = setup_all_vms(lh, vm, os.path.join(os.getcwd(), f"{infra_env}.iso"))
         self._wait_known_state(e["name"] for e in vm)
+
+    def _create_remote_vm_x86_workers(self) -> None:
+        logger.debug("Setting up vm x86 workers on remote hosts")
+        cluster_name = self._cc["name"]
+        infra_env = f"{cluster_name}-x86"
+        bm_hostnames = set()
+        bms = []
+        for x in self._cc["workers"]:
+            if x["node"] not in bm_hostnames and x["type"] == "vm" and x["node"] != 'localhost':
+                bms.append(x)
+                bm_hostnames.add(x["node"])
+        for bm in bms:
+            rh = host.RemoteHost(bm["node"])
+            host_config = self.local_host_config(bm["node"])
+            rh.ssh_connect(host_config["username"], host_config["password"])
+            cmd = "yum -y install libvirt qemu-img qemu-kvm virt-install"
+            rh.run_or_die(cmd)
+
+        lh = host.LocalHost()
+        vms = []
+        for bm in bms:
+            rh = host.RemoteHost(bm["node"])
+            logger.debug(f"Setting up vms on {bm['node']}")
+            host_config = self.local_host_config(bm["node"])
+            rh.ssh_connect(host_config["username"], host_config["password"])
+
+            # TODO validate api port on rh
+            self.ensure_linked_to_bridge(rh)
+
+            vm = list(x for x in self._cc["workers"] if x["type"] == "vm" and x["node"] == bm["node"])
+
+            for e in vm:
+                image_path = os.path.dirname(e["image_path"])
+                rh.run(f"mkdir -p {image_path}")
+                rh.run(f"chmod a+rw {image_path}")
+                iso_src = os.path.join(os.getcwd(), f"{infra_env}.iso")
+                iso_path = os.path.join(image_path, f"{infra_env}.iso")
+                logger.debug(f"Copying {iso_src} to {rh.hostname()}:/{iso_path}")
+                rh.copy_to(iso_src, iso_path)
+                logger.debug(f"iso_path is now {iso_path} for {rh.hostname()}")
+
+                setup_dhcp_entry(lh, e)
+
+            logger.debug(f"Starting {len(vm)} VMs on {bm['node']}")
+            setup_all_vms(rh, vm, iso_path)
+            vms.extend(vm)
+        self._wait_known_state(e["name"] for e in vms)
+
 
     def _create_x86_workers(self) -> None:
         logger.info("Setting up x86 workers")
@@ -693,6 +773,7 @@ class ClusterDeployer():
 
         self._create_physical_x86_nodes(self._cc["workers"])
         self._create_vm_x86_workers()
+        self._create_remote_vm_x86_workers()
 
         logger.info("renaming workers")
         self._rename_workers(infra_env_name)

@@ -179,6 +179,9 @@ class Host:
                 proc.communicate()
                 ret = proc.returncode
             return Result(out, err, ret)
+
+        # Make sure multiline command is not seen as multiple commands
+        cmd = cmd.replace("\n", "\\\n")
         while True:
             try:
                 logger.log(log_level, f"running command {cmd} on {self._hostname}")
