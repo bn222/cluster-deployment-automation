@@ -123,6 +123,8 @@ class ClustersConfig():
                     host_config["username"] = "core"
                 if "password" not in host_config:
                     host_config["password"] = None
+                if "pre_installed" not in host_config:
+                    host_config["pre_installed"] = "True"
 
     def autodetect_external_port(self):
         lh = host.LocalHost()
