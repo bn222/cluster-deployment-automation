@@ -120,7 +120,7 @@ def setup_all_vms(h: host.Host, vms, iso_path) -> list:
     return futures
 
 
-def ensure_bridge_is_started(h: host.Host, bridge_xml: str):
+def ensure_bridge_is_started(h: host.Host, api_network: str, bridge_xml: str):
     cmd = "virsh net-destroy default"
     h.run(cmd) # ignore return code - it might fail if net was not started
 
@@ -130,13 +130,23 @@ def ensure_bridge_is_started(h: host.Host, bridge_xml: str):
         logger.error(ret)
         sys.exit(-1)
 
+    # Fix cases where virsh net-start fails with error "... interface virbr0: File exists"
+    cmd = "ip link delete virbr0"
+    h.run(cmd) # ignore return code - it might fail if virbr did not exist
+
     cmd = f"virsh net-define {bridge_xml}"
     h.run_or_die(cmd)
+
+    # set interface down before starting bridge as otherwise bridge start might fail if interface
+    # already got an IP address in same network as bridge
+    h.run(f"ip link set {api_network} down")
 
     cmd = "virsh net-start default"
     h.run_or_die(cmd)
 
-def configure_bridge(h: host.Host) -> None:
+    h.run(f"ip link set {api_network} up")
+
+def configure_bridge(h: host.Host, api_network: str) -> None:
     cmd = "systemctl enable libvirtd"
     h.run_or_die(cmd)
     cmd = "systemctl start libvirtd"
@@ -165,7 +175,7 @@ def configure_bridge(h: host.Host) -> None:
 """
         bridge_xml = os.path.join("/tmp", 'vir_bridge.xml')
         h.write(bridge_xml, contents)
-        ensure_bridge_is_started(h, bridge_xml)
+        ensure_bridge_is_started(h, api_network, bridge_xml)
 
         cmd = "systemctl restart libvirtd"
         h.run_or_die(cmd)
@@ -387,7 +397,7 @@ class ClusterDeployer():
         # done in configure_bridge().
         cmd = "sed -e 's/#\\(user\\|group\\) = \".*\"$/\\1 = \"root\"/' -i /etc/libvirt/qemu.conf"
         lh.run(cmd)
-        configure_bridge(lh)
+        configure_bridge(lh, api_network)
 
         if "master" not in interface:
             logger.info(f"No master set for interface {api_network}, setting it to {bridge}")
