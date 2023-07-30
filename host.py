@@ -102,7 +102,7 @@ class Host:
             logger.info(f"connected to {self._hostname}")
             break
 
-    def _read_output(self, cmd: str, log_level: int = logging.INFO) -> Result:
+    def _read_output(self, cmd: str, log_level: int = logging.DEBUG) -> Result:
         _, stdout, stderr = self._host.exec_command(cmd)
 
         out = []
@@ -138,7 +138,7 @@ class Host:
             return Result(out, err, ret)
         while True:
             try:
-                logger.log(log_level, f"running command {cmd}")
+                logger.log(log_level, f"running command {cmd} on {self._hostname}")
                 return self._read_output(cmd, log_level)
             except Exception as e:
                 logger.log(log_level, e)
@@ -268,13 +268,13 @@ class Host:
         return not ret.returncode and re.search("State:.*running", ret.out) is not None
 
     def ipa(self) -> dict:
-        return json.loads(self.run("ip -json a").out)
+        return json.loads(self.run("ip -json a", logging.DEBUG).out)
 
     def ipr(self) -> dict:
-        return json.loads(self.run("ip -json r").out)
+        return json.loads(self.run("ip -json r", logging.DEBUG).out)
 
     def all_ports(self) -> dict:
-        return json.loads(self.run("ip -json link").out)
+        return json.loads(self.run("ip -json link", logging.DEBUG).out)
 
     def ip(self, port_name: str) -> str:
         return common.extract_ip(self.ipa(), port_name)
