@@ -40,7 +40,7 @@ def ensure_dhcp_entry(h: host.Host, name: str, ip: str, mac: str):
 
     cmd = "virsh net-dumpxml default"
     ret = h.run_or_die(cmd)
-    if name in ret.out:
+    if f"'{name}'" in ret.out:
         logger.info(f"{name} already configured as static DHCP entry - removing before adding back with proper configuration")
         host_xml = f"<host name='{name}'/>"
         cmd = f"virsh net-update default delete ip-dhcp-host \"{host_xml}\" --live --config"
