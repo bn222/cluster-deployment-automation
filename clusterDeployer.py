@@ -260,8 +260,8 @@ class ClusterDeployer():
 
         self._futures = {e["name"]: empty() for e in self._cc.all_nodes()}
 
-    def local_host_config(self):
-        return next(e for e in self._cc["hosts"] if e["name"] == "localhost")
+    def local_host_config(self, hostname: Optional[str] = "localhost"):
+        return next(e for e in self._cc["hosts"] if e["name"] == hostname)
 
     """
     Using Aicli, we will find all the clusters installed on our host included in our configuration file.
@@ -375,13 +375,14 @@ class ClusterDeployer():
         def carrier_no_addr(intf):
             return not intf["addr_info"] and "NO-CARRIER" not in intf["flags"]
 
-        if self._cc["network_api_port"] == "auto":
+        host_config = self.local_host_config(lh.hostname())
+        if host_config["network_api_port"] == "auto":
             intif = common.first(carrier_no_addr, lh.ipa())
             if not intif:
                 return None
-            self._cc["network_api_port"] = intif["ifname"]
+            host_config["network_api_port"] = intif["ifname"]
 
-        port = self._cc["network_api_port"]
+        port = host_config["network_api_port"]
         logger.info(f'Validating API network port {port}')
         if not lh.port_exists(port):
             logger.error(f"Can't find API network port {port}")
@@ -407,15 +408,16 @@ class ClusterDeployer():
     def need_api_network(self):
         return len(self._cc.local_vms()) != len(self._cc.all_nodes())
 
-    def ensure_linked_to_bridge(self) -> None:
+    def ensure_linked_to_bridge(self, lh) -> None:
         if not self.need_api_network():
             logger.info("Only running local VMs (virbr0 not connected to externally)")
             return
 
-        api_network = self._cc["network_api_port"]
+        host_config = self.local_host_config(lh.hostname())
+        api_network = host_config["network_api_port"]
+
         logger.info(f"link {api_network} to virbr0")
 
-        lh = host.LocalHost()
         interface = list(filter(lambda x: x["ifname"] == api_network, lh.all_ports()))
         if not interface:
             logger.info(f"Missing API network interface {api_network}")
@@ -462,7 +464,8 @@ class ClusterDeployer():
             else:
                 logger.info("Skipping master creation.")
 
-            self.ensure_linked_to_bridge()
+            lh = host.LocalHost()
+            self.ensure_linked_to_bridge(lh)
             if "workers" in self.args.steps:
                 if self._cc["workers"]:
                     self.create_workers()
@@ -493,11 +496,12 @@ class ClusterDeployer():
                 sys.exit(-1)
         else:
             logger.info("Don't need external network so will not set it up")
+        host_config = self.local_host_config(lh.hostname())
         if self.need_api_network() and not self._validate_api_port(lh):
-            logger.info(f"Can't find a valid network API port, config is {self._cc['network_api_port']}")
+            logger.info(f"Can't find a valid network API port, config is {host_config['network_api_port']}")
             sys.exit(-1)
         else:
-            logger.info(f"Using {self._cc['network_api_port']} as network API port")
+            logger.info(f"Using {host_config['network_api_port']} as network API port")
 
     def client(self) -> K8sClient:
         if self._client is None:
@@ -559,7 +563,7 @@ class ClusterDeployer():
         self._ai.wait_cluster(cluster_name)
         for p in futures:
             p.result()
-        self.ensure_linked_to_bridge()
+        self.ensure_linked_to_bridge(lh)
         for e in self._cc["masters"]:
             self._set_password(e)
         logger.info(f'downloading kubeconfig to {self._cc["kubeconfig"]}')

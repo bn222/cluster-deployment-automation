@@ -24,3 +24,4 @@ clusters:
     hosts:
     - name: "A"
       images_path: "/path/to/pool/directory"
+      network_api_port: "<auto> to keep cluster default - <device name> to overwrite cluster default>"
