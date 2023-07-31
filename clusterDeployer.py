@@ -130,8 +130,8 @@ def configure_bridge(h: host.Host) -> None:
     ret = h.run(cmd)
 
     if "stp='off'" not in ret.out:
-        logger.logger("Destoying and recreating bridge")
-        logger.logger("creating default-net.xml on localhost")
+        logger.info("Destoying and recreating bridge")
+        logger.info("creating default-net.xml on localhost")
         contents = """
 <network>
   <name>default</name>
