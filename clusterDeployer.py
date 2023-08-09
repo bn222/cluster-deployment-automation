@@ -68,6 +68,7 @@ def setup_vm(h: host.Host, virsh_pool: VirshPool, cfg: dict, iso_path: str):
         --connect qemu:///system
         -n {name}
         -r {RAM_MB}
+        --cpu host
         --vcpus {CPU_CORE}
         --os-variant={OS_VARIANT}
         --import
