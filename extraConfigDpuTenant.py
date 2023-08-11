@@ -131,10 +131,6 @@ class ExtraConfigDpuTenant:
 
         logger.info("creating config map to put ovn-k into dpu host mode")
         tclient.oc("create -f manifests/tenant/sriovdpuconfigmap.yaml")
-        logger.info("creating mc to disable ovs")
-        tclient.oc("create -f manifests/tenant/disable-ovs.yaml")
-        logger.info("Waiting for mcp")
-        tclient.wait_for_mcp("dpu-host", "dpu host mode")
 
         logger.info("setting ovn kube node env-override to set management port")
         logger.info(os.getcwd())
@@ -158,6 +154,11 @@ class ExtraConfigDpuTenant:
             rh.ssh_connect("core")
             # workaround for https://issues.redhat.com/browse/NHE-335
             logger.info(rh.run("sudo ovs-vsctl del-port br-int ovn-k8s-mp0"))
+
+        logger.info("creating mc to disable ovs")
+        tclient.oc("create -f manifests/tenant/disable-ovs.yaml")
+        logger.info("Waiting for mcp")
+        tclient.wait_for_mcp("dpu-host", "dpu host mode")
 
         logger.info("Final infrastructure cluster configuration")
         iclient = K8sClient("/root/kubeconfig.infracluster")
@@ -260,11 +261,6 @@ class ExtraConfigDpuTenant_NewAPI(ExtraConfigDpuTenant):
         logger.info(tclient.oc("create -f /tmp/hardware-offload-config.yaml"))
         # DELTA END
 
-        logger.info("creating mc to disable ovs")
-        tclient.oc("create -f manifests/tenant/disable-ovs.yaml")
-        logger.info("Waiting for mcp")
-        tclient.wait_for_mcp("dpu-host", "disable-ovs.yaml")
-
         # DELTA: We don't create env-override to set management port. https://github.com/ovn-org/ovn-kubernetes/pull/3467
 
         for e in self._cc["workers"]:
@@ -280,6 +276,11 @@ class ExtraConfigDpuTenant_NewAPI(ExtraConfigDpuTenant):
                 # FIXME: The above patch did not seem to entirely work. We will need to investigate further
                 # For now we will delete the port.
                 logger.info(rh.run("sudo ovs-vsctl del-port br-int ovn-k8s-mp0"))
+
+        logger.info("creating mc to disable ovs")
+        tclient.oc("create -f manifests/tenant/disable-ovs.yaml")
+        logger.info("Waiting for mcp")
+        tclient.wait_for_mcp("dpu-host", "disable-ovs.yaml")
 
         logger.info("Final infrastructure cluster configuration")
         iclient = K8sClient("/root/kubeconfig.infracluster")
