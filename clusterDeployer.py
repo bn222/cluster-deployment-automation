@@ -405,9 +405,6 @@ class ClusterDeployer():
             remote_masters = 0
         return remote_masters != 0 or remote_workers != 0
 
-    def _is_sno_configuration(self) -> bool:
-        return len(self._cc["masters"]) == 1 and len(self._cc["workers"]) == 0
-
     def deploy(self) -> None:
         self._validate()
 
@@ -437,7 +434,7 @@ class ClusterDeployer():
             logger.info("Skipping post configuration.")
 
     def _validate(self):
-        if self._is_sno_configuration():
+        if self._cc.is_sno():
             logger.info("Setting up a Single Node OpenShift (SNO) environment")
             self._cc["api_ip"] = self._cc["masters"][0]["ip"]
             self._cc["ingress_ip"] = self._cc["masters"][0]["ip"]
@@ -477,7 +474,7 @@ class ClusterDeployer():
         cfg["vip_dhcp_allocation"] = False
         cfg["additional_ntp_source"] = "clock.redhat.com"
         cfg["base_dns_domain"] = "redhat.com"
-        cfg["sno"] = self._is_sno_configuration()
+        cfg["sno"] = self._cc.is_sno()
 
         logger.info("Creating cluster")
         logger.info(cfg)
