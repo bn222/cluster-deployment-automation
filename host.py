@@ -15,6 +15,7 @@ from typing import Optional
 import common
 from logger import logger
 import logging
+from functools import lru_cache
 
 
 Result = namedtuple("Result", "out err returncode")
@@ -40,9 +41,13 @@ class Host:
         self._bmc_user = bmc_user
         self._bmc_password = bmc_password
 
+    @lru_cache(maxsize=None)
+    def is_localhost(self):
+        return self._hostname in ("localhost", socket.gethostname())
+
     def ssh_connect(self, username: str, id_rsa_path: Optional[str] = None,
                     id_ed25519_path: Optional[str] = None) -> None:
-        assert self._hostname != "localhost"
+        assert not self.is_localhost()
         if id_rsa_path is None:
             id_rsa_path = os.path.join(os.environ["HOME"], ".ssh/id_rsa")
         if id_ed25519_path is None:
@@ -115,7 +120,7 @@ class Host:
         return Result(out, err, exit_code)
 
     def run(self, cmd: str, log_level: int = logging.INFO, env: dict = os.environ.copy()) -> Result:
-        if self._hostname == "localhost":
+        if self.is_localhost():
             args = shlex.split(cmd)
             pipe = subprocess.PIPE
             with subprocess.Popen(args, stdout=pipe, stderr=pipe, env=env) as proc:
@@ -287,18 +292,22 @@ class Host:
         return "NO-CARRIER" not in ports[port_name]["flags"]
 
     def write(self, fn, contents):
-        if self._hostname == "localhost":
+        if self.is_localhost():
             with open(fn, "w") as f:
                 f.write(contents)
         else:
             raise Exception("Not implemented")
 
     def read_file(self, file_name: str) -> str:
-        if self._hostname == "localhost":
+        if self.is_localhost():
             with open(file_name) as f:
                 return f.read()
         else:
-            raise Exception("Not implemented")
+            ret = self.run(f"cat {file_name}")
+            if ret.returncode == 0:
+                return ret.out
+            else:
+                raise Exception(f"Error reading {file_name}")
 
 class HostWithBF2(Host):
     def connect_to_bf(self, bf_addr: str):
