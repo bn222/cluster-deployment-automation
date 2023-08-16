@@ -77,14 +77,16 @@ class K8sClient():
     def wait_for_mcp(self, mcp_name: str, resource: str = "resource"):
         time.sleep(60)
         iteration = 0
-        max_tries = 4
+        max_tries = 10
         start = time.time()
-        get_status_cmd = "get mcp " + mcp_name + " -o jsonpath='{.status.conditions[?(@.type==\"Updated\")].status}'"
-        while self.oc(get_status_cmd).out != "True":
+        while True:
+            ret = self.oc(f"wait mcp {mcp_name} --for condition=updated --timeout=20m")
+            if ret.returncode == 0:
+                break;
             if iteration >= max_tries:
+                logger.info(ret)
                 logger.error(f"mcp {mcp_name} failed to update for {resource} after {max_tries}, quitting ...")
                 sys.exit(-1)
-            logger.info(self.oc(f"wait mcp {mcp_name} --for condition=updated --timeout=50m"))
             iteration = iteration + 1
             time.sleep(60)
         minutes, seconds = divmod(int(time.time() - start), 60)
