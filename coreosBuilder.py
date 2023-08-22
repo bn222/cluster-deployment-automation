@@ -114,6 +114,7 @@ class CoreosBuilder():
         os.makedirs(fcos_dir)
         os.chdir(fcos_dir)
 
+        # -e COSA_NO_KVM=1 \
         cmd = f"""
         podman run --rm -ti --security-opt label=disable --privileged         \
                --uidmap=1000:0:1 --uidmap=0:1:1000 --uidmap 1001:1001:64536   \
@@ -123,7 +124,9 @@ class CoreosBuilder():
                quay.io/coreos-assembler/coreos-assembler:latest
         """
 
-        def run_die(cmd):
+        def build_step(cmd, step):
+            logger.info(f"Building CoreOS: {step}")
+            cmd = cmd + " " + step
             r = lh.run(cmd)
             if r.returncode != 0:
                 logger.info("Building CoreOS failed while running:")
@@ -132,12 +135,12 @@ class CoreosBuilder():
                 logger.info(r)
                 sys.exit(-1)
 
-        run_die(cmd + " init /git")
-        run_die(cmd + " fetch")
-        run_die(cmd + " build")
-        run_die(cmd + " buildextend-metal")
-        run_die(cmd + " buildextend-metal4k")
-        run_die(cmd + " buildextend-live")
+        build_step(cmd, "init /git")
+        build_step(cmd, "fetch")
+        build_step(cmd, "build")
+        build_step(cmd, "buildextend-metal")
+        build_step(cmd, "buildextend-metal4k")
+        build_step(cmd, "buildextend-live")
 
         embed_src = self._find_iso(fcos_dir)
         if embed_src is None:
@@ -212,4 +215,4 @@ def main():
 
 
 if __name__ == "__main__":
-  main()
+    main()

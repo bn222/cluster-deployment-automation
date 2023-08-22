@@ -10,8 +10,10 @@ import re
 import time
 import json
 import shlex
+import shutil
 import sys
 from typing import Optional
+from urllib3.util import is_connection_dropped
 import common
 from logger import logger
 import logging
@@ -320,6 +322,12 @@ class Host:
                 return ret.out.strip().split("\n")
             else:
                 raise Exception(f"Error listing dir {path}")
+
+    def copy(self, src, dst):
+        if self.is_localhost():
+            shutil.copy(src, dst)
+        else:
+            self.run(f"cp {src} {dst}")
 
 
 class HostWithBF2(Host):

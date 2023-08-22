@@ -26,15 +26,15 @@ from extraConfigCNO import ExtraConfigCNO
 from extraConfigRT import ExtraConfigRT
 import paramiko
 import common
-from virshPool import VirshPool
 import glob
 from logger import logger
 import logging
 
 
 def ensure_dhcp_entry(h: host.Host, name: str, ip: str, mac: str):
-    # If adding a worker node fails, one might want to retry w/o tearing down the whole cluster
-    # In that case, the DHCP entry might already be present, with wrong mac -> remove it
+    # If adding a worker node fails, one might want to retry w/o tearing down
+    # the whole cluster. In that case, the DHCP entry might already be present,
+    # with wrong mac -> remove it
 
     cmd = "virsh net-dumpxml default"
     ret = h.run_or_die(cmd)
@@ -50,17 +50,30 @@ def ensure_dhcp_entry(h: host.Host, name: str, ip: str, mac: str):
     h.run_or_die(cmd)
 
 
-def setup_vm(h: host.Host, virsh_pool: VirshPool, cfg: dict, iso_path: str):
+def setup_vm(h: host.Host, cfg: dict, iso_or_image_path: str):
     name = cfg["name"]
     ip = cfg["ip"]
     mac = "52:54:"+":".join(re.findall("..", secrets.token_hex()[:8]))
     ensure_dhcp_entry(h, name, ip, mac)
 
-    OS_VARIANT = "rhel8.5"
+    disk_size_gb = 48
+    if iso_or_image_path.endswith(".iso"):
+        options = "-o preallocation="
+        if cfg['sparse']:
+            options += "on"
+        else:
+            options += "off"
+
+        h.run(f'qemu-img create -f qcow2 {options} {cfg["image_path"]} {disk_size_gb}G')
+        cdrom_line = f"--cdrom {iso_or_image_path}"
+        append = "--wait=-1"
+    else:
+        cdrom_line = ""
+        append = "--noautoconsole"
+
+    OS_VARIANT = "rhel8.6"
     RAM_MB = 32784
-    DISK_GB = cfg['disk_size']
     CPU_CORE = 8
-    SPARSE = cfg['sparse']
     network = "default"
 
     cmd = f"""
@@ -74,34 +87,33 @@ def setup_vm(h: host.Host, virsh_pool: VirshPool, cfg: dict, iso_path: str):
         --import
         --network=network:{network},mac={mac}
         --events on_reboot=restart
-        --cdrom {iso_path}
-        --disk pool={virsh_pool.name()},size={DISK_GB},sparse={SPARSE},format=raw
-        --wait=-1
+        {cdrom_line}
+        --disk path={cfg["image_path"]}
+        {append}
     """
     logger.info(f"Starting VM {name}")
     ret = h.run(cmd)
     if ret.returncode != 0:
-        logger.info(f"Finished starting VM {name}, cmd = {cmd}, err=  error {ret}")
+        logger.info(f"Finished starting VM {name}, cmd = {cmd}, ret = {ret}")
     else:
         logger.info(f"Finished starting VM {name} without any errors")
     return ret
 
 
-def setup_all_vms(h: host.Host, vms, iso_path, virsh_pool) -> list:
+def setup_all_vms(h: host.Host, vms, iso_path) -> list:
     if not vms:
         return []
-
-    virsh_pool.ensure_initialized()
 
     executor = ThreadPoolExecutor(max_workers=len(vms))
     futures = []
     for e in vms:
-        futures.append(executor.submit(setup_vm, h, virsh_pool, e, iso_path))
+        futures.append(executor.submit(setup_vm, h, e, iso_path))
 
         while not h.vm_is_running(e["name"]) and not futures[-1].done():
             time.sleep(1)
 
     return futures
+
 
 def ensure_bridge_is_started(h: host.Host, bridge_xml: str):
     cmd = "virsh net-destroy default"
@@ -195,12 +207,6 @@ class ClusterDeployer():
         os.makedirs(self._iso_path, exist_ok=True)
         self._extra_config = ExtraConfigRunner(cc)
 
-        pool_name = f"{self._cc['name']}_guest_images"
-        for e in self._cc["hosts"]:
-            h = host.Host(e["name"])
-
-            e["virsh_pool"] = VirshPool(h, pool_name, e["images_path"])
-
         def empty():
             f = Future()
             f.set_result(None)
@@ -247,16 +253,15 @@ class ClusterDeployer():
         lh = host.LocalHost()
         for m in self._cc.local_vms():
             assert m["node"] == "localhost"
-            images_path = self.local_host_config()["virsh_pool"].images_path()
-            name = m["name"]
-            image = f"/{images_path}/{name}.img"
-            if os.path.exists(image):
-                os.remove(image)
-            image = f"/{images_path}/{name}.qcow2"
-            if os.path.exists(image):
-                os.remove(image)
+            # remove the image only if it really exists
+            image_path = m["image_path"]
+            if os.path.exists(image_path.replace(".qcow2", ".img")):
+                os.remove(image_path.replace(".qcow2", ".img"))
+            if os.path.exists(image_path):
+                os.remove(image_path)
 
-            # destroy the VM only if that really exists
+            # destroy the VM only if it really exists
+            name = m["name"]
             if lh.run(f"virsh desc {name}").returncode == 0:
                 r = lh.run(f"virsh destroy {name}")
                 logger.info(r.err if r.err else r.out.strip())
@@ -307,9 +312,6 @@ class ClusterDeployer():
                 f.write(json.dumps(filtered, indent=4))
             logger.info(lh.run("virsh net-start default"))
             logger.info(lh.run("systemctl restart libvirtd"))
-
-            vp = self.local_host_config()["virsh_pool"]
-            vp.ensure_removed()
 
         if self.need_api_network():
             intif = self._validate_api_port(lh)
@@ -505,8 +507,7 @@ class ClusterDeployer():
         # since self.local_host_config() is not present if no local vms
         if self._cc.local_vms():
             futures = setup_all_vms(lh, self._cc["masters"],
-                                    os.path.join(os.getcwd(), f"{infra_env}.iso"),
-                                    self.local_host_config()["virsh_pool"])
+                                    os.path.join(os.getcwd(), f"{infra_env}.iso"))
         else:
             self._create_physical_x86_nodes(self._cc["masters"])
             futures = []
@@ -524,7 +525,7 @@ class ClusterDeployer():
             p.result()
         self.ensure_linked_to_bridge()
         logger.info(f'downloading kubeconfig to {self._cc["kubeconfig"]}')
-        self._ai.download_kubeconfig(self._cc["name"], os.path.dirname(self._cc["kubeconfig"]))
+        self._ai.download_kubeconfig(self._cc["name"], self._cc["kubeconfig"])
         self._update_etc_hosts()
 
     def _print_logs(self, name):
@@ -588,7 +589,7 @@ class ClusterDeployer():
             rh = host.RemoteHost(ai_ip)
             rh.ssh_connect("core")
             rh.run("echo root:redhat | sudo chpasswd")
-        
+
         self._perform_worker_health_check(self._cc["workers"])
 
     def _create_physical_x86_nodes(self, nodes) -> None:
@@ -619,9 +620,7 @@ class ClusterDeployer():
         # TODO: clean this up. Currently just skipping this
         # since self.local_host_config() is not present if no local vms
         if self._cc.local_vms():
-            _ = setup_all_vms(lh, vm,
-                                     os.path.join(os.getcwd(), f"{infra_env}.iso"),
-                                     self.local_host_config()["virsh_pool"])
+            _ = setup_all_vms(lh, vm, os.path.join(os.getcwd(), f"{infra_env}.iso"))
         self._wait_known_state(e["name"] for e in vm)
 
     def _create_x86_workers(self) -> None:

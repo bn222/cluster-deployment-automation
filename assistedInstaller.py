@@ -34,6 +34,10 @@ class AssistedClientAutomation(AssistedClient):
         if name in map(lambda x: x["name"], self.list_infra_envs()):
             self.delete_infra_env(name)
 
+    def download_kubeconfig(self, name, path, stdout=False):
+        path = os.path.dirname(path)
+        return super().download_kubeconfig(name, path, stdout)
+
     def download_iso_with_retry(self, infra_env: str):
         logger.info(self.info_iso(infra_env, {}))
         logger.info("Downloading iso (will retry if not ready)...")

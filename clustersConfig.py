@@ -110,15 +110,13 @@ class ClustersConfig():
                     node_names.add(h["node"])
 
             # Set default value for optional parameters for workers.
-            for node in cc["workers"] + cc["masters"]:
+            for node in all_nodes:
                 if "bmc_ip" not in node:
                     node["bmc_ip"] = None
-
-            # fill-in defaults value for required attributes on
-            # all hosts
-            for host_config in cc["hosts"]:
-                if "images_path" not in host_config:
-                    host_config["images_path"] = f'/home/{cc["name"]}_guests_images'
+                if "image_path" not in node:
+                    base_path = f'/home/{cc["name"]}_guests_images'
+                    qemu_img_name = f'{node["name"]}.qcow2'
+                    node["image_path"] = os.path.join(base_path, qemu_img_name)
 
     def _apply_jinja(self, contents: str) -> str:
         def worker_number(a):

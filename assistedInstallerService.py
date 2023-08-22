@@ -10,6 +10,7 @@ import sys
 import re
 from logger import logger
 import filecmp
+from typing import Optional
 
 
 def load_url_or_file(url_or_file: str):
@@ -40,7 +41,8 @@ that can be used to create and monitor clusters. However, since we are deploying
 non-standard way, the web-ui can't be used.
 """
 class AssistedInstallerService():
-    def __init__(self, ip: str, branch: str = "master"):
+    def __init__(self, version, ip: str, branch: str = "master"):
+        self._version = version
         self._ip = ip
         base_url = f"https://raw.githubusercontent.com/openshift/assisted-service/{branch}"
         pod_config_url = f"{base_url}/deploy/podman/configmap.yml"
@@ -49,10 +51,10 @@ class AssistedInstallerService():
         self.podFile = load_url_or_file(pod_file)
         self.workdir = os.path.join(os.getcwd(), "build")
 
-    def _configure(self, version) -> None:
+    def _configure(self) -> None:
         os.makedirs(self.workdir, exist_ok=True)
         with open(self._config_map_path(), 'w') as out_configmap:
-            yaml.dump(self._customized_configmap(version), out_configmap, sort_keys=False)
+            yaml.dump(self._customized_configmap(), out_configmap, sort_keys=False)
 
         with open(self._pod_persistent_path(), 'w') as out_pod:
             yaml.dump(self._customized_pod_persistent(), out_pod, default_flow_style=False)
@@ -69,7 +71,7 @@ class AssistedInstallerService():
     def _last_run_pod(self) -> str:
         return f'{self.workdir}/pod-persistent-last.yml'
 
-    def _customized_configmap(self, version):
+    def _customized_configmap(self):
         y = yaml.safe_load(self.podConfig)
         y["data"]["IMAGE_SERVICE_BASE_URL"] = f"http://{self._ip}:8888"
         y["data"]["SERVICE_BASE_URL"] = f"http://{self._ip}:8090"
@@ -88,7 +90,8 @@ class AssistedInstallerService():
         # and nightly) in the same config. For that reason, pass in the
         # version, and instantiate AI _only_ with one version, i.e. the
         # version we will be using.
-        y["data"]["RELEASE_IMAGES"] = json.dumps([self.prep_version(version)])
+        version_contents = self.prep_version(self._version)
+        y["data"]["RELEASE_IMAGES"] = json.dumps([version_contents])
         return y
 
     def _customized_pod_persistent(self) -> str:
@@ -183,53 +186,60 @@ class AssistedInstallerService():
     def get_normal_pullspec(self, version) -> str:
         return f"quay.io/openshift-release-dev/ocp-release:{version}-multi"
 
-    def ai_running(self) -> bool:
+    def find_pod(self, name) -> Optional[dict]:
         lh = host.LocalHost()
         result = lh.run("podman pod ps --format json")
         if result.err:
             logger.error(f"Error {result.err}")
             exit(1)
+        for x in json.loads(result.out):
+            if x["Name"] == name:
+                return x
+        return None
 
-        def expected(x):
-            return x["Name"], x["Status"] == "assisted-installer", "Running"
+    def pod_running(self) -> bool:
+        return bool(self.find_pod("assisted-installer"))
 
-        return any(expected(x) for x in json.loads(result.out))
+    def last_cm_is_same(self):
+        return os.path.exists(self._last_run_cm()) and filecmp.cmp(self._config_map_path(), self._last_run_cm())
 
-    def check_if_start_needed(self, force) -> bool:
-        lh = host.LocalHost()
+    def last_pod_is_same(self):
+        return os.path.exists(self._last_run_pod()) and filecmp.cmp(self._pod_persistent_path(), self._last_run_pod())
+
+    def stop_needed(self, force) -> bool:
         name = "assisted-installer"
-        if force and self.ai_running():
-            logger.info(f"{name} already running and stopping since force requested")
-            lh.run(f"podman pod stop {name}")
-            lh.run(f"podman pod rm {name}")
+        ai_pod = self.find_pod(name)
+        if not ai_pod:
+            logger.info(f"{name} not yet running")
+            return False
+
+        if force:
+            logger.info(f"{name} already running but force requested")
             return True
-        if self.ai_running():
-            cm_same = os.path.exists(self._last_run_cm()) and filecmp.cmp(self._config_map_path(), self._last_run_cm())
-            pod_same = os.path.exists(self._last_run_pod()) and filecmp.cmp(self._pod_persistent_path(), self._last_run_pod())
-            if cm_same and pod_same:
-                logger.info(f"{name} already running with the same configmap and pod config, will not restart it")
+        else:
+            if ai_pod["Status"] != "Running":
+                logger.info(f'{name} already exists but status is {ai_pod["Status"]}')
+                return True
+
+            if self.last_cm_is_same() and self.last_pod_is_same():
+                logger.info(f"{name} already running with the same configmap and pod config")
                 return False
             else:
-                logger.info(f"{name} already running with a different configmap, stopping it")
-                lh.run(f"podman pod stop {name}")
-                lh.run(f"podman pod rm {name}")
+                logger.info(f"{name} already running with a different configmap")
                 return True
-        else:
-            logger.info(f"{name} not yet running")
-            return True
 
     def _ensure_pod_started(self, force) -> None:
-        if self.check_if_start_needed(force):
+        if self.stop_needed(force):
+            self.stop()
+
+        if not self.pod_running():
             shutil.copy(self._config_map_path(), self._last_run_cm())
             shutil.copy(self._pod_persistent_path(), self._last_run_pod())
-            r = self._play_kube(self._last_run_cm(), self._last_run_pod())
-            if r.returncode != 0:
-                logger.error(r)
-                sys.exit(-1)
+            self._play_kube(self._last_run_cm(), self._last_run_pod())
 
     def _play_kube(self, cm, pod) -> host.Result:
         lh = host.LocalHost()
-        r = lh.run(f"podman play kube --configmap {cm} {pod}")
+        r = lh.run_or_die(f"podman play kube --configmap {cm} {pod}")
         return r
 
     def _ensure_libvirt_running(self) -> None:
@@ -268,20 +278,16 @@ class AssistedInstallerService():
 
     def stop(self) -> None:
         lh = host.LocalHost()
-        result = lh.run("podman pod ps --format json")
-        if result.err:
-            logger.error(f"Error {result.err}")
-            exit(1)
-        name = "assisted-installer"
-        if name in map(lambda x: x["Name"], json.loads(result.out)):
-            logger.info(f"{name} already running, stopping it before restarting")
-            lh.run(f"podman pod stop {name}")
-            lh.run(f"podman pod rm {name}")
-        else:
-            logger.debug(f"{name} not yet running")
+        ret = lh.run("podman pod ps --format json")
+        pod_name = "assisted-installer"
+        target = [x for x in json.loads(ret.out) if x["Name"] == pod_name]
+        if target:
+            logger.info(f"Stopping {pod_name}")
+            lh.run(f"podman pod stop {pod_name}")
+            lh.run(f"podman pod rm {pod_name}")
 
-    def start(self, version, force=False) -> None:
-        self._configure(version)
+    def start(self, force=False) -> None:
+        self._configure()
         self._ensure_pod_started(force)
         self.wait_for_api()
 
@@ -301,12 +307,19 @@ class AssistedInstallerService():
             export_vol(path, e)
 
     def import_snapshot(self, path) -> None:
+        self.stop()
         lh = host.LocalHost()
 
         def import_vol(path, vol_name):
+            nested = "rm -rf /source_data/*"
+            cmd = f"podman run -it --name snapshot --privileged -v {vol_name}:/source_data -v {path}:/export_data alpine sh -c '{nested}'"
+            lh.run("podman rm snapshot")
+            logger.info(lh.run(cmd))
+            logger.info(lh.run("podman rm snapshot"))
             nested = f"tar -xzf /export_data/{vol_name}.tar.gz -C /source_data"
             cmd = f"podman run -it --name snapshot --privileged -v {vol_name}:/source_data -v {path}:/export_data alpine sh -c '{nested}'"
             logger.info(cmd)
+            lh.run("podman rm snapshot")
             logger.info(lh.run(cmd))
             logger.info(lh.run("podman rm snapshot"))
 
@@ -314,3 +327,6 @@ class AssistedInstallerService():
         logger.info(f"importing {target} from {path}")
         for e in target:
             import_vol(path, e)
+
+        self.start(True)
+        time.sleep(30)
