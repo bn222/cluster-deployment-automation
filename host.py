@@ -16,6 +16,7 @@ import common
 from logger import logger
 import logging
 from functools import lru_cache
+from typing import List
 
 
 Result = namedtuple("Result", "out err returncode")
@@ -308,6 +309,18 @@ class Host:
                 return ret.out
             else:
                 raise Exception(f"Error reading {file_name}")
+
+    def listdir(self, path: Optional[str] = None) -> List[str]:
+        if self.is_localhost():
+            return os.listdir(path)
+        else:
+            path = path if path is not None else ""
+            ret = self.run(f"ls {path}")
+            if ret.returncode == 0:
+                return ret.out.strip().split("\n")
+            else:
+                raise Exception(f"Error listing dir {path}")
+
 
 class HostWithBF2(Host):
     def connect_to_bf(self, bf_addr: str):
