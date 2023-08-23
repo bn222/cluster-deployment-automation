@@ -387,9 +387,11 @@ class ClusterDeployer():
         interface = interface[0]
         bridge = "virbr0"
 
-        configure_bridge(lh)
+        # Need to restart libvirtd after modify the config file, which will be
+        # done in configure_bridge().
         cmd = "sed -e 's/#\\(user\\|group\\) = \".*\"$/\\1 = \"root\"/' -i /etc/libvirt/qemu.conf"
         lh.run(cmd)
+        configure_bridge(lh)
 
         if "master" not in interface:
             logger.info(f"No master set for interface {api_network}, setting it to {bridge}")
