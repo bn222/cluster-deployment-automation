@@ -14,6 +14,7 @@ ssh-keygen -t ed25519 -a 64 -N '' -f ~/.ssh/id_ed25519
 ```
 
 ## Install required software and Python packages by starting a Python virtual environment
+NOTE: Requires Python3.9 or higher
 ```
 python -m venv ocp-venv
 source ocp-venv/bin/activate
@@ -106,7 +107,7 @@ EOF
 ## Start the installation
 ```
 source ocp-venv/bin/activate
-python main.py cluster.yaml
+python cda.py cluster.yaml deploy
 deactivate
 ```
 
