@@ -13,7 +13,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--secret', dest='secrets_path', default='', action='store', type=str, help='pull_secret.json path (default is in cwd)')
     parser.add_argument('--assisted-installer-url', dest='url', default='192.168.122.1', action='store', type=str, help='If set to 0.0.0.0 (the default), Assisted Installer will be started locally')
 
-    subparsers = parser.add_subparsers(title='subcommands', dest='subcommand', required=True)
+    subparsers = parser.add_subparsers(title='subcommands', dest='subcommand')
     deploy_parser = subparsers.add_parser('deploy', help='Deploy clusters')
     deploy_parser.add_argument('-t', '--teardown', dest='teardown', action='store_true', help='Remove anything that would be created by setting up the cluster(s)')
     deploy_parser.add_argument('-f', '--teardown-full', dest='teardown_full', action='store_true', help='Remove anything that would be created by setting up the cluster(s), included ai')

@@ -8,6 +8,7 @@ from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import Future
 from typing import Optional
 from typing import Dict
+from assistedInstaller import AssistedClientAutomation
 from clustersConfig import ClustersConfig
 import host
 import secrets
@@ -64,6 +65,7 @@ def setup_vm(h: host.Host, cfg: dict, iso_or_image_path: str):
         else:
             options += "off"
 
+        os.makedirs(os.path.dirname(cfg["image_path"]), exist_ok=True)
         h.run(f'qemu-img create -f qcow2 {options} {cfg["image_path"]} {disk_size_gb}G')
         cdrom_line = f"--cdrom {iso_or_image_path}"
         append = "--wait=-1"
@@ -196,8 +198,9 @@ class ExtraConfigRunner():
             logger.info(f"running extra config {to_run['name']}")
             self._extra_config[to_run['name']].run(to_run, futures)
 
+
 class ClusterDeployer():
-    def __init__(self, cc, ai, args, secrets_path: str):
+    def __init__(self, cc: ClustersConfig, ai: AssistedClientAutomation, args, secrets_path: str):
         self._client = None
         self.args = args
         self._cc = cc
@@ -323,20 +326,6 @@ class ClusterDeployer():
         if os.path.exists(self._cc["kubeconfig"]):
             os.remove(self._cc["kubeconfig"])
 
-    def _validate_external_port(self, lh) -> Optional[str]:
-        # do automatic detection, if needed
-        if self._cc["external_port"] == "auto":
-            self._cc["external_port"] = lh.port_from_route("default")
-            if not self._cc["external_port"]:
-                return None
-
-        # check that the interface really exists
-        extif = self._cc["external_port"]
-        if lh.port_exists(extif):
-            logger.info(f"Using {extif} as external port")
-            return extif
-        return None
-
     def _validate_api_port(self, lh) -> Optional[str]:
         def carrier_no_addr(intf):
             return not intf["addr_info"] and "NO-CARRIER" not in intf["flags"]
@@ -452,9 +441,11 @@ class ClusterDeployer():
         if cc < min_cores:
             logger.info(f"Detected {cc} cores on localhost, but need at least {min_cores} cores")
             sys.exit(-1)
-        if self.need_external_network() and not self._validate_external_port(lh):
-            logger.info(f"Can't find a valid external port, config is {self._cc['external_port']}")
-            sys.exit(-1)
+        if self.need_external_network():
+            self._cc.prepare_external_port()
+            if not self._cc.validate_external_port():
+                logger.error(f"Invalid external port, config is {self._cc['external_port']}")
+                sys.exit(-1)
         else:
             logger.info("Don't need external network so will not set it up")
         if self.need_api_network() and not self._validate_api_port(lh):
@@ -526,7 +517,7 @@ class ClusterDeployer():
         self.ensure_linked_to_bridge()
         logger.info(f'downloading kubeconfig to {self._cc["kubeconfig"]}')
         self._ai.download_kubeconfig(self._cc["name"], self._cc["kubeconfig"])
-        self._update_etc_hosts()
+        self.update_etc_hosts()
 
     def _print_logs(self, name):
         ip = self._ai.get_ai_ip(name)
@@ -800,7 +791,7 @@ class ClusterDeployer():
                     logger.info(f"Found matching private key at {ssh_priv_key}")
         return ssh_priv_key
 
-    def _update_etc_hosts(self) -> None:
+    def update_etc_hosts(self) -> None:
         cluster_name = self._cc["name"]
         api_name = f"api.{cluster_name}.redhat.com"
         api_ip = self._ai.info_cluster(cluster_name).api_vip

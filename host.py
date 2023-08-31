@@ -203,6 +203,7 @@ class Host:
     """
     @retry(stop=stop_after_attempt(10), wait=wait_fixed(60))
     def _boot_with_overrides(self, iso_path: str) -> None:
+        assert ":" in iso_path
         logger.info(f"Trying to boot '{self._hostname}' through {self._bmc_url()}")
         red = self._redfish()
         try:
@@ -211,8 +212,8 @@ class Host:
             logger.info(e)
             logger.info("eject failed, but continuing")
             pass
+        logger.info(f"inserting iso {iso_path}")
         red.insert_iso(iso_path)
-        logger.info(f"inserted iso {iso_path}")
         try:
             red.set_iso_once()
         except Exception as e:

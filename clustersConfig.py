@@ -12,6 +12,7 @@ import re
 from typing import List
 from typing import Dict
 from logger import logger
+from typing import Optional
 
 
 class ClusterInfo:
@@ -117,6 +118,18 @@ class ClustersConfig():
                     base_path = f'/home/{cc["name"]}_guests_images'
                     qemu_img_name = f'{node["name"]}.qcow2'
                     node["image_path"] = os.path.join(base_path, qemu_img_name)
+
+    def autodetect_external_port(self):
+        lh = host.LocalHost()
+        self.__setitem__("external_port", lh.port_from_route("default"))
+
+    def prepare_external_port(self):
+        if self.__getitem__("external_port") == "auto":
+            self.autodetect_external_port()
+
+    def validate_external_port(self):
+        extif = self.__getitem__("external_port")
+        return host.LocalHost().port_exists(extif)
 
     def _apply_jinja(self, contents: str) -> str:
         def worker_number(a):
