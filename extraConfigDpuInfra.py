@@ -115,9 +115,9 @@ def run_dpu_network_operator_git(lh, kc):
     env["IMG"] = "quay.io/bnemeth/dpu-network-operator:142"
     # cleanup first, to make this script idempotent
     logger.info("running make undeploy")
-    logger.info(lh.run("make undeploy", env))
+    logger.info(lh.run("make undeploy", env=env))
     logger.info("running make deploy")
-    logger.info(lh.run("make deploy", env))
+    logger.info(lh.run("make deploy", env=env))
     os.chdir(cur_dir)
 
 
