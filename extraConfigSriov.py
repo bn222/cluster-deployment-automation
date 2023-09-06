@@ -42,7 +42,7 @@ class ExtraConfigSriov:
 
         # cleanup first, to make this script idempotent
         logger.info("running make undeploy")
-        logger.info(lh.run("make undeploy", env))
+        logger.info(lh.run("make undeploy", env=env))
 
         # Workaround PSA issues. https://issues.redhat.com/browse/OCPBUGS-1005
         client.oc("create namespace openshift-sriov-network-operator")
@@ -52,7 +52,7 @@ class ExtraConfigSriov:
                   "security.openshift.io/scc.podSecurityLabelSync=false")
 
         logger.info("running make deploy-setup")
-        logger.info(lh.run("make deploy-setup", env))
+        logger.info(lh.run("make deploy-setup", env=env))
         time.sleep(60)
         os.chdir(cur_dir)
 
