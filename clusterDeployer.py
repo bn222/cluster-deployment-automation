@@ -515,6 +515,8 @@ class ClusterDeployer():
         for p in futures:
             p.result()
         self.ensure_linked_to_bridge()
+        for e in self._cc["masters"]:
+            self._set_password(e)
         logger.info(f'downloading kubeconfig to {self._cc["kubeconfig"]}')
         self._ai.download_kubeconfig(self._cc["name"], self._cc["kubeconfig"])
         self.update_etc_hosts()
@@ -575,13 +577,16 @@ class ClusterDeployer():
 
         logger.info("Setting password to for root to redhat")
         for w in self._cc["workers"]:
-            ai_ip = self._ai.get_ai_ip(w["name"])
-            assert ai_ip is not None
-            rh = host.RemoteHost(ai_ip)
-            rh.ssh_connect("core")
-            rh.run("echo root:redhat | sudo chpasswd")
+            self._set_password(w)
 
         self._perform_worker_health_check(self._cc["workers"])
+
+    def _set_password(self, node):
+        ai_ip = self._ai.get_ai_ip(node["name"])
+        assert ai_ip is not None
+        rh = host.RemoteHost(ai_ip)
+        rh.ssh_connect("core")
+        rh.run("echo root:redhat | sudo chpasswd")
 
     def _create_physical_x86_nodes(self, nodes) -> None:
         def boot_helper(worker, iso):
