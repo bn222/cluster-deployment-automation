@@ -66,7 +66,9 @@ def setup_vm(h: host.Host, cfg: dict, iso_or_image_path: str):
             options += "off"
 
         os.makedirs(os.path.dirname(cfg["image_path"]), exist_ok=True)
-        h.run(f'qemu-img create -f qcow2 {options} {cfg["image_path"]} {disk_size_gb}G')
+        logger.info(f"creating image for VM {name}")
+        h.run_or_die(f'qemu-img create -f qcow2 {options} {cfg["image_path"]} {disk_size_gb}G')
+
         cdrom_line = f"--cdrom {iso_or_image_path}"
         append = "--wait=-1"
     else:

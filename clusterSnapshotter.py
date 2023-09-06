@@ -32,6 +32,9 @@ class ClusterSnapshotter:
 
     def export_cluster(self):
         self._cc.prepare_external_port()
+        lh = host.LocalHost()
+        lh.run(f"mkdir -p {self._snapshot_dir()}")
+        self._ais.export_snapshot(self._snapshot_dir())
 
         def save_phys(node):
             coreosBuilder.ensure_fcos_exists()
@@ -55,41 +58,37 @@ class ClusterSnapshotter:
             logger.info(f"Finished backing up node {node}")
             rh.run("sudo systemctl reboot")
 
-        lh = host.LocalHost()
-        lh.run(f"mkdir -p {self._snapshot_dir()}")
-        self._ais.export_snapshot(self._snapshot_dir())
-
-        lh = host.LocalHost()
-        vms = lh.run("virsh list --all --name").out.strip().split()
-        for e in self._cc.all_vms():
-            if e["name"] in vms:
-                self._export_vm(e)
+        def save_vms():
+            lh = host.LocalHost()
+            vms = lh.run("virsh list --all --name").out.strip().split()
+            for e in self._cc.all_vms():
+                if e["name"] in vms:
+                    self._export_vm(e)
 
         not_vms = [x for x in self._cc.all_nodes() if x["type"] == "physical"]
-
-        executor = ThreadPoolExecutor(max_workers=len(not_vms))
+        executor = ThreadPoolExecutor(max_workers=len(not_vms) + 1)
         futures = []
         for e in not_vms:
             futures.append(executor.submit(save_phys, e["node"]))
+        futures.append(executor.submit(save_vms))
         for e in futures:
             e.result()
 
     def import_cluster(self):
+        self._cc.prepare_external_port()
         self._ais.import_snapshot(self._snapshot_dir())
-
         ai_nodes = [h["requested_hostname"] for h in self._ai.list_hosts()]
         active_vms = [x for x in self._cc.all_vms() if x["name"] in ai_nodes]
 
-        for e in active_vms:
-            self._import_vm(e)
+        def load_vms():
+            for e in active_vms:
+                self._import_vm(e)
 
-        lh = host.LocalHost()
-        for e in active_vms:
-            lh.run(f'virsh destroy {e["name"]}')
-        for e in active_vms:
-            lh.run(f'virsh start {e["name"]}')
-
-        self._cc.prepare_external_port()
+            lh = host.LocalHost()
+            for e in active_vms:
+                lh.run(f'virsh destroy {e["name"]}')
+            for e in active_vms:
+                lh.run(f'virsh start {e["name"]}')
 
         def load_phys(node):
             coreosBuilder.ensure_fcos_exists()
@@ -115,10 +114,11 @@ class ClusterSnapshotter:
 
         not_vms = [x for x in self._cc.all_nodes() if x["type"] == "physical"]
 
-        executor = ThreadPoolExecutor(max_workers=len(not_vms))
+        executor = ThreadPoolExecutor(max_workers=len(not_vms) + 1)
         futures = []
         for e in not_vms:
             futures.append(executor.submit(load_phys, e["node"]))
+        futures.append(executor.submit(load_vms))
         for e in futures:
             e.result()
 
