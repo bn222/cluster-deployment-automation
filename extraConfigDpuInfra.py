@@ -175,7 +175,7 @@ class ExtraConfigDpuInfra:
             time.sleep(5)
 
         logger.info("Creating namespace for tenant")
-        client.oc("create -f manifests/infra/tenantcluster-dpu.yaml")
+        client.oc("create -f manifests/infra/ns.yaml")
 
         logger.info("Creating DpuClusterConfig cr")
         client.oc("create -f manifests/infra/dpuclusterconfig.yaml")
