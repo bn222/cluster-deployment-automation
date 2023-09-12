@@ -43,7 +43,7 @@ def install_remotelyh(ip, links):
         cmd = f"curl -k {e} --create-dirs > {wd}/{fn}"
         rh.run(cmd)
 
-    logger.info("result:", rh.run("sudo rpm-ostree"))
+    logger.info("result: %s", rh.run("sudo rpm-ostree").out)
 
     cmd = f"sudo rpm-ostree override replace {wd}/*.rpm"
     logger.info(cmd)

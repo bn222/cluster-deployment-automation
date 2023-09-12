@@ -97,6 +97,28 @@ class ExtraConfigSriovOvSHWOL:
         with open(outfilename, "w") as outFile:
             outFile.write(rendered)
 
+    def try_get_ovs_pf(self, rh: host, name: str) -> str:
+        rh.ssh_connect("core")
+        try:
+            result = rh.read_file("/var/lib/ovnk/iface_default_hint").strip()
+            if result:
+                logger.info(f"Found PF Name {result} on node {name}")
+                return result
+        except:
+            logger.info(f"Cannot find PF Name on node {name} using hint")
+
+        retries = 5
+        for attempt in range (1, retries + 1):
+            interface_list = rh.run("sudo ovs-vsctl list-ifaces br-ex").out.strip().split("\n")
+            result = [x for x in interface_list if "patch" not in x]
+            if result:
+                logger.info(f"Found PF Name {result} on node {name} on attempt {attempt}")
+                return result[0]
+            time.sleep(20)
+
+        logger.error(f"Failed to find PF name on node {name} using ovs-vsctl")
+        sys.exit(-1)
+
     def run(self, _, futures: Dict[str, Future]) -> None:
         [f.result() for (_, f) in futures.items()]
         client = K8sClient(self._cc["kubeconfig"])
@@ -117,27 +139,15 @@ class ExtraConfigSriovOvSHWOL:
             if ip is None:
                 sys.exit(-1)
             rh = host.RemoteHost(ip)
-            rh.ssh_connect("core")
-            result = rh.run("cat /var/lib/ovnk/iface_default_hint").out.strip()
-            if result:
-                logger.info(f"Found PF Name {result} on node {name}")
-            else:
-                logger.info(f"Cannot find PF Name on node {name} using hint")
-                interface_list = rh.run("sudo ovs-vsctl list-ifaces br-ex").out.strip().split("\n")
-                result = [x for x in interface_list if "patch" not in x]
-                result = result[0]
-                if result:
-                    logger.info(f"Found PF Name {result} on node {name}")
-                else:
-                    logger.info(f"Cannot find PF Name on node {name} using ovs-vsctl")
-            if result:
-                # Reserve VF(s) for management port(s).
-                workloadVFs = result + f"#{numMgmtVfs}-{numVfs-1}"
-                managementVFs = result + f"#0-{numMgmtVfs-1}"
-                if workloadVFs not in workloadVFsAll:
-                    workloadVFsAll.append(workloadVFs)
-                if managementVFs not in managementVFsAll:
-                    managementVFsAll.append(managementVFs)
+            result = self.try_get_ovs_pf(rh, name)
+
+            # Reserve VF(s) for management port(s).
+            workloadVFs = f"{result}#{numMgmtVfs}-{numVfs - 1}"
+            managementVFs = f"{result}#0-{numMgmtVfs - 1}"
+            if workloadVFs not in workloadVFsAll:
+                workloadVFsAll.append(workloadVFs)
+            if managementVFs not in managementVFsAll:
+                managementVFsAll.append(managementVFs)
 
         # We error out if we can't find any PFs.
         if not workloadVFsAll:
@@ -185,27 +195,15 @@ class ExtraConfigSriovOvSHWOL_NewAPI(ExtraConfigSriovOvSHWOL):
             if ip is None:
                 sys.exit(-1)
             rh = host.RemoteHost(ip)
-            rh.ssh_connect("core")
-            result = rh.run("cat /var/lib/ovnk/iface_default_hint").out.strip()
-            if result:
-                logger.info(f"Found PF Name {result} on node {name}")
-            else:
-                logger.info(f"Cannot find PF Name on node {name} using hint")
-                interface_list = rh.run("sudo ovs-vsctl list-ifaces br-ex").out.strip().split("\n")
-                result = [x for x in interface_list if "patch" not in x]
-                result = result[0]
-                if result:
-                    logger.info(f"Found PF Name {result} on node {name}")
-                else:
-                    logger.info(f"Cannot find PF Name on node {name} using ovs-vsctl")
-            if result:
-                # Reserve VF(s) for management port(s).
-                workloadVFs = result + f"#{numMgmtVfs}-{numVfs-1}"
-                managementVFs = result + f"#0-{numMgmtVfs-1}"
-                if workloadVFs not in workloadVFsAll:
-                    workloadVFsAll.append(workloadVFs)
-                if managementVFs not in managementVFsAll:
-                    managementVFsAll.append(managementVFs)
+            result = self.try_get_ovs_pf(rh, name)
+
+            # Reserve VF(s) for management port(s).
+            workloadVFs = f"{result}#{numMgmtVfs}-{numVfs - 1}"
+            managementVFs = f"{result}#0-{numMgmtVfs - 1}"
+            if workloadVFs not in workloadVFsAll:
+                workloadVFsAll.append(workloadVFs)
+            if managementVFs not in managementVFsAll:
+                managementVFsAll.append(managementVFs)
 
         # We error out if we can't find any PFs.
         if not workloadVFsAll:
