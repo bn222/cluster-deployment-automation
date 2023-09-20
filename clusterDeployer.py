@@ -25,6 +25,7 @@ from extraConfigDpuInfra import ExtraConfigDpuInfra, ExtraConfigDpuInfra_NewAPI
 from extraConfigOvnK import ExtraConfigOvnK
 from extraConfigCNO import ExtraConfigCNO
 from extraConfigRT import ExtraConfigRT
+from extraConfigDualStack import ExtraConfigDualStack
 import paramiko
 import common
 import glob
@@ -189,6 +190,7 @@ class ExtraConfigRunner():
             "ovnk8s": ExtraConfigOvnK(cc),
             "cno": ExtraConfigCNO(cc),
             "rt": ExtraConfigRT(cc),
+            "dualstack": ExtraConfigDualStack(cc),
         }
         self._extra_config = ec
 
