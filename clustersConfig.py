@@ -101,6 +101,8 @@ class ClustersConfig():
                     n["disk_size"] = 48
                 if "preallocated" not in n:
                     n["preallocated"] = True
+                if "os_variant" not in n:
+                    n["os_variant"] = "rhel8.6"
 
             node_names = set(x["name"] for x in cc["hosts"])
             for h in all_nodes:

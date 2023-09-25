@@ -92,7 +92,7 @@ def setup_vm(h: host.Host, cfg: dict, iso_or_image_path: str):
         cdrom_line = ""
         append = "--noautoconsole"
 
-    OS_VARIANT = "rhel8.6"
+    OS_VARIANT = cfg["os_variant"]
     RAM_MB = 32784
     CPU_CORE = 8
     if h.is_localhost():
