@@ -74,7 +74,7 @@ def setup_dhcp_entry(h: host.Host, cfg: dict):
 def setup_vm(h: host.Host, cfg: dict, iso_or_image_path: str):
     name = cfg["name"]
     mac = cfg["mac"]
-    disk_size_gb = 48
+    disk_size_gb = cfg["disk_size"]
     if iso_or_image_path.endswith(".iso"):
         options = "-o preallocation="
         if cfg['preallocated']:
