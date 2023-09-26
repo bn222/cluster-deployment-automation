@@ -112,6 +112,7 @@ class CoreosBuilder():
         if os.path.exists(fcos_dir):
             shutil.rmtree(fcos_dir)
         os.makedirs(fcos_dir)
+        cur_dir = os.getcwd()
         os.chdir(fcos_dir)
 
         # -e COSA_NO_KVM=1 \
@@ -148,6 +149,7 @@ class CoreosBuilder():
             sys.exit(-1)
 
         self._embed_ign(embed_src, dst)
+        os.chdir(cur_dir)
 
     def _embed_ign(self, embed_src, dst):
         fn_ign = embed_src.replace(".iso", "-embed.ign")
