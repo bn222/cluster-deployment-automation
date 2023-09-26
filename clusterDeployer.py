@@ -40,11 +40,24 @@ def ensure_dhcp_entry(h: host.Host, name: str, ip: str, mac: str):
 
     cmd = "virsh net-dumpxml default"
     ret = h.run_or_die(cmd)
-    if name in ret.out:
+    if f"'{name}'" in ret.out:
         logger.info(f"{name} already configured as static DHCP entry - removing before adding back with proper configuration")
         host_xml = f"<host name='{name}'/>"
         cmd = f"virsh net-update default delete ip-dhcp-host \"{host_xml}\" --live --config"
         h.run_or_die(cmd)
+
+    cmd = "virsh net-dhcp-leases default"
+    ret = h.run(cmd)
+    # Look for "{name} " in the output. The space is intended to differentiate between "bm-worker-2 " and e.g. "bm-worker-20"
+    if f"{name} " in ret.out:
+        logger.error(f"Error: {name} found in dhcp leases")
+        logger.error("To fix this, run")
+        logger.error("\tvirsh net-destroy default")
+        logger.error("\tRemove wrong entries from /var/lib/libvirt/dnsmasq/virbr0.status")
+        logger.error("\tvirsh net-start default")
+        logger.error("\tsystemctl restart libvirt")
+        sys.exit(-1)
+
 
     host_xml = f"<host mac='{mac}' name='{name}' ip='{ip}'/>"
     logger.info(f"Creating static DHCP entry for VM {name}")
@@ -120,7 +133,7 @@ def setup_all_vms(h: host.Host, vms, iso_path) -> list:
     return futures
 
 
-def ensure_bridge_is_started(h: host.Host, bridge_xml: str):
+def ensure_bridge_is_started(h: host.Host, api_network: str, bridge_xml: str):
     cmd = "virsh net-destroy default"
     h.run(cmd) # ignore return code - it might fail if net was not started
 
@@ -130,13 +143,39 @@ def ensure_bridge_is_started(h: host.Host, bridge_xml: str):
         logger.error(ret)
         sys.exit(-1)
 
+    # Fix cases where virsh net-start fails with error "... interface virbr0: File exists"
+    cmd = "ip link delete virbr0"
+    h.run(cmd) # ignore return code - it might fail if virbr did not exist
+
     cmd = f"virsh net-define {bridge_xml}"
     h.run_or_die(cmd)
+
+    # set interface down before starting bridge as otherwise bridge start might fail if interface
+    # already got an IP address in same network as bridge
+    h.run(f"ip link set {api_network} down")
 
     cmd = "virsh net-start default"
     h.run_or_die(cmd)
 
-def configure_bridge(h: host.Host) -> None:
+    h.run(f"ip link set {api_network} up")
+
+def limit_dhcp_range(h: host.Host, old_range: str, new_range: str) -> None:
+    # restrict dynamic dhcp range: we use static dhcp ip addresses; however, those addresses might have been used
+    # through the dynamic dhcp by any systems such as systems ready to be installed.
+    cmd = "virsh net-dumpxml default"
+    ret = h.run(cmd)
+    if f"range start='{old_range}'" in ret.out:
+        host_xml = f"<range start='{old_range}' end='192.168.122.254'/>"
+        cmd = f"virsh net-update default delete ip-dhcp-range \"{host_xml}\" --live --config"
+        r = h.run(cmd)
+        logger.debug(r.err if r.err else r.out)
+
+        host_xml = f"<range start='{new_range}' end='192.168.122.254'/>"
+        cmd = f"virsh net-update default add ip-dhcp-range \"{host_xml}\" --live --config"
+        r = h.run(cmd)
+        logger.debug(r.err if r.err else r.out)
+
+def configure_bridge(h: host.Host, api_network: str) -> None:
     cmd = "systemctl enable libvirtd"
     h.run_or_die(cmd)
     cmd = "systemctl start libvirtd"
@@ -158,14 +197,16 @@ def configure_bridge(h: host.Host) -> None:
   <bridge name='virbr0' stp='off' delay='0'/>
   <ip address='192.168.122.1' netmask='255.255.0.0'>
     <dhcp>
-      <range start='192.168.122.2' end='192.168.122.254'/>
+      <range start='192.168.122.129' end='192.168.122.254'/>
     </dhcp>
   </ip>
 </network>
 """
         bridge_xml = os.path.join("/tmp", 'vir_bridge.xml')
         h.write(bridge_xml, contents)
-        ensure_bridge_is_started(h, bridge_xml)
+        ensure_bridge_is_started(h, api_network, bridge_xml)
+
+        limit_dhcp_range(h, "192.168.122.2", "192.168.122.129")
 
         cmd = "systemctl restart libvirtd"
         h.run_or_die(cmd)
@@ -293,6 +334,9 @@ class ClusterDeployer():
                 logger.info(lh.run(cmd))
                 removed_macs.append(mac)
 
+        # bring back initial dynamic dhcp range.
+        limit_dhcp_range(lh, "192.168.122.129", "192.168.122.2")
+
         fn = "/var/lib/libvirt/dnsmasq/virbr0.status"
         with open(fn) as f:
             contents = f.read()
@@ -387,7 +431,7 @@ class ClusterDeployer():
         # done in configure_bridge().
         cmd = "sed -e 's/#\\(user\\|group\\) = \".*\"$/\\1 = \"root\"/' -i /etc/libvirt/qemu.conf"
         lh.run(cmd)
-        configure_bridge(lh)
+        configure_bridge(lh, api_network)
 
         if "master" not in interface:
             logger.info(f"No master set for interface {api_network}, setting it to {bridge}")
