@@ -1,7 +1,4 @@
-from ailib import Redfish
 import socket
-from tenacity import retry, stop_after_attempt, wait_fixed
-import paramiko
 import subprocess
 from collections import namedtuple
 import io
@@ -12,13 +9,15 @@ import json
 import shlex
 import shutil
 import sys
-from typing import Optional
-from urllib3.util import is_connection_dropped
-import common
-from logger import logger
 import logging
-from functools import lru_cache
+from typing import Optional
 from typing import List
+from functools import lru_cache
+from ailib import Redfish
+from tenacity import retry, stop_after_attempt, wait_fixed
+import paramiko
+from logger import logger
+import common
 
 
 Result = namedtuple("Result", "out err returncode")
@@ -76,9 +75,8 @@ class Host:
         except (paramiko.ssh_exception.PasswordRequiredException, paramiko.ssh_exception.SSHException):
             if not self._id_ed25519:
                 raise
-            else:
-                pkey = paramiko.Ed25519Key.from_private_key(io.StringIO(
-                    self._id_ed25519))
+            pkey = paramiko.Ed25519Key.from_private_key(io.StringIO(
+                self._id_ed25519))
 
         while True:
             self._username = username
@@ -104,7 +102,7 @@ class Host:
             logger.info(f"connected to {self._hostname}")
             break
 
-    def _read_output(self, cmd: str, log_level: int = logging.INFO) -> Result:
+    def _read_output(self, cmd: str, log_level: int = logging.DEBUG) -> Result:
         _, stdout, stderr = self._host.exec_command(cmd)
 
         out = []
@@ -138,15 +136,14 @@ class Host:
                 proc.communicate()
                 ret = proc.returncode
             return Result(out, err, ret)
-        else:
-            while True:
-                try:
-                    logger.log(log_level, f"running command {cmd}")
-                    return self._read_output(cmd, log_level)
-                except Exception as e:
-                    logger.log(log_level, e)
-                    logger.log(log_level, f"Connection lost while running command {cmd}, reconnecting...")
-                    self.ssh_connect_looped(self._username)
+        while True:
+            try:
+                logger.log(log_level, f"running command {cmd} on {self._hostname}")
+                return self._read_output(cmd, log_level)
+            except Exception as e:
+                logger.log(log_level, e)
+                logger.log(log_level, f"Connection lost while running command {cmd}, reconnecting...")
+                self.ssh_connect_looped(self._username)
 
     def run_or_die(self, cmd: str) -> Result:
         ret = self.run(cmd)
@@ -211,7 +208,6 @@ class Host:
         except Exception as e:
             logger.info(e)
             logger.info("eject failed, but continuing")
-            pass
         logger.info(f"inserting iso {iso_path}")
         red.insert_iso(iso_path)
         try:
@@ -272,13 +268,13 @@ class Host:
         return not ret.returncode and re.search("State:.*running", ret.out) is not None
 
     def ipa(self) -> dict:
-        return json.loads(self.run("ip -json a").out)
+        return json.loads(self.run("ip -json a", logging.DEBUG).out)
 
     def ipr(self) -> dict:
-        return json.loads(self.run("ip -json r").out)
+        return json.loads(self.run("ip -json r", logging.DEBUG).out)
 
     def all_ports(self) -> dict:
-        return json.loads(self.run("ip -json link").out)
+        return json.loads(self.run("ip -json link", logging.DEBUG).out)
 
     def ip(self, port_name: str) -> str:
         return common.extract_ip(self.ipa(), port_name)
@@ -310,19 +306,16 @@ class Host:
             ret = self.run(f"cat {file_name}")
             if ret.returncode == 0:
                 return ret.out
-            else:
-                raise Exception(f"Error reading {file_name}")
+            raise Exception(f"Error reading {file_name}")
 
     def listdir(self, path: Optional[str] = None) -> List[str]:
         if self.is_localhost():
             return os.listdir(path)
-        else:
-            path = path if path is not None else ""
-            ret = self.run(f"ls {path}")
-            if ret.returncode == 0:
-                return ret.out.strip().split("\n")
-            else:
-                raise Exception(f"Error listing dir {path}")
+        path = path if path is not None else ""
+        ret = self.run(f"ls {path}")
+        if ret.returncode == 0:
+            return ret.out.strip().split("\n")
+        raise Exception(f"Error listing dir {path}")
 
     def copy(self, src, dst):
         if self.is_localhost():

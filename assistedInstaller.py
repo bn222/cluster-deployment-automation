@@ -1,9 +1,8 @@
-from ailib import AssistedClient
 import time
 import os
 import json
-import ipaddress
 import requests
+from ailib import AssistedClient
 import common
 from logger import logger
 
@@ -21,7 +20,6 @@ class AssistedClientAutomation(AssistedClient):
                 self.delete_cluster(name)
             except Exception:
                 logger.info("failed to delete cluster, will retry..")
-                pass
             time.sleep(5)
 
     def ensure_infraenv_created(self, name: str, cfg):
@@ -81,8 +79,7 @@ class AssistedClientAutomation(AssistedClient):
             if status == "installing":
                 logger.info(f"Cluster {cluster_name} is in state installing")
                 break
-            else:
-                time.sleep(10)
+            time.sleep(10)
         logger.info(f"Took {tries} tries to start cluster {cluster_name}")
 
     def get_ai_host(self, name: str):
