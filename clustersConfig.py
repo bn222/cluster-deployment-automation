@@ -119,6 +119,10 @@ class ClustersConfig():
             for host_config in cc["hosts"]:
                 if "network_api_port" not in host_config:
                     host_config["network_api_port"] = cc["network_api_port"]
+                if "username" not in host_config:
+                    host_config["username"] = "core"
+                if "password" not in host_config:
+                    host_config["password"] = None
 
     def autodetect_external_port(self):
         lh = host.LocalHost()
@@ -207,6 +211,9 @@ class ClustersConfig():
 
     def all_nodes(self) -> list:
         return self["masters"] + self["workers"]
+
+    def all_hosts(self) -> list:
+        return self["hosts"]
 
     def all_vms(self) -> list:
         return [x for x in self.all_nodes() if x["type"] == "vm"]
