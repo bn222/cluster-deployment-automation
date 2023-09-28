@@ -37,17 +37,24 @@ def RemoteHost(ip: str):
 
 
 class Host:
-    def __init__(self, hostname: str, bmc_ip: Optional[str] = None, bmc_user: str = "root", bmc_password: str = "calvin"):
-        self._hostname = hostname
-        self._bmc_ip = bmc_ip
-        self._bmc_user = bmc_user
-        self._bmc_password = bmc_password
+    _instance = {}
+    def __new__(cls, hostname: str, bmc_ip: Optional[str] = None, bmc_user: Optional[str] = "root", bmc_password: Optional[str] = "calvin"):
+        if hostname not in cls._instance:
+            cls._instance[hostname] = super().__new__(cls)
+            cls._instance[hostname]._hostname = hostname
+            cls._instance[hostname]._bmc_ip = bmc_ip
+            cls._instance[hostname]._bmc_user = bmc_user
+            cls._instance[hostname]._bmc_password = bmc_password
+            cls._instance[hostname].sudo_needed = False
+            logger.debug(f"new instance for {hostname}")
+        return cls._instance[hostname]
 
     @lru_cache(maxsize=None)
     def is_localhost(self):
         return self._hostname in ("localhost", socket.gethostname())
 
-    def ssh_connect(self, username: str, id_rsa_path: Optional[str] = None,
+    def ssh_connect(self, username: str, password: Optional[str] = None,
+                    id_rsa_path: Optional[str] = None,
                     id_ed25519_path: Optional[str] = None) -> None:
         assert not self.is_localhost()
         if id_rsa_path is None:
@@ -66,10 +73,10 @@ class Host:
             self._id_ed25519 = None
         logger.info(f"waiting for '{self._hostname}' to respond to ping")
         self.wait_ping()
-        logger.info(f"{self._hostname} responded to ping, trying to connect")
-        self.ssh_connect_looped(username)
+        logger.info(f"{self._hostname} responded to ping, trying to connect uing {username}")
+        self.ssh_connect_looped(username, password)
 
-    def ssh_connect_looped(self, username: str) -> None:
+    def ssh_connect_looped(self, username: str, password: str) -> None:
         try:
             pkey = paramiko.RSAKey.from_private_key(io.StringIO(self._id_rsa))
         except (paramiko.ssh_exception.PasswordRequiredException, paramiko.ssh_exception.SSHException):
@@ -80,12 +87,13 @@ class Host:
 
         while True:
             self._username = username
+            self._password = password
             self._host = paramiko.SSHClient()
             self._host.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
             try:
                 self._host.connect(self._hostname, username=username,
-                                   pkey=pkey)
+                                   pkey=pkey, password=password)
             except paramiko.ssh_exception.AuthenticationException as e:
                 if pkey.get_name() != "ssh-ed25519" and self._id_ed25519:
                     logger.info("Retry connect with es25519.")
@@ -99,7 +107,7 @@ class Host:
                 logger.info(type(e))
                 time.sleep(10)
                 continue
-            logger.info(f"connected to {self._hostname}")
+            logger.info(f"connected to {self._hostname} with {self._username}")
             break
 
     def _read_output(self, cmd: str, log_level: int = logging.DEBUG) -> Result:
@@ -120,7 +128,42 @@ class Host:
 
         return Result(out, err, exit_code)
 
+    def remove(self, source):
+        if self.is_localhost():
+            if os.path.exists(source):
+                os.remove(source)
+        else:
+            try:
+                sftp = self._host.open_sftp()
+                sftp.remove(source)
+            except FileNotFoundError:
+                pass
+
+    # Copying local_file to "Host", which can be local or remote
+    def copy_to(self, local_file, remote_file):
+        if self.is_localhost():
+            shutil.copy(local_file, remote_file)
+        else:
+            while True:
+                try:
+                    sftp = self._host.open_sftp()
+                    if not os.path.exists(local_file):
+                        logger.error(f"Can't tranfer missing local {local_file} to {self._hostname}")
+                        sys.exit(-1)
+                    sftp.put(local_file, remote_file)
+                    break
+                except Exception as e:
+                    logger.info(e)
+                    logger.info(f"Connection lost while trying to open sftpd connection, reconnecting...")
+                    self.ssh_connect_looped(self._username, self._password)
+
+    def need_sudo(self):
+        self.sudo_needed = True
+
     def run(self, cmd: str, log_level: int = logging.INFO, env: dict = os.environ.copy()) -> Result:
+        if self.sudo_needed:
+            cmd = "sudo " + cmd
+
         if self.is_localhost():
             args = shlex.split(cmd)
             pipe = subprocess.PIPE
@@ -143,7 +186,7 @@ class Host:
             except Exception as e:
                 logger.log(log_level, e)
                 logger.log(log_level, f"Connection lost while running command {cmd}, reconnecting...")
-                self.ssh_connect_looped(self._username)
+                self.ssh_connect_looped(self._username, self._password)
 
     def run_or_die(self, cmd: str) -> Result:
         ret = self.run(cmd)
@@ -296,7 +339,10 @@ class Host:
             with open(fn, "w") as f:
                 f.write(contents)
         else:
-            raise Exception("Not implemented")
+            tmp_file = os.path.join("/tmp", fn)
+            with open(tmp_file, "w") as f:
+                f.write(contents)
+            self.copy_to(tmp_file, fn)
 
     def read_file(self, file_name: str) -> str:
         if self.is_localhost():
@@ -317,12 +363,8 @@ class Host:
             return ret.out.strip().split("\n")
         raise Exception(f"Error listing dir {path}")
 
-    def copy(self, src, dst):
-        if self.is_localhost():
-            shutil.copy(src, dst)
-        else:
-            self.run(f"cp {src} {dst}")
-
+    def hostname(self) -> str:
+        return self._hostname
 
 class HostWithBF2(Host):
     def connect_to_bf(self, bf_addr: str):

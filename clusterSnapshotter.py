@@ -129,7 +129,7 @@ class ClusterSnapshotter:
         src = config["image_path"]
         dst = os.path.join(self._snapshot_dir(), os.path.basename(src))
         logger.info(f"Copying {src} to {dst}")
-        lh.copy(src, dst)
+        lh.copy_to(src, dst)
 
     def _import_vm(self, config):
         lh = host.LocalHost()
@@ -137,7 +137,7 @@ class ClusterSnapshotter:
         os.makedirs(os.path.dirname(src), exist_ok=True)
         dst = os.path.join(self._snapshot_dir(), os.path.basename(src))
         logger.info(f"Copying {dst} to {src}")
-        lh.copy(dst, src)
+        lh.copy_to(dst, src)
         setup_vm(lh, config, config["image_path"])
         ClusterDeployer(self._cc, self._ai, None, "").update_etc_hosts()
 

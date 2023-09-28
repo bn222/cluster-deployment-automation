@@ -116,6 +116,9 @@ class ClustersConfig():
                     base_path = f'/home/{cc["name"]}_guests_images'
                     qemu_img_name = f'{node["name"]}.qcow2'
                     node["image_path"] = os.path.join(base_path, qemu_img_name)
+            for host_config in cc["hosts"]:
+                if "network_api_port" not in host_config:
+                    host_config["network_api_port"] = cc["network_api_port"]
 
     def autodetect_external_port(self):
         lh = host.LocalHost()
