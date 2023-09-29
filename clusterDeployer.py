@@ -74,11 +74,11 @@ def setup_dhcp_entry(h: host.Host, cfg: dict):
 def setup_vm(h: host.Host, cfg: dict, iso_or_image_path: str):
     name = cfg["name"]
     mac = cfg["mac"]
-    disk_size_gb = 48
+    disk_size_gb = cfg["disk_size"]
     if iso_or_image_path.endswith(".iso"):
         options = "-o preallocation="
-        if cfg['sparse']:
-            options += "on"
+        if cfg['preallocated']:
+            options += "full"
         else:
             options += "off"
 
@@ -92,7 +92,7 @@ def setup_vm(h: host.Host, cfg: dict, iso_or_image_path: str):
         cdrom_line = ""
         append = "--noautoconsole"
 
-    OS_VARIANT = "rhel8.6"
+    OS_VARIANT = cfg["os_variant"]
     RAM_MB = 32784
     CPU_CORE = 8
     if h.is_localhost():
