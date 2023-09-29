@@ -328,6 +328,8 @@ class ClusterDeployer():
             if m["node"] != "localhost":
                 host_config = self.local_host_config(m["node"])
                 h.ssh_connect(host_config["username"], host_config["password"])
+                if not host_config['pre_installed']:
+                    h.need_sudo()
 
             # remove the image only if it really exists
             image_path = m["image_path"]
@@ -395,6 +397,8 @@ class ClusterDeployer():
                 if m["name"] != "localhost":
                     host_config = self.local_host_config(m["name"])
                     h.ssh_connect(host_config["username"], host_config["password"])
+                    if not host_config['pre_installed']:
+                        h.need_sudo()
 
                 intif = self._validate_api_port(h)
                 if not intif:
@@ -708,9 +712,14 @@ class ClusterDeployer():
         self._wait_known_state(e["name"] for e in vm)
 
     def _create_remote_vm_x86_workers(self) -> None:
+        def boot_helper(worker, iso):
+            return self.boot_iso_x86(worker, iso)
         logger.debug("Setting up vm x86 workers on remote hosts")
         cluster_name = self._cc["name"]
         infra_env = f"{cluster_name}-x86"
+        executor = ThreadPoolExecutor(max_workers=len(self._cc["workers"]))
+        futures = []
+
         bm_hostnames = set()
         bms = []
         for x in self._cc["workers"]:
@@ -720,9 +729,28 @@ class ClusterDeployer():
         for bm in bms:
             rh = host.RemoteHost(bm["node"])
             host_config = self.local_host_config(bm["node"])
-            rh.ssh_connect(host_config["username"], host_config["password"])
-            cmd = "yum -y install libvirt qemu-img qemu-kvm virt-install"
-            rh.run_or_die(cmd)
+            if not host_config['pre_installed']:
+                coreosBuilder.ensure_fcos_exists(os.path.join(os.getcwd(), "fedora-coreos.iso"))
+                break
+
+        # If bm is not pre-installed, boot an iso with prepoer packages installed
+        # Remember also that we'll need sudo access
+        # If bm was pre-installed  (e.g. by beaker), install the necessary packages
+        for bm in bms:
+            rh = host.RemoteHost(bm["node"])
+            host_config = self.local_host_config(bm["node"])
+            if not host_config['pre_installed']:
+                logger.debug(f"Setting up Host {bm['node']} to host vms")
+                iso = "fedora-coreos.iso"
+                futures.append(executor.submit(boot_helper, bm, iso))
+                rh.need_sudo()
+            else:
+                rh.ssh_connect(host_config["username"], host_config["password"])
+                cmd = "yum -y install libvirt qemu-img qemu-kvm virt-install"
+                rh.run(cmd)
+
+        for f in futures:
+            logger.debug(f.result())
 
         lh = host.LocalHost()
         vms = []

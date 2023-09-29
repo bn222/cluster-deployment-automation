@@ -79,6 +79,8 @@ class CoreosBuilder():
         config_dir = self._clone_if_not_exists("https://github.com/coreos/fedora-coreos-config")
 
         contents = "packages:\n  - kernel-modules-extra\n"
+        contents = contents + "  - python3\n  - libvirt\n  - qemu-img\n  - qemu-kvm\n  - virt-install\n  - netcat\n  - bridge-utils\n  - tcpdump\n"
+
         custom_yaml = os.path.join(config_dir, 'manifests/custom.yaml')
         logger.info(f"writing {custom_yaml}")
         with open(custom_yaml, 'w') as outfile:
@@ -95,6 +97,21 @@ class CoreosBuilder():
         after = contents[include_end:]
         if not after.startswith(to_include):
             contents = before + to_include + after
+
+        coreos_yaml = os.path.join(config_dir, 'manifests/fedora-coreos.yaml')
+        logger.debug(f"modifying {coreos_yaml}")
+        with open(coreos_yaml, 'r') as f:
+            core_content = f.read()
+        old_str = "- python3\n"
+        core_content = core_content.replace(old_str, "# python3\n")
+        old_str = "- python3-libs\n"
+        core_content = core_content.replace(old_str, "# python3-libs\n")
+        old_str = "- perl\n"
+        core_content = core_content.replace(old_str, "# perl\n")
+        old_str = "- perl-interpreter\n"
+        core_content = core_content.replace(old_str, "# perl-interpreter\n")
+        with open(coreos_yaml, "w") as f:
+            f.write(core_content)
 
         logger.info(os.getcwd())
         manifest_lock = os.path.join(config_dir, "manifest-lock.x86_64.json")
@@ -150,6 +167,22 @@ class CoreosBuilder():
 
         self._embed_ign(embed_src, dst)
         os.chdir(cur_dir)
+
+        # cleanup
+        coreos_yaml = os.path.join(config_dir, 'manifests/fedora-coreos.yaml')
+        logger.info(f"modifying {coreos_yaml}")
+        with open(coreos_yaml, 'r') as f:
+            core_content = f.read()
+        old_str = "# python3\n"
+        core_content = core_content.replace(old_str, "- python3\n")
+        old_str = "# python3-libs\n"
+        core_content = core_content.replace(old_str, "- python3-libs\n")
+        old_str = "# perl\n"
+        core_content = core_content.replace(old_str, "- perl\n")
+        old_str = "# perl-interpreter\n"
+        core_content = core_content.replace(old_str, "- perl-interpreter\n")
+        with open(coreos_yaml, "w") as f:
+            f.write(core_content)
 
     def _embed_ign(self, embed_src, dst):
         fn_ign = embed_src.replace(".iso", "-embed.ign")
