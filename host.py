@@ -10,6 +10,7 @@ import shlex
 import shutil
 import sys
 import logging
+import tempfile
 from typing import Optional
 from typing import List
 from functools import lru_cache
@@ -342,10 +343,11 @@ class Host:
             with open(fn, "w") as f:
                 f.write(contents)
         else:
-            tmp_file = os.path.join("/tmp", fn)
-            with open(tmp_file, "w") as f:
-                f.write(contents)
+            with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
+                tmp_filename = tmp_file.name
+                tmp_file.write(contents.encode('utf-8'))
             self.copy_to(tmp_file, fn)
+            os.remove(tmp_filename)
 
     def read_file(self, file_name: str) -> str:
         if self.is_localhost():
