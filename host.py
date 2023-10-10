@@ -141,17 +141,16 @@ class Host:
                 pass
 
     # Copying local_file to "Host", which can be local or remote
-    def copy_to(self, local_file, remote_file):
+    def copy_to(self, src_file, dst_file):
+        if not os.path.exists(src_file):
+            raise FileNotFoundError(2, f"No such file or dir: {src_file}")
         if self.is_localhost():
-            shutil.copy(local_file, remote_file)
+            shutil.copy(src_file, dst_file)
         else:
             while True:
                 try:
                     sftp = self._host.open_sftp()
-                    if not os.path.exists(local_file):
-                        logger.error(f"Can't tranfer missing local {local_file} to {self._hostname}")
-                        sys.exit(-1)
-                    sftp.put(local_file, remote_file)
+                    sftp.put(src_file, dst_file)
                     break
                 except Exception as e:
                     logger.info(e)
