@@ -42,13 +42,15 @@ class Host:
     def __new__(cls, hostname: str, bmc_ip: Optional[str] = None, bmc_user: Optional[str] = "root", bmc_password: Optional[str] = "calvin"):
         if hostname not in cls._instance:
             cls._instance[hostname] = super().__new__(cls)
-            cls._instance[hostname]._hostname = hostname
-            cls._instance[hostname]._bmc_ip = bmc_ip
-            cls._instance[hostname]._bmc_user = bmc_user
-            cls._instance[hostname]._bmc_password = bmc_password
-            cls._instance[hostname].sudo_needed = False
             logger.debug(f"new instance for {hostname}")
         return cls._instance[hostname]
+
+    def __init__(self, hostname: str, bmc_ip: Optional[str] = None, bmc_user: Optional[str] = "root", bmc_password: Optional[str] = "calvin"):
+        self._hostname = hostname
+        self._bmc_ip = bmc_ip
+        self._bmc_user = bmc_user
+        self._bmc_password = bmc_password
+        self.sudo_needed = False
 
     @lru_cache(maxsize=None)
     def is_localhost(self):
