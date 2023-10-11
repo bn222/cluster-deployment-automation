@@ -37,6 +37,14 @@ def RemoteHost(ip: str):
     return Host(ip)
 
 
+def default_id_rsa_path():
+    return os.path.join(os.environ["HOME"], ".ssh/id_rsa")
+
+
+def default_ed25519_path():
+    return os.path.join(os.environ["HOME"], ".ssh/id_ed25519")
+
+
 class Host:
     _instance = {}
     def __new__(cls, hostname: str, bmc_ip: Optional[str] = None, bmc_user: Optional[str] = "root", bmc_password: Optional[str] = "calvin"):
@@ -57,13 +65,9 @@ class Host:
         return self._hostname in ("localhost", socket.gethostname())
 
     def ssh_connect(self, username: str, password: Optional[str] = None,
-                    id_rsa_path: Optional[str] = None,
-                    id_ed25519_path: Optional[str] = None) -> None:
+                    id_rsa_path: str = default_id_rsa_path(),
+                    id_ed25519_path: str = default_ed25519_path()):
         assert not self.is_localhost()
-        if id_rsa_path is None:
-            id_rsa_path = os.path.join(os.environ["HOME"], ".ssh/id_rsa")
-        if id_ed25519_path is None:
-            id_ed25519_path = os.path.join(os.environ["HOME"], ".ssh/id_ed25519")
         try:
             with open(id_rsa_path, "r") as f:
                 self._id_rsa = f.read().strip()
