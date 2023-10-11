@@ -113,24 +113,6 @@ class Host:
             logger.info(f"connected to {self._hostname} with {self._username}")
             break
 
-    def _read_output(self, cmd: str, log_level: int = logging.DEBUG) -> Result:
-        _, stdout, stderr = self._host.exec_command(cmd)
-
-        out = []
-        for line in iter(stdout.readline, ""):
-            logger.log(log_level, f"{self._hostname}: {line.strip()}")
-            out.append(line)
-
-        err = []
-        for line in iter(stderr.readline, ""):
-            err.append(line)
-
-        exit_code = stdout.channel.recv_exit_status()
-        out = "".join(out)
-        err = "".join(err)
-
-        return Result(out, err, exit_code)
-
     def remove(self, source):
         if self.is_localhost():
             if os.path.exists(source):
@@ -166,28 +148,52 @@ class Host:
         if self.sudo_needed:
             cmd = "sudo " + cmd
 
+        logger.log(log_level, f"running command {cmd} on {self._hostname}")
         if self.is_localhost():
-            args = shlex.split(cmd)
-            pipe = subprocess.PIPE
-            with subprocess.Popen(args, stdout=pipe, stderr=pipe, env=env) as proc:
-                if proc.stdout is None:
-                    logger.info("Can't find stdout")
-                    sys.exit(-1)
-                if proc.stderr is None:
-                    logger.info("Can't find stderr")
-                    sys.exit(-1)
-                out = proc.stdout.read().decode("utf-8")
-                err = proc.stderr.read().decode("utf-8")
-                proc.communicate()
-                ret = proc.returncode
-            return Result(out, err, ret)
+            return self._run_local(cmd, env)
+        else:
+            return self._run_remote(cmd, log_level)
+
+    def _run_local(self, cmd: str, env: dict) -> Result:
+        args = shlex.split(cmd)
+        pipe = subprocess.PIPE
+        with subprocess.Popen(args, stdout=pipe, stderr=pipe, env=env) as proc:
+            if proc.stdout is None:
+                logger.info("Can't find stdout")
+                sys.exit(-1)
+            if proc.stderr is None:
+                logger.info("Can't find stderr")
+                sys.exit(-1)
+            out = proc.stdout.read().decode("utf-8")
+            err = proc.stderr.read().decode("utf-8")
+            proc.communicate()
+            ret = proc.returncode
+        return Result(out, err, ret)
+
+    def _run_remote(self, cmd: str, log_level: int) -> Result:
+        def read_output(cmd, log_level):
+            _, stdout, stderr = self._host.exec_command(cmd)
+
+            out = []
+            for line in iter(stdout.readline, ""):
+                logger.log(log_level, f"{self._hostname}: {line.strip()}")
+                out.append(line)
+
+            err = []
+            for line in iter(stderr.readline, ""):
+                err.append(line)
+
+            exit_code = stdout.channel.recv_exit_status()
+            out = "".join(out)
+            err = "".join(err)
+
+            return Result(out, err, exit_code)
 
         # Make sure multiline command is not seen as multiple commands
         cmd = cmd.replace("\n", "\\\n")
         while True:
             try:
-                logger.log(log_level, f"running command {cmd} on {self._hostname}")
-                return self._read_output(cmd, log_level)
+                return read_output(cmd, log_level)
             except Exception as e:
                 logger.log(log_level, e)
                 logger.log(log_level, f"Connection lost while running command {cmd}, reconnecting...")
