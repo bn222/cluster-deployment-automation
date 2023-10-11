@@ -296,9 +296,9 @@ class Host:
         r = lh.run(ping_cmd)
         return r.returncode == 0
 
-    def os_release(self, log_level: int = logging.DEBUG) -> dict:
+    def os_release(self) -> dict:
         d = {}
-        for e in self.run("cat /etc/os-release", log_level).out.split("\n"):
+        for e in self.read_file("/etc/os-release"):
             e = e.split("=", maxsplit=1)
             if len(e) != 2:
                 continue
