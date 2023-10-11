@@ -305,10 +305,10 @@ class Host:
     def os_release(self) -> dict:
         d = {}
         for e in self.read_file("/etc/os-release"):
-            e = e.split("=", maxsplit=1)
-            if len(e) != 2:
+            split_e = e.split("=", maxsplit=1)
+            if len(split_e) != 2:
                 continue
-            k, v = e
+            k, v = split_e
             v = v.strip("\"'")
             d[k] = v
         return d
