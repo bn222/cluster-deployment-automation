@@ -20,7 +20,7 @@ from functools import lru_cache
 from ailib import Redfish
 from tenacity import retry, stop_after_attempt, wait_fixed
 import paramiko
-from paramiko import RSAKey, Ed25519Key
+from paramiko import ssh_exception, RSAKey, Ed25519Key
 from logger import logger
 from abc import ABC, abstractmethod
 import common
@@ -158,7 +158,7 @@ class Host:
                 try:
                     self._host = e.login()
                     return
-                except paramiko.ssh_exception.AuthenticationException as e:
+                except ssh_exception.AuthenticationException as e:
                     logger.info(type(e))
                     raise e
                 except Exception as e:
@@ -305,9 +305,11 @@ class Host:
       a) Go to "Maintenance" tab at the top
       b) Go to the "System Update" sub-tab below the "Maintenance" panel.
       c) Change the "Location Type" to "HTTP"
-      d) Under the "HTTP Server Settings", set the "HTTP Address" to be "downloads.dell.com".
+      d) Under the "HTTP Server Settings", set the "HTTP Address" to be
+         "downloads.dell.com".
       e) Click "Check for Update".
-      f) Depending on the missing updates, select what is needed then press "Install and Reboot"
+      f) Depending on the missing updates, select what is needed then press
+         "Install and Reboot"
       g) Wait a while for iDRAC to come up.
       h) Once the web interface is available, go back to the "Dashboard" tab.
       i) Monitor the system to post after the "Dell" blue screen.
