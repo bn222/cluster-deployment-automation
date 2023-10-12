@@ -414,7 +414,7 @@ class Host:
             with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
                 tmp_filename = tmp_file.name
                 tmp_file.write(contents.encode('utf-8'))
-            self.copy_to(tmp_file, fn)
+            self.copy_to(tmp_filename, fn)
             os.remove(tmp_filename)
 
     def read_file(self, file_name: str) -> str:
