@@ -103,13 +103,13 @@ class PasswordLogin(Login):
 
 
 class Host:
-    def __new__(cls, hostname: str, bmc_ip: Optional[str] = None, bmc_user: Optional[str] = "root", bmc_password: Optional[str] = "calvin"):
+    def __new__(cls, hostname: str, bmc_ip: Optional[str] = None, bmc_user: str = "root", bmc_password: str = "calvin"):
         if hostname not in host_instances:
             host_instances[hostname] = super().__new__(cls)
             logger.debug(f"new instance for {hostname}")
         return host_instances[hostname]
 
-    def __init__(self, hostname: str, bmc_ip: Optional[str] = None, bmc_user: Optional[str] = "root", bmc_password: Optional[str] = "calvin"):
+    def __init__(self, hostname: str, bmc_ip: Optional[str] = None, bmc_user: str = "root", bmc_password: str = "calvin"):
         self._hostname = hostname
         self._bmc_ip = bmc_ip
         self._bmc_user = bmc_user

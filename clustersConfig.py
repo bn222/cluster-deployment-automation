@@ -114,6 +114,10 @@ class ClustersConfig():
             for node in all_nodes:
                 if "bmc_ip" not in node:
                     node["bmc_ip"] = None
+                if "bmc_user" not in node:
+                    node["bmc_user"] = "root"
+                if "bmc_password" not in node:
+                    node["bmc_password"] = "calvin"
                 if "image_path" not in node:
                     base_path = f'/home/{cc["name"]}_guests_images'
                     qemu_img_name = f'{node["name"]}.qcow2'
