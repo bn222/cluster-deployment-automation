@@ -496,6 +496,9 @@ class ClusterDeployer():
             else:
                 logger.info("Skipping pre configuration.")
 
+            lh = host.LocalHost()
+            self.ensure_linked_to_bridge(lh)
+
             if "masters" in self.args.steps:
                 self.teardown()
                 self.create_cluster()
@@ -503,8 +506,6 @@ class ClusterDeployer():
             else:
                 logger.info("Skipping master creation.")
 
-            lh = host.LocalHost()
-            self.ensure_linked_to_bridge(lh)
             if "workers" in self.args.steps:
                 if self._cc["workers"]:
                     self.create_workers()
