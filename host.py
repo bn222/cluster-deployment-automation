@@ -12,12 +12,17 @@ import sys
 import logging
 import tempfile
 from typing import Optional
+from typing import Union
 from typing import List
+from typing import Type
+from typing import Dict
 from functools import lru_cache
 from ailib import Redfish
 from tenacity import retry, stop_after_attempt, wait_fixed
 import paramiko
+from paramiko import RSAKey, Ed25519Key
 from logger import logger
+from abc import ABC, abstractmethod
 import common
 
 
@@ -45,19 +50,71 @@ def default_ed25519_path():
     return os.path.join(os.environ["HOME"], ".ssh/id_ed25519")
 
 
+class Login(ABC):
+    @abstractmethod
+    def login(self) -> paramiko.SSHClient:
+        pass
+
+
+class KeyLogin(Login):
+    def __init__(self, hostname: str, username: str, key_path: str) -> None:
+        self._username = username
+        self._hostname = hostname
+        self._key_path = key_path
+        with open(key_path, "r") as f:
+            self._key = f.read().strip()
+
+        key_loader = self._key_loader()
+        self._pkey = key_loader.from_private_key(io.StringIO(self._key))
+
+    def _key_loader(self) -> Union[Type[Ed25519Key], Type[RSAKey]]:
+        if self._is_rsa():
+            return RSAKey
+        else:
+            return Ed25519Key
+
+    def _is_rsa(self) -> bool:
+        lh = LocalHost()
+        result = lh.run(f"ssh-keygen -vvv -l -f {self._key_path}")
+        print(result)
+        return "---[RSA " in result.out
+
+    def login(self) -> paramiko.SSHClient:
+        logger.info(f"Logging in into {self._hostname} with {self._key_path}")
+        host = paramiko.SSHClient()
+        host.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        host.connect(self._hostname, username=self._username, pkey=self._pkey)
+        return host
+
+
+class PasswordLogin(Login):
+    def __init__(self, hostname: str, username: str, password: str) -> None:
+        self._username = username
+        self._password = password
+        self._hostname = hostname
+
+    def login(self) -> paramiko.SSHClient:
+        logger.info(f"Logging in into {self._hostname} with password")
+        host = paramiko.SSHClient()
+        host.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        host.connect(self._hostname, username=self._username,
+                     password=self._password)
+        return host
+
+
 class Host:
-    _instance = {}
     def __new__(cls, hostname: str, bmc_ip: Optional[str] = None, bmc_user: Optional[str] = "root", bmc_password: Optional[str] = "calvin"):
-        if hostname not in cls._instance:
-            cls._instance[hostname] = super().__new__(cls)
+        if hostname not in host_instances:
+            host_instances[hostname] = super().__new__(cls)
             logger.debug(f"new instance for {hostname}")
-        return cls._instance[hostname]
+        return host_instances[hostname]
 
     def __init__(self, hostname: str, bmc_ip: Optional[str] = None, bmc_user: Optional[str] = "root", bmc_password: Optional[str] = "calvin"):
         self._hostname = hostname
         self._bmc_ip = bmc_ip
         self._bmc_user = bmc_user
         self._bmc_password = bmc_password
+        self._logins: List[Login] = []
         self.sudo_needed = False
 
     @lru_cache(maxsize=None)
@@ -65,63 +122,61 @@ class Host:
         return self._hostname in ("localhost", socket.gethostname())
 
     def ssh_connect(self, username: str, password: Optional[str] = None,
-                    id_rsa_path: str = default_id_rsa_path(),
-                    id_ed25519_path: str = default_ed25519_path()):
+                    rsa_path: str = default_id_rsa_path(),
+                    ed25519_path: str = default_ed25519_path()):
         assert not self.is_localhost()
-        try:
-            with open(id_rsa_path, "r") as f:
-                self._id_rsa = f.read().strip()
-        except FileNotFoundError:
-            self._id_rsa = None
-        try:
-            with open(id_ed25519_path, "r") as f:
-                self._id_ed25519 = f.read().strip()
-        except FileNotFoundError:
-            self._id_ed25519 = None
         logger.info(f"waiting for '{self._hostname}' to respond to ping")
         self.wait_ping()
-        logger.info(f"{self._hostname} responded to ping, trying to connect uing {username}")
-        self.ssh_connect_looped(username, password)
+        logger.info(f"{self._hostname} up, connecting with {username}")
 
-    def ssh_connect_looped(self, username: str, password: str) -> None:
-        try:
-            pkey = paramiko.RSAKey.from_private_key(io.StringIO(self._id_rsa))
-        except (paramiko.ssh_exception.PasswordRequiredException, paramiko.ssh_exception.SSHException):
-            if not self._id_ed25519:
-                raise
-            pkey = paramiko.Ed25519Key.from_private_key(io.StringIO(
-                self._id_ed25519))
-
-        while True:
-            self._username = username
-            self._password = password
-            self._host = paramiko.SSHClient()
-            self._host.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-
+        self._logins = []
+        if os.path.exists(rsa_path):
             try:
-                self._host.connect(self._hostname, username=username,
-                                   pkey=pkey, password=password)
-            except paramiko.ssh_exception.AuthenticationException as e:
-                if pkey.get_name() != "ssh-ed25519" and self._id_ed25519:
-                    logger.info("Retry connect with es25519.")
-                    pkey = paramiko.Ed25519Key.from_private_key(io.StringIO(
-                        self._id_ed25519))
-                    continue
+                id_rsa = KeyLogin(self._hostname, username, rsa_path)
+                self._logins.append(id_rsa)
+            except Exception:
+                pass
 
-                logger.info(type(e))
-                raise e
-            except Exception as e:
-                logger.info(type(e))
-                time.sleep(10)
-                continue
-            logger.info(f"connected to {self._hostname} with {self._username}")
-            break
+        if os.path.exists(ed25519_path):
+            try:
+                id_ed25519 = KeyLogin(self._hostname, username, ed25519_path)
+                self._logins.append(id_ed25519)
+            except Exception:
+                pass
+
+        if password is not None:
+            pw = PasswordLogin(self._hostname, username, password)
+            self._logins.append(pw)
+
+        self.ssh_connect_looped(self._logins)
+
+    def ssh_connect_looped(self, logins: List[Login]) -> None:
+        if len(logins) == 0:
+            raise Exception("No usuable logins found")
+        while True:
+            for e in logins:
+                try:
+                    self._host = e.login()
+                    return
+                except paramiko.ssh_exception.AuthenticationException as e:
+                    logger.info(type(e))
+                    raise e
+                except Exception as e:
+                    logger.info(type(e))
+                    time.sleep(10)
+
+    def _rsa_login(self) -> Optional[KeyLogin]:
+        for x in self._logins:
+            if isinstance(x, KeyLogin) and x._is_rsa():
+                return x
+        return None
 
     def remove(self, source):
         if self.is_localhost():
             if os.path.exists(source):
                 os.remove(source)
         else:
+            assert self._host is not None
             try:
                 sftp = self._host.open_sftp()
                 sftp.remove(source)
@@ -142,8 +197,8 @@ class Host:
                     break
                 except Exception as e:
                     logger.info(e)
-                    logger.info(f"Connection lost while trying to open sftpd connection, reconnecting...")
-                    self.ssh_connect_looped(self._username, self._password)
+                    logger.info("Disconnected during sftpd, reconnecting...")
+                    self.ssh_connect_looped(self._logins)
 
     def need_sudo(self):
         self.sudo_needed = True
@@ -176,6 +231,7 @@ class Host:
 
     def _run_remote(self, cmd: str, log_level: int) -> Result:
         def read_output(cmd, log_level):
+            assert self._host is not None
             _, stdout, stderr = self._host.exec_command(cmd)
 
             out = []
@@ -201,7 +257,7 @@ class Host:
             except Exception as e:
                 logger.log(log_level, e)
                 logger.log(log_level, f"Connection lost while running command {cmd}, reconnecting...")
-                self.ssh_connect_looped(self._username, self._password)
+                self.ssh_connect_looped(self._logins)
 
     def run_or_die(self, cmd: str) -> Result:
         ret = self.run(cmd)
@@ -213,6 +269,7 @@ class Host:
         return ret
 
     def close(self) -> None:
+        assert self._host is not None
         self._host.close()
 
     def _bmc_url(self) -> str:
@@ -382,15 +439,16 @@ class Host:
     def hostname(self) -> str:
         return self._hostname
 
+
 class HostWithBF2(Host):
     def connect_to_bf(self, bf_addr: str):
-        private_key = open("/root/.ssh/id_rsa", "r").read().strip()
-        key_file_obj = io.StringIO(private_key)
-        pkey = paramiko.RSAKey.from_private_key(key_file_obj)
-
-        prov_host = paramiko.SSHClient()
-        prov_host.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        prov_host.connect(self._hostname, username=self._username, pkey=pkey)
+        self.ssh_connect("core")
+        prov_host = self._host
+        rsa_login = self._rsa_login()
+        if rsa_login is None:
+            logger.error("Missing login with key")
+            sys.exit(-1)
+        pkey = rsa_login._pkey
 
         logger.info(f"Connecting to BF through host {self._hostname}")
 
@@ -415,15 +473,12 @@ class HostWithBF2(Host):
             logger.log(log_level, f"{self._hostname} -> BF: {line.strip()}")
             out.append(line)
 
-        err = []
+        err: List[str] = []
         for line in iter(stderr.readline, ""):
             err.append(line)
 
         exit_code = stdout.channel.recv_exit_status()
-        out = "".join(out)
-        err = "".join(err)
-
-        return Result(out, err, exit_code)
+        return Result("".join(out), "".join(err), exit_code)
 
     def run_in_container(self, cmd: str, interactive: bool = False) -> Result:
         name = "bf"
@@ -461,3 +516,6 @@ class HostWithBF2(Host):
     def bf_load_bfb(self) -> Result:
         logger.info("Loading BFB image")
         return self.run_in_container("/bfb")
+
+
+host_instances: Dict[str, Host] = {}
