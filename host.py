@@ -379,8 +379,10 @@ class Host:
         return d["NAME"], d["VARIANT"] == 'Fedora Linux', 'CoreOS'
 
     def vm_is_running(self, name: str) -> bool:
+        def state_running(out: str) -> bool:
+            return re.search("State:.*running", out) is not None
         ret = self.run(f"virsh dominfo {name}")
-        return not ret.returncode and re.search("State:.*running", ret.out) is not None
+        return not ret.returncode and state_running(ret.out)
 
     def ipa(self) -> dict:
         return json.loads(self.run("ip -json a", logging.DEBUG).out)
