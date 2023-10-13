@@ -22,6 +22,7 @@ def main_deploy(args):
             cc["version"] = "4.13.0-nightly"
     else:
         logger.info(f"Will use Assisted Installer running at {args.url}")
+        ais = None
 
     """
     Here we will use the AssistedClient from the aicli package from:
@@ -32,10 +33,13 @@ def main_deploy(args):
     ai = AssistedClientAutomation(f"{args.url}:8090")
     cd = ClusterDeployer(cc, ai, args, args.secrets_path)
 
-    if args.teardown:
+    if args.teardown or args.teardown_full:
         cd.teardown()
     else:
         cd.deploy()
+
+    if args.teardown_full and ais:
+        ais.stop()
 
 
 def main_snapshot(args):
