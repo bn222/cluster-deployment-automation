@@ -25,6 +25,8 @@ to be in a good state.
 6) This is done by loading the DOCA Ubuntu BFB image officially supported by NVIDIA.
 7) This is done via rshim to load the image.
 """
+
+
 class ExtraConfigBFB:
     def __init__(self, cc):
         self._cc = cc
@@ -81,4 +83,3 @@ class ExtraConfigSwitchNicMode:
         client.oc("create -f manifests/nicmode/switch.yaml")
         logger.info("Waiting for mcp to update")
         client.wait_for_mcp("sriov", "switch.yaml")
-

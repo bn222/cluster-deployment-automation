@@ -3,6 +3,7 @@ from logger import logger
 from concurrent.futures import Future
 from typing import Dict
 
+
 class ExtraConfigRT:
     def __init__(self, cc):
         self._cc = cc

@@ -6,6 +6,7 @@ from ailib import AssistedClient
 import common
 from logger import logger
 
+
 class AssistedClientAutomation(AssistedClient):
     def __init__(self, url):
         super().__init__(url, quiet=True, debug=False)
@@ -26,7 +27,6 @@ class AssistedClientAutomation(AssistedClient):
         if name not in map(lambda x: x["name"], self.list_infra_envs()):
             logger.info(f"Creating infraenv {name}")
             self.create_infra_env(name, cfg)
-
 
     def ensure_infraenv_deleted(self, name: str):
         if name in map(lambda x: x["name"], self.list_infra_envs()):

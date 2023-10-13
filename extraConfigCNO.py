@@ -5,6 +5,7 @@ from concurrent.futures import Future
 from typing import Dict
 from logger import logger
 
+
 class ExtraConfigCNO:
     def __init__(self, cc):
         self._cc = cc
