@@ -278,6 +278,9 @@ class ExtraConfigDpuInfra_NewAPI(ExtraConfigDpuInfra):
 
         for b in bf_names:
             ip = client.get_ip(b)
+            if ip is None:
+                logger.error(f"Failed to get ip for node {b}")
+                sys.exit(-1)
             rh = host.RemoteHost(ip)
             rh.ssh_connect("core")
             result = rh.run("sudo ovs-vsctl show")

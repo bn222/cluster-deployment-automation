@@ -1,5 +1,6 @@
 import ipaddress
 from typing import List
+from typing import Optional
 
 
 def ip_in_subnet(addr, subnet) -> bool:
@@ -23,3 +24,10 @@ def extract_port(ipr: dict, route: str) -> str:
 
 def extract_interfaces(ipa: dict) -> List[str]:
     return [x["ifname"] for x in ipa]
+
+
+def find_port(host, port_name: str) -> Optional[dict]:
+    for e in host.all_ports():
+        if e["ifname"] == port_name:
+            return e
+    return None

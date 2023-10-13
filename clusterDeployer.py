@@ -8,6 +8,7 @@ from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import Future
 from typing import Optional
 from typing import Dict
+from typing import List
 import secrets
 import re
 import socket
@@ -247,6 +248,7 @@ def configure_bridge(h: host.Host, api_network: str) -> None:
 
 class ExtraConfigRunner:
     def __init__(self, cc: ClustersConfig):
+        self._cc = cc
         self._extra_config = {
             "bf_bfb_image": ExtraConfigBFB(cc),
             "switch_to_nic_mode": ExtraConfigSwitchNicMode(cc),
@@ -275,7 +277,7 @@ class ExtraConfigRunner:
 
 class ClusterDeployer:
     def __init__(self, cc: ClustersConfig, ai: AssistedClientAutomation, args, secrets_path: str):
-        self._client = None
+        self._client: Optional[K8sClient] = None
         self.args = args
         self._cc = cc
         self._ai = ai
@@ -461,12 +463,11 @@ class ClusterDeployer:
 
         logger.info(f"link {api_network} to virbr0")
 
-        interface = list(filter(lambda x: x["ifname"] == api_network, lh.all_ports()))
+        interface = common.find_port(lh, api_network)
         if not interface:
             logger.info(f"Missing API network interface {api_network}")
             sys.exit(-1)
 
-        interface = interface[0]
         bridge = "virbr0"
 
         # Need to restart libvirtd after modify the config file, which will be
@@ -877,10 +878,10 @@ class ClusterDeployer:
                 if "inventory" not in h:
                     continue
                 nics = json.loads(h["inventory"]).get("interfaces")
-                addresses = sum((nic["ipv4_addresses"] for nic in nics), [])
-                addresses = list(a.split("/")[0] for a in addresses)
+                addresses: List[str] = sum((nic["ipv4_addresses"] for nic in nics), [])
+                stripped_addresses = list(a.split("/")[0] for a in addresses)
 
-                if w["ip"] in addresses:
+                if w["ip"] in stripped_addresses:
                     name = w["name"]
                     self._ai.update_host(h["id"], {"name": name})
                     logger.info(f"renamed {name}")
@@ -1046,13 +1047,13 @@ class ClusterDeployer:
                 logger.error(f"Output was: {ipa}")
                 sys.exit(-1)
 
-            found = found[0]
+            first_found = found[0]
             try:
-                ip = common.extract_ip(ipa, found)
+                ip = common.extract_ip(ipa, first_found)
                 break
             except Exception:
                 ip = None
-                logger.info(f"Failed to find ip on {found}, output was {ipa}")
+                logger.info(f"IP missing on {first_found}, output was {ipa}")
             time.sleep(10)
 
         if ip is None:
@@ -1064,7 +1065,7 @@ class ClusterDeployer:
         logger.info(f'waiting for {self._cc["workers"]} workers')
         lh = host.LocalHost()
         bf_workers = list(filter(lambda x: x["type"] == "bf", self._cc["workers"]))
-        connections = {}
+        connections: Dict[str, host.Host] = {}
         while True:
             workers = [w["name"] for w in self._cc["workers"]]
             if all(self.client().is_ready(w) for w in workers):

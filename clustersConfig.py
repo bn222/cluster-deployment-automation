@@ -36,12 +36,8 @@ def read_sheet() -> list:
     file = gspread.authorize(credentials)
     sheet = file.open("ANL lab HW enablement clusters and connections")
     sheet = sheet.sheet1
-    recs = sheet.get_all_records()
-    ret = []
 
-    for e in recs:
-        ret.append(list(e.values()))
-    return ret
+    return [list(e.values()) for e in sheet.get_all_records()]
 
 
 class ClustersConfig:
@@ -189,7 +185,8 @@ class ClustersConfig:
                 cluster.network_api_port = e[3]
             elif e[7] == "no":
                 cluster.workers.append(e[0])
-        ret.append(cluster)
+        if cluster is not None:
+            ret.append(cluster)
         return {x.provision_host: x for x in ret}
 
     def _validate_clusters(self) -> None:

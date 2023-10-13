@@ -80,11 +80,11 @@ class ExtraConfigDpuTenant:
             sys.exit(-1)
         rh = host.RemoteHost(ip)
         rh.ssh_connect("core")
-        bf = [x for x in rh.run("lspci").out.split("\n") if "BlueField" in x]
-        if not bf:
+        all_bf = [x for x in rh.run("lspci").out.split("\n") if "BlueField" in x]
+        if not all_bf:
             logger.info(f"Couldn't find BF on {first_worker}")
             sys.exit(-1)
-        bf = bf[0].split(" ")[0]
+        bf = all_bf[0].split(" ")[0]
 
         logger.info(f"BF is at {bf}")
 
@@ -132,7 +132,11 @@ class ExtraConfigDpuTenant:
         for e in self._cc["workers"]:
             cmd = f"label node {e['name']} network.operator.openshift.io/dpu-host="
             logger.info(tclient.oc(cmd))
-            rh = host.RemoteHost(tclient.get_ip(e['name']))
+            ip = tclient.get_ip(e['name'])
+            if ip is None:
+                logger.error(f"Failed to get ip for node {e['name']}")
+                sys.exit(-1)
+            rh = host.RemoteHost(ip)
             rh.ssh_connect("core")
             # workaround for https://issues.redhat.com/browse/NHE-335
             logger.info(rh.run("sudo ovs-vsctl del-port br-int ovn-k8s-mp0"))
@@ -182,11 +186,11 @@ class ExtraConfigDpuTenant_NewAPI(ExtraConfigDpuTenant):
             sys.exit(-1)
         rh = host.RemoteHost(ip)
         rh.ssh_connect("core")
-        bf = [x for x in rh.run("lspci").out.split("\n") if "BlueField" in x]
-        if not bf:
+        all_bf = [x for x in rh.run("lspci").out.split("\n") if "BlueField" in x]
+        if not all_bf:
             logger.info(f"Couldn't find BF on {first_worker}")
             sys.exit(-1)
-        bf = bf[0].split(" ")[0]
+        bf = all_bf[0].split(" ")[0]
 
         logger.info(f"BF is at {bf}")
 
@@ -247,7 +251,11 @@ class ExtraConfigDpuTenant_NewAPI(ExtraConfigDpuTenant):
         for e in self._cc["workers"]:
             cmd = f"label node {e['name']} network.operator.openshift.io/dpu-host="
             logger.info(tclient.oc(cmd))
-            rh = host.RemoteHost(tclient.get_ip(e['name']))
+            ip = tclient.get_ip(e['name'])
+            if ip is None:
+                logger.error(f"Failed to get ip for node {e['name']}")
+                sys.exit(-1)
+            rh = host.RemoteHost(ip)
             rh.ssh_connect("core")
             # DELTA: "ovn-k8s-mp0" port is deleted by OVN-K. https://github.com/ovn-org/ovn-kubernetes/pull/3571
             result = rh.run("sudo ovs-vsctl show")
