@@ -31,3 +31,11 @@ def find_port(host, port_name: str) -> Optional[dict]:
         if e["ifname"] == port_name:
             return e
     return None
+
+
+def route_to_port(host, route: str) -> str:
+    return extract_port(host.ipr(), route)
+
+
+def port_to_ip(host, port_name: str) -> str:
+    return extract_ip(host.ipa(), port_name)

@@ -1,5 +1,6 @@
 import host
 import os
+import common
 
 
 """
@@ -34,4 +35,4 @@ class NFS:
         self._host.run("systemctl restart nfs-server")
 
     def _ip(self) -> str:
-        return self._host.ip(self._port)
+        return common.port_to_ip(self._host, self._port)

@@ -23,7 +23,6 @@ import paramiko
 from paramiko import ssh_exception, RSAKey, Ed25519Key
 from logger import logger
 from abc import ABC, abstractmethod
-import common
 
 
 Result = namedtuple("Result", "out err returncode")
@@ -393,12 +392,6 @@ class Host:
 
     def all_ports(self) -> dict:
         return json.loads(self.run("ip -json link", logging.DEBUG).out)
-
-    def ip(self, port_name: str) -> str:
-        return common.extract_ip(self.ipa(), port_name)
-
-    def port_from_route(self, route: str) -> str:
-        return common.extract_port(self.ipr(), route)
 
     def port_exists(self, port_name: str) -> bool:
         return self.run(f"ip link show {port_name}").returncode == 0

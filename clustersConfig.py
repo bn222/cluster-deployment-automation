@@ -11,6 +11,7 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import host
 from logger import logger
+import common
 
 
 class ClusterInfo:
@@ -125,8 +126,8 @@ class ClustersConfig:
                     host_config["pre_installed"] = "True"
 
     def autodetect_external_port(self):
-        lh = host.LocalHost()
-        self.__setitem__("external_port", lh.port_from_route("default"))
+        detected = common.route_to_port(host.LocalHost(), "default")
+        self.__setitem__("external_port", detected)
 
     def prepare_external_port(self):
         if self.__getitem__("external_port") == "auto":
