@@ -97,8 +97,7 @@ class PasswordLogin(Login):
         logger.info(f"Logging in into {self._hostname} with password")
         host = paramiko.SSHClient()
         host.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        host.connect(self._hostname, username=self._username,
-                     password=self._password)
+        host.connect(self._hostname, username=self._username, password=self._password)
         return host
 
 
@@ -121,9 +120,7 @@ class Host:
     def is_localhost(self):
         return self._hostname in ("localhost", socket.gethostname())
 
-    def ssh_connect(self, username: str, password: Optional[str] = None,
-                    rsa_path: str = default_id_rsa_path(),
-                    ed25519_path: str = default_ed25519_path()):
+    def ssh_connect(self, username: str, password: Optional[str] = None, rsa_path: str = default_id_rsa_path(), ed25519_path: str = default_ed25519_path()):
         assert not self.is_localhost()
         logger.info(f"waiting for '{self._hostname}' to respond to ping")
         self.wait_ping()
@@ -315,6 +312,7 @@ class Host:
       i) Monitor the system to post after the "Dell" blue screen.
 
     """
+
     @retry(stop=stop_after_attempt(10), wait=wait_fixed(60))
     def _boot_with_overrides(self, iso_path: str) -> None:
         assert ":" in iso_path
@@ -383,6 +381,7 @@ class Host:
     def vm_is_running(self, name: str) -> bool:
         def state_running(out: str) -> bool:
             return re.search("State:.*running", out) is not None
+
         ret = self.run(f"virsh dominfo {name}")
         return not ret.returncode and state_running(ret.out)
 

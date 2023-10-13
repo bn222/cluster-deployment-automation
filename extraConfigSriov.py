@@ -46,15 +46,13 @@ class ExtraConfigSriov:
 
         # Workaround PSA issues. https://issues.redhat.com/browse/OCPBUGS-1005
         client.oc("create namespace openshift-sriov-network-operator")
-        client.oc("label ns --overwrite openshift-sriov-network-operator "
-                  "pod-security.kubernetes.io/enforce=privileged "
-                  "pod-security.kubernetes.io/enforce-version=v1.24 "
-                  "security.openshift.io/scc.podSecurityLabelSync=false")
+        client.oc("label ns --overwrite openshift-sriov-network-operator " "pod-security.kubernetes.io/enforce=privileged " "pod-security.kubernetes.io/enforce-version=v1.24 " "security.openshift.io/scc.podSecurityLabelSync=false")
 
         logger.info("running make deploy-setup")
         logger.info(lh.run("make deploy-setup", env=env))
         time.sleep(60)
         os.chdir(cur_dir)
+
 
 class ExtraConfigSriovOvSHWOL:
     def __init__(self, cc):
@@ -108,7 +106,7 @@ class ExtraConfigSriovOvSHWOL:
             logger.info(f"Cannot find PF Name on node {name} using hint")
 
         retries = 5
-        for attempt in range (1, retries + 1):
+        for attempt in range(1, retries + 1):
             interface_list = rh.run("sudo ovs-vsctl list-ifaces br-ex").out.strip().split("\n")
             result = [x for x in interface_list if "patch" not in x]
             if result:
@@ -172,6 +170,7 @@ class ExtraConfigSriovOvSHWOL:
         client.wait_for_mcp("sriov", "nad.yaml")
 
         self.ensure_pci_realloc(client, "sriov")
+
 
 # VF Management port requires a new API. We need a new extra config class to handle the API changes.
 class ExtraConfigSriovOvSHWOL_NewAPI(ExtraConfigSriovOvSHWOL):
@@ -240,6 +239,7 @@ class ExtraConfigSriovOvSHWOL_NewAPI(ExtraConfigSriovOvSHWOL):
         logger.info(client.oc("create -f /tmp/hardware-offload-config.yaml"))
 
         self.ensure_pci_realloc(client, "sriov")
+
 
 def main():
     pass

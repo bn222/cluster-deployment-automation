@@ -58,18 +58,19 @@ def ensure_dhcp_entry(h: host.Host, name: str, ip: str, mac: str):
         logger.error("\tsystemctl restart libvirt")
         sys.exit(-1)
 
-
     host_xml = f"<host mac='{mac}' name='{name}' ip='{ip}'/>"
     logger.info(f"Creating static DHCP entry for VM {name}, ip {ip} mac {mac}")
     cmd = f"virsh net-update default add ip-dhcp-host \"{host_xml}\" --live --config"
     h.run_or_die(cmd)
 
+
 def setup_dhcp_entry(h: host.Host, cfg: dict):
     name = cfg["name"]
     ip = cfg["ip"]
-    mac = "52:54:"+":".join(re.findall("..", secrets.token_hex()[:8]))
+    mac = "52:54:" + ":".join(re.findall("..", secrets.token_hex()[:8]))
     cfg["mac"] = mac
     ensure_dhcp_entry(h, name, ip, mac)
+
 
 def setup_vm(h: host.Host, cfg: dict, iso_or_image_path: str):
     name = cfg["name"]
@@ -143,7 +144,7 @@ def setup_all_vms(h: host.Host, vms, iso_path) -> list:
 
 def ensure_bridge_is_started(h: host.Host, api_network: str, bridge_xml: str):
     cmd = "virsh net-destroy default"
-    h.run(cmd) # ignore return code - it might fail if net was not started
+    h.run(cmd)  # ignore return code - it might fail if net was not started
 
     cmd = "virsh net-undefine default"
     ret = h.run(cmd)
@@ -153,7 +154,7 @@ def ensure_bridge_is_started(h: host.Host, api_network: str, bridge_xml: str):
 
     # Fix cases where virsh net-start fails with error "... interface virbr0: File exists"
     cmd = "ip link delete virbr0"
-    h.run(cmd) # ignore return code - it might fail if virbr did not exist
+    h.run(cmd)  # ignore return code - it might fail if virbr did not exist
 
     cmd = f"virsh net-define {bridge_xml}"
     h.run_or_die(cmd)
@@ -166,6 +167,7 @@ def ensure_bridge_is_started(h: host.Host, api_network: str, bridge_xml: str):
     h.run_or_die(cmd)
 
     h.run(f"ip link set {api_network} up")
+
 
 def limit_dhcp_range(h: host.Host, old_range: str, new_range: str) -> None:
     # restrict dynamic dhcp range: we use static dhcp ip addresses; however, those addresses might have been used
@@ -183,6 +185,7 @@ def limit_dhcp_range(h: host.Host, old_range: str, new_range: str) -> None:
         r = h.run(cmd)
         logger.debug(r.err if r.err else r.out)
 
+
 def network_xml(ip: str, dhcp_range: Optional[Tuple[str, str]] = None):
     if dhcp_range is None:
         dhcp_part = ""
@@ -190,7 +193,7 @@ def network_xml(ip: str, dhcp_range: Optional[Tuple[str, str]] = None):
         dhcp_part = f"""<dhcp>
   <range start='{dhcp_range[0]}' end='{dhcp_range[1]}'/>
   </dhcp>"""
-        
+
     return f"""
 <network>
   <name>default</name>
@@ -201,6 +204,7 @@ def network_xml(ip: str, dhcp_range: Optional[Tuple[str, str]] = None):
   </ip>
 </network>
   """
+
 
 def configure_bridge(h: host.Host, api_network: str) -> None:
     hostname = h.hostname()
@@ -240,7 +244,8 @@ def configure_bridge(h: host.Host, api_network: str) -> None:
         # We need to investigate how to remove the sleep to speed up
         time.sleep(5)
 
-class ExtraConfigRunner():
+
+class ExtraConfigRunner:
     def __init__(self, cc: ClustersConfig):
         ec = {
             "bf_bfb_image": ExtraConfigBFB(cc),
@@ -269,7 +274,7 @@ class ExtraConfigRunner():
             self._extra_config[to_run['name']].run(to_run, futures)
 
 
-class ClusterDeployer():
+class ClusterDeployer:
     def __init__(self, cc: ClustersConfig, ai: AssistedClientAutomation, args, secrets_path: str):
         self._client = None
         self.args = args
@@ -318,6 +323,7 @@ class ClusterDeployer():
     Lastly we unlink the "eno1" interface from the virtual bridge "virtbr0". Currently "eno1" on hosts
     is hardcoded to be the network hosting the API network.
     """
+
     def teardown(self) -> None:
         cluster_name = self._cc["name"]
         logger.info(f"Tearing down {cluster_name}")
@@ -588,8 +594,7 @@ class ClusterDeployer():
         if self._cc.local_vms():
             for e in self._cc["masters"]:
                 setup_dhcp_entry(lh, e)
-            futures = setup_all_vms(lh, self._cc["masters"],
-                                    os.path.join(os.getcwd(), f"{infra_env}.iso"))
+            futures = setup_all_vms(lh, self._cc["masters"], os.path.join(os.getcwd(), f"{infra_env}.iso"))
         else:
             self._create_physical_x86_nodes(self._cc["masters"])
             futures = []
@@ -598,6 +603,7 @@ class ClusterDeployer():
             finished = [p for p in futures if p.done()]
             if finished:
                 raise Exception(f"Can't install VMs {finished[0].result()}")
+
         names = (e["name"] for e in self._cc["masters"])
         self._wait_known_state(names, cb)
         self._ai.start_until_success(cluster_name)
@@ -716,6 +722,7 @@ class ClusterDeployer():
     def _create_remote_vm_x86_workers(self) -> None:
         def boot_helper(worker, iso):
             return self.boot_iso_x86(worker, iso)
+
         logger.debug("Setting up vm x86 workers on remote hosts")
         cluster_name = self._cc["name"]
         infra_env = f"{cluster_name}-x86"
@@ -783,7 +790,6 @@ class ClusterDeployer():
             setup_all_vms(rh, vm, iso_path)
             vms.extend(vm)
         self._wait_known_state(e["name"] for e in vms)
-
 
     def _create_x86_workers(self) -> None:
         logger.info("Setting up x86 workers")

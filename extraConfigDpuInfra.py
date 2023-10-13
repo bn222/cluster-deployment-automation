@@ -60,14 +60,15 @@ def install_remotelyh(ip, links):
     rh.ssh_connect("core")
     return want in rh.run("uname -a").out
 
+
 def install_custom_kernel(lh, client, bf_names, ips):
     logger.info(f"Installing custom kernel on {ips}")
     links = [
-      "https://s3.upshift.redhat.com/DH-PROD-CKI/internal-artifacts/696717272/build%20aarch64/3333360250/artifacts/kernel-core-4.18.0-372.35.1.el8_6.mr3440_221116_1544.aarch64.rpm",
-      "https://s3.upshift.redhat.com/DH-PROD-CKI/internal-artifacts/696717272/build%20aarch64/3333360250/artifacts/kernel-4.18.0-372.35.1.el8_6.mr3440_221116_1544.aarch64.rpm",
-      "https://s3.upshift.redhat.com/DH-PROD-CKI/internal-artifacts/696717272/build%20aarch64/3333360250/artifacts/kernel-modules-4.18.0-372.35.1.el8_6.mr3440_221116_1544.aarch64.rpm",
-      "https://s3.upshift.redhat.com/DH-PROD-CKI/internal-artifacts/696717272/build%20aarch64/3333360250/artifacts/kernel-modules-extra-4.18.0-372.35.1.el8_6.mr3440_221116_1544.aarch64.rpm",
-      "http://download.eng.bos.redhat.com/brewroot/vol/rhel-8/packages/linux-firmware/20220210/108.git6342082c.el8_6/noarch/linux-firmware-20220210-108.git6342082c.el8_6.noarch.rpm"
+        "https://s3.upshift.redhat.com/DH-PROD-CKI/internal-artifacts/696717272/build%20aarch64/3333360250/artifacts/kernel-core-4.18.0-372.35.1.el8_6.mr3440_221116_1544.aarch64.rpm",
+        "https://s3.upshift.redhat.com/DH-PROD-CKI/internal-artifacts/696717272/build%20aarch64/3333360250/artifacts/kernel-4.18.0-372.35.1.el8_6.mr3440_221116_1544.aarch64.rpm",
+        "https://s3.upshift.redhat.com/DH-PROD-CKI/internal-artifacts/696717272/build%20aarch64/3333360250/artifacts/kernel-modules-4.18.0-372.35.1.el8_6.mr3440_221116_1544.aarch64.rpm",
+        "https://s3.upshift.redhat.com/DH-PROD-CKI/internal-artifacts/696717272/build%20aarch64/3333360250/artifacts/kernel-modules-extra-4.18.0-372.35.1.el8_6.mr3440_221116_1544.aarch64.rpm",
+        "http://download.eng.bos.redhat.com/brewroot/vol/rhel-8/packages/linux-firmware/20220210/108.git6342082c.el8_6/noarch/linux-firmware-20220210-108.git6342082c.el8_6.noarch.rpm",
     ]
 
     executor = ThreadPoolExecutor(max_workers=len(ips))
@@ -94,7 +95,9 @@ def install_custom_kernel(lh, client, bf_names, ips):
 
         def cb():
             host.sync_time(lh, rh)
+
         client.wait_ready(bf, cb)
+
 
 def run_dpu_network_operator_git(lh, kc):
     repo_dir = "/root/dpu-network-operator"
@@ -152,6 +155,7 @@ class ExtraConfigDpuInfra:
 
             def cb():
                 host.sync_time(lh, rh)
+
             client.wait_ready(bf, cb)
 
         # workaround, this will reboot the BF
@@ -208,6 +212,7 @@ class ExtraConfigDpuInfra:
                 logger.info("Did not find interface c1pf0hpf in br-ex. Try to restart ovs-configuration on node.")
                 sys.exit(-1)
 
+
 # VF Management port requires a new API. We need a new extra config class to handle the API changes.
 class ExtraConfigDpuInfra_NewAPI(ExtraConfigDpuInfra):
     def run(self, _, futures: Dict[str, Future]) -> None:
@@ -228,6 +233,7 @@ class ExtraConfigDpuInfra_NewAPI(ExtraConfigDpuInfra):
 
             def cb():
                 host.sync_time(lh, rh)
+
             client.wait_ready(bf, cb)
 
         # workaround, this will reboot the BF
@@ -279,6 +285,7 @@ class ExtraConfigDpuInfra_NewAPI(ExtraConfigDpuInfra):
                 logger.info(result.out)
                 logger.info("Did not find interface c1pf0hpf in br-ex. Try to restart ovs-configuration on node.")
                 sys.exit(-1)
+
 
 def main():
     pass

@@ -18,6 +18,7 @@ def ensure_fcos_exists(dst: str = "/root/iso/fedora-coreos.iso") -> None:
         logger.info(f"fcos missing from {dst}, building it")
         builder.build(dst)
 
+
 """
 The purpose of coreos builder is to build an image with "kernel-modules-extra" which would contain
 the rshim module. The rshim module is important for communicating with the BlueField-2 DPU.
@@ -66,7 +67,9 @@ the iso.
 
 The "final iso location" is the image we will use to live boot our machines.
 """
-class CoreosBuilder():
+
+
+class CoreosBuilder:
     def __init__(self, working_dir: str):
         self._workdir = working_dir
 

@@ -31,13 +31,7 @@ def parse_args() -> argparse.Namespace:
         args.skip_steps = args.skip_steps.split(",")
         args.steps = [x for x in args.steps if x not in args.skip_steps]
 
-    log_levels = {
-        'debug': logging.DEBUG,
-        'info': logging.INFO,
-        'warning': logging.WARNING,
-        'error': logging.ERROR,
-        'critical': logging.CRITICAL
-    }
+    log_levels = {'debug': logging.DEBUG, 'info': logging.INFO, 'warning': logging.WARNING, 'error': logging.ERROR, 'critical': logging.CRITICAL}
     args.verbosity = log_levels[args.verbosity]
     configure_logger(args.verbosity)
 

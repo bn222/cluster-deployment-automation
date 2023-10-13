@@ -23,14 +23,8 @@ class ClusterInfo:
 
 def read_sheet() -> list:
     logger.info("Downloading sheet from Google")
-    scopes = [
-        'https://www.googleapis.com/auth/spreadsheets',
-        'https://www.googleapis.com/auth/drive'
-    ]
-    cred_paths = [
-        os.path.join(os.getcwd(), "credentials.json"),
-        os.path.join(os.environ["HOME"], "credentials.json")
-    ]
+    scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
+    cred_paths = [os.path.join(os.getcwd(), "credentials.json"), os.path.join(os.environ["HOME"], "credentials.json")]
     cred_path = None
     for e in cred_paths:
         if os.path.exists(e):
@@ -50,7 +44,7 @@ def read_sheet() -> list:
     return ret
 
 
-class ClustersConfig():
+class ClustersConfig:
     def __init__(self, yamlPath: str):
         self._clusters = {}  # type: Dict[str, ClusterInfo]
 

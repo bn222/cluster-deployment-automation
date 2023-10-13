@@ -15,7 +15,7 @@ def main_deploy(args):
         ais.start()
         # workaround, this will still install 4.14, but AI will think
         # it is 4.13 (see also workaround when setting up versions)
-        if cc["version"][:len("4.14")] == "4.14":
+        if cc["version"][: len("4.14")] == "4.14":
             logger.warn("Applying workaround for assisted installer issue")
             logger.warn("Will pretend to install 4.13, but using 4.14 pullsec")
             logger.warn("Ignore all output from Assisted that mentions 4.13")

@@ -12,7 +12,7 @@ from logger import logger
 oc_url = "https://mirror.openshift.com/pub/openshift-v4/clients/ocp/latest/"
 
 
-class K8sClient():
+class K8sClient:
     def __init__(self, kubeconfig: str):
         self._kc = kubeconfig
         with open(kubeconfig) as f:
@@ -82,7 +82,7 @@ class K8sClient():
         while True:
             ret = self.oc(f"wait mcp {mcp_name} --for condition=updated --timeout=20m")
             if ret.returncode == 0:
-                break;
+                break
             if iteration >= max_tries:
                 logger.info(ret)
                 logger.error(f"mcp {mcp_name} failed to update for {resource} after {max_tries}, quitting ...")

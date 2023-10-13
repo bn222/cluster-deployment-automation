@@ -51,7 +51,7 @@ class ExtraConfigDpuTenant:
         with open(outfilename, "w") as outFile:
             outFile.write(rendered)
 
-    def render_envoverrides_cm(self, client: K8sClient, cfg, ns: str, ) -> str:
+    def render_envoverrides_cm(self, client: K8sClient, cfg, ns: str) -> str:
         contents = open("manifests/tenant/envoverrides.yaml").read()
         contents += f"{ns}\n"
         contents += "data:\n"
@@ -148,9 +148,8 @@ class ExtraConfigDpuTenant:
         # https://issues.redhat.com/browse/NHE-334
         iclient.oc(f"project two-cluster-design")
         logger.info(iclient.oc(f"create secret generic tenant-cluster-1-kubeconf --from-file=config={tclient._kc}"))
-        patch = json.dumps({"spec":{"kubeConfigFile":"tenant-cluster-1-kubeconf"}})
-        r = iclient.oc(
-            f"patch --type merge -p '{patch}' DpuClusterConfig dpuclusterconfig-sample -n two-cluster-design")
+        patch = json.dumps({"spec": {"kubeConfigFile": "tenant-cluster-1-kubeconf"}})
+        r = iclient.oc(f"patch --type merge -p '{patch}' DpuClusterConfig dpuclusterconfig-sample -n two-cluster-design")
         logger.info(r)
         logger.info("Creating network attachement definition")
         tclient.oc("create -f manifests/tenant/nad.yaml")
@@ -159,6 +158,7 @@ class ExtraConfigDpuTenant:
 
         ec = ExtraConfigSriovOvSHWOL(self._cc)
         ec.ensure_pci_realloc(tclient, "dpu-host")
+
 
 class ExtraConfigDpuTenant_NewAPI(ExtraConfigDpuTenant):
     def run(self, cfg, futures: Dict[str, Future]) -> None:
@@ -169,13 +169,12 @@ class ExtraConfigDpuTenant_NewAPI(ExtraConfigDpuTenant):
         tclient.wait_for_mcp("dpu-host")
 
         lh = host.LocalHost()
-        run_dpu_network_operator_git(lh , "/root/kubeconfig.tenantcluster")
+        run_dpu_network_operator_git(lh, "/root/kubeconfig.tenantcluster")
 
         logger.info("Creating namespace for tenant")
         tclient.oc("create -f manifests/infra/ns.yaml")
         logger.info("Creating DpuClusterConfig cr")
         tclient.oc("create -f manifests/tenant/dpuclusterconfig.yaml")
-
 
         first_worker = self._cc["workers"][0]['name']
         ip = tclient.get_ip(first_worker)
@@ -270,9 +269,8 @@ class ExtraConfigDpuTenant_NewAPI(ExtraConfigDpuTenant):
         # https://issues.redhat.com/browse/NHE-334
         logger.info(iclient.oc(f"create secret generic tenant-cluster-1-kubeconf --from-file=config={tclient._kc} --namespace=two-cluster-design"))
 
-        patch = json.dumps({"spec":{"kubeConfigFile":"tenant-cluster-1-kubeconf"}})
-        r = iclient.oc(
-            f"patch --type merge -p '{patch}' DpuClusterConfig dpuclusterconfig-sample -n two-cluster-design")
+        patch = json.dumps({"spec": {"kubeConfigFile": "tenant-cluster-1-kubeconf"}})
+        r = iclient.oc(f"patch --type merge -p '{patch}' DpuClusterConfig dpuclusterconfig-sample -n two-cluster-design")
         logger.info(r)
         logger.info("Creating network attachement definition")
         tclient.oc("create -f manifests/tenant/nad.yaml")
@@ -280,9 +278,11 @@ class ExtraConfigDpuTenant_NewAPI(ExtraConfigDpuTenant):
         ec = ExtraConfigSriovOvSHWOL(self._cc)
         ec.ensure_pci_realloc(tclient, "dpu-host")
 
+
 def create_nm_operator(client: K8sClient):
     logger.info("Apply NMO subscription")
     client.oc("create -f manifests/tenant/nmo-subscription.yaml")
+
 
 def restart_dpu_network_operator(iclient: K8sClient):
     lh = host.LocalHost()
