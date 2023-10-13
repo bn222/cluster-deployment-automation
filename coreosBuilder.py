@@ -225,15 +225,15 @@ class CoreosBuilder:
 
     def create_ignition(self, public_key_dir: str = "/root/.ssh/") -> str:
         logger.info("Creating ignition")
-        ign = {}
 
-        ign["ignition"] = {"version": "3.3.0"}
-        ign["passwd"] = {"users": [{"name": "core", "sshAuthorizedKeys": []}]}
+        keys = []
         for file in glob.glob(f"{public_key_dir}/*.pub"):
             logger.info(f"appending key from {file}")
             with open(file, 'r') as f:
                 key = " ".join(f.read().split(" ")[:-1])
-            ign["passwd"]["users"][0]["sshAuthorizedKeys"].append(key)
+            keys.append(key)
+
+        ign = {"ignition": {"version": "3.3.0"}, "password": {"users": [{"name": "core", "sshAuthorizedKeys": keys}]}}
         return json.dumps(ign)
 
     def ensure_ign_embedded(self, dst: str) -> None:
