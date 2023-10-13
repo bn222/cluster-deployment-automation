@@ -247,7 +247,7 @@ def configure_bridge(h: host.Host, api_network: str) -> None:
 
 class ExtraConfigRunner:
     def __init__(self, cc: ClustersConfig):
-        ec = {
+        self._extra_config = {
             "bf_bfb_image": ExtraConfigBFB(cc),
             "switch_to_nic_mode": ExtraConfigSwitchNicMode(cc),
             "sriov_network_operator": ExtraConfigSriov(cc),
@@ -263,7 +263,6 @@ class ExtraConfigRunner:
             "rt": ExtraConfigRT(cc),
             "dualstack": ExtraConfigDualStack(cc),
         }
-        self._extra_config = ec
 
     def run(self, to_run, futures: Dict[str, Future]) -> None:
         if to_run["name"] not in self._extra_config:

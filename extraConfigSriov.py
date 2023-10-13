@@ -4,8 +4,6 @@ import os
 from git import Repo
 import time
 from concurrent.futures import Future
-from clustersConfig import ClustersConfig
-from arguments import parse_args
 import shutil
 import jinja2
 import sys
@@ -95,23 +93,23 @@ class ExtraConfigSriovOvSHWOL:
         with open(outfilename, "w") as outFile:
             outFile.write(rendered)
 
-    def try_get_ovs_pf(self, rh: host, name: str) -> str:
+    def try_get_ovs_pf(self, rh: host.Host, name: str) -> str:
         rh.ssh_connect("core")
         try:
             result = rh.read_file("/var/lib/ovnk/iface_default_hint").strip()
             if result:
                 logger.info(f"Found PF Name {result} on node {name}")
                 return result
-        except:
+        except Exception:
             logger.info(f"Cannot find PF Name on node {name} using hint")
 
         retries = 5
         for attempt in range(1, retries + 1):
             interface_list = rh.run("sudo ovs-vsctl list-ifaces br-ex").out.strip().split("\n")
-            result = [x for x in interface_list if "patch" not in x]
-            if result:
-                logger.info(f"Found PF Name {result} on node {name} on attempt {attempt}")
-                return result[0]
+            selection = [x for x in interface_list if "patch" not in x]
+            if selection:
+                logger.info(f"Found PF {selection} on node {name} on attempt {attempt}")
+                return selection[0]
             time.sleep(20)
 
         logger.error(f"Failed to find PF name on node {name} using ovs-vsctl")
