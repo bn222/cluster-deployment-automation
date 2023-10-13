@@ -496,6 +496,9 @@ class ClusterDeployer():
             else:
                 logger.info("Skipping pre configuration.")
 
+            lh = host.LocalHost()
+            self.ensure_linked_to_bridge(lh)
+
             if "masters" in self.args.steps:
                 self.teardown()
                 self.create_cluster()
@@ -503,8 +506,6 @@ class ClusterDeployer():
             else:
                 logger.info("Skipping master creation.")
 
-            lh = host.LocalHost()
-            self.ensure_linked_to_bridge(lh)
             if "workers" in self.args.steps:
                 if self._cc["workers"]:
                     self.create_workers()
@@ -601,14 +602,15 @@ class ClusterDeployer():
         self._wait_known_state(names, cb)
         self._ai.start_until_success(cluster_name)
 
+        logger.info(f'downloading kubeconfig to {self._cc["kubeconfig"]}')
+        self._ai.download_kubeconfig(self._cc["name"], self._cc["kubeconfig"])
+
         self._ai.wait_cluster(cluster_name)
         for p in futures:
             p.result()
         self.ensure_linked_to_bridge(lh)
         for e in self._cc["masters"]:
             self._set_password(e)
-        logger.info(f'downloading kubeconfig to {self._cc["kubeconfig"]}')
-        self._ai.download_kubeconfig(self._cc["name"], self._cc["kubeconfig"])
         self.update_etc_hosts()
 
     def _print_logs(self, name):
