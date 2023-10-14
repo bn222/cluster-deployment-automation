@@ -20,7 +20,7 @@ from functools import lru_cache
 from ailib import Redfish
 from tenacity import retry, stop_after_attempt, wait_fixed
 import paramiko
-from paramiko import ssh_exception, RSAKey, Ed25519Key
+from paramiko import SSHException, RSAKey, Ed25519Key
 from logger import logger
 from abc import ABC, abstractmethod
 import common
@@ -155,7 +155,7 @@ class Host:
                 try:
                     self._host = e.login()
                     return
-                except ssh_exception.AuthenticationException as e:
+                except SSHException.AuthenticationException as e:
                     logger.info(type(e))
                     raise e
                 except Exception as e:
