@@ -233,7 +233,7 @@ class CoreosBuilder:
                 key = " ".join(f.read().split(" ")[:-1])
             keys.append(key)
 
-        ign = {"ignition": {"version": "3.3.0"}, "password": {"users": [{"name": "core", "sshAuthorizedKeys": keys}]}}
+        ign = {"ignition": {"version": "3.3.0"}, "passwd": {"users": [{"name": "core", "sshAuthorizedKeys": keys}]}}
         return json.dumps(ign)
 
     def ensure_ign_embedded(self, dst: str) -> None:
