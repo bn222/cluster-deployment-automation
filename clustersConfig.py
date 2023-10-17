@@ -80,6 +80,8 @@ class ClustersConfig:
                 cc["external_port"] = "auto"
             if "network_api_port" not in cc:
                 cc["network_api_port"] = "auto"
+            if "proxy" not in cc:
+                cc["proxy"] = None
 
             if "hosts" not in cc:
                 cc["hosts"] = []
