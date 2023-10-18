@@ -3,11 +3,12 @@ from assistedInstallerService import AssistedInstallerService
 from clustersConfig import ClustersConfig
 from clusterDeployer import ClusterDeployer
 from arguments import parse_args
+import argparse
 from logger import logger
 from clusterSnapshotter import ClusterSnapshotter
 
 
-def main_deploy(args):
+def main_deploy(args: argparse.Namespace) -> None:
     cc = ClustersConfig(args.config)
 
     if args.url == "192.168.122.1":
@@ -42,7 +43,7 @@ def main_deploy(args):
         ais.stop()
 
 
-def main_snapshot(args):
+def main_snapshot(args: argparse.Namespace) -> None:
     args = parse_args()
     cc = ClustersConfig(args.config)
 
@@ -60,7 +61,7 @@ def main_snapshot(args):
         logger.error(f"Unexpected action {args.actions}")
 
 
-def main():
+def main() -> None:
     args = parse_args()
     if args.subcommand == "deploy":
         main_deploy(args)

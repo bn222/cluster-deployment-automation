@@ -8,7 +8,7 @@ from logger import logger
 
 
 class AssistedClientAutomation(AssistedClient):
-    def __init__(self, url):
+    def __init__(self, url: str):
         super().__init__(url, quiet=True, debug=False)
 
     def cluster_exists(self, name: str) -> bool:

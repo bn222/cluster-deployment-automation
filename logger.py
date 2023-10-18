@@ -1,7 +1,9 @@
 import logging
+from typing import Optional
+from typing import TextIO
 
 
-def configure_logger(lvl):
+def configure_logger(lvl: int) -> logging.Logger:
     logger = logging.getLogger("CDA")
     logger.setLevel(lvl)
 
@@ -21,5 +23,5 @@ def configure_logger(lvl):
     return logger
 
 
-prev_handler = None
+prev_handler: Optional[logging.StreamHandler[TextIO]] = None
 logger = configure_logger(logging.INFO)

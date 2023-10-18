@@ -3,7 +3,7 @@ from typing import List
 from typing import Optional
 
 
-def ip_in_subnet(addr, subnet) -> bool:
+def ip_in_subnet(addr: str, subnet: str) -> bool:
     return ipaddress.ip_address(addr) in ipaddress.ip_network(subnet)
 
 

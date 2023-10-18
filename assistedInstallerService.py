@@ -42,7 +42,7 @@ non-standard way, the web-ui can't be used.
 
 
 class AssistedInstallerService:
-    def __init__(self, version, ip: str, branch: str = "master"):
+    def __init__(self, version: str, ip: str, branch: str = "master"):
         self._version = version
         self._ip = ip
         base_url = f"https://raw.githubusercontent.com/openshift/assisted-service/{branch}"
