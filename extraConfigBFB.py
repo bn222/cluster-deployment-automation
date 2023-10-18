@@ -1,3 +1,4 @@
+from clustersConfig import ClustersConfig
 import host
 import coreosBuilder
 from concurrent.futures import ThreadPoolExecutor
@@ -25,14 +26,11 @@ to be in a good state.
 
 
 class ExtraConfigBFB:
-    def __init__(self, cc):
-        self._cc = cc
-
-    def run(self, _, futures: Dict[str, Future]) -> None:
+    def run(self, cc: ClustersConfig, _, futures: Dict[str, Future]) -> None:
         coreosBuilder.ensure_fcos_exists()
         logger.info("Loading BF-2 with BFB image on all workers")
         lh = host.LocalHost()
-        nfs = NFS(lh, self._cc["external_port"])
+        nfs = NFS(lh, cc["external_port"])
         iso_url = nfs.host_file("/root/iso/fedora-coreos.iso")
 
         def helper(e) -> None:
@@ -52,10 +50,10 @@ class ExtraConfigBFB:
             h.ssh_connect("core")
             check(h.bf_load_bfb())
 
-        executor = ThreadPoolExecutor(max_workers=len(self._cc["workers"]))
+        executor = ThreadPoolExecutor(max_workers=len(cc["workers"]))
         # Assuming that all workers have BF that need to reset to bfb image in
         # dpu mode
-        for e in self._cc["workers"]:
+        for e in cc["workers"]:
             futures[e["name"]].result()
             f = executor.submit(helper, e)
             futures[e["name"]] = f
@@ -63,17 +61,14 @@ class ExtraConfigBFB:
 
 
 class ExtraConfigSwitchNicMode:
-    def __init__(self, cc):
-        self._cc = cc
-
-    def run(self, _, futures: Dict[str, Future]) -> None:
+    def run(self, cc: ClustersConfig, _, futures: Dict[str, Future]) -> None:
         [f.result() for (_, f) in futures.items()]
-        client = K8sClient(self._cc["kubeconfig"])
+        client = K8sClient(cc["kubeconfig"])
 
         client.oc("create -f manifests/nicmode/pool.yaml")
 
         # label nodes
-        for e in self._cc["workers"]:
+        for e in cc["workers"]:
             logger.info(client.oc(f'label node {e["name"]} --overwrite=true feature.node.kubernetes.io/network-sriov.capable=true'))
 
         client.oc("delete -f manifests/nicmode/switch.yaml")

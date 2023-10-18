@@ -17,20 +17,20 @@ class ExtraConfigRunner:
     def __init__(self, cc: ClustersConfig):
         self._cc = cc
         self._extra_config = {
-            "bf_bfb_image": ExtraConfigBFB(cc),
-            "switch_to_nic_mode": ExtraConfigSwitchNicMode(cc),
-            "sriov_network_operator": ExtraConfigSriov(cc),
-            "sriov_ovs_hwol": ExtraConfigSriovOvSHWOL(cc),
-            "sriov_ovs_hwol_new_api": ExtraConfigSriovOvSHWOL_NewAPI(cc),
-            "dpu_infra": ExtraConfigDpuInfra(cc),
-            "dpu_infra_new_api": ExtraConfigDpuInfra_NewAPI(cc),
-            "dpu_tenant_mc": ExtraConfigDpuTenantMC(cc),
-            "dpu_tenant": ExtraConfigDpuTenant(cc),
-            "dpu_tenant_new_api": ExtraConfigDpuTenant_NewAPI(cc),
-            "ovnk8s": ExtraConfigOvnK(cc),
-            "cno": ExtraConfigCNO(cc),
-            "rt": ExtraConfigRT(cc),
-            "dualstack": ExtraConfigDualStack(cc),
+            "bf_bfb_image": ExtraConfigBFB(),
+            "switch_to_nic_mode": ExtraConfigSwitchNicMode(),
+            "sriov_network_operator": ExtraConfigSriov(),
+            "sriov_ovs_hwol": ExtraConfigSriovOvSHWOL(),
+            "sriov_ovs_hwol_new_api": ExtraConfigSriovOvSHWOL_NewAPI(),
+            "dpu_infra": ExtraConfigDpuInfra(),
+            "dpu_infra_new_api": ExtraConfigDpuInfra_NewAPI(),
+            "dpu_tenant_mc": ExtraConfigDpuTenantMC(),
+            "dpu_tenant": ExtraConfigDpuTenant(),
+            "dpu_tenant_new_api": ExtraConfigDpuTenant_NewAPI(),
+            "ovnk8s": ExtraConfigOvnK(),
+            "cno": ExtraConfigCNO(),
+            "rt": ExtraConfigRT(),
+            "dualstack": ExtraConfigDualStack(),
         }
 
     def run(self, to_run, futures: Dict[str, Future]) -> None:
@@ -39,4 +39,4 @@ class ExtraConfigRunner:
             sys.exit(-1)
         else:
             logger.info(f"running extra config {to_run['name']}")
-            self._extra_config[to_run['name']].run(to_run, futures)
+            self._extra_config[to_run['name']].run(self._cc, to_run, futures)

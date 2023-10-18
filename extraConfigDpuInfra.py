@@ -1,4 +1,5 @@
 from concurrent.futures import ThreadPoolExecutor
+from clustersConfig import ClustersConfig
 import host
 import time
 from git import Repo
@@ -134,17 +135,14 @@ def restart_ovs_configuration(ips):
 
 
 class ExtraConfigDpuInfra:
-    def __init__(self, cc):
-        self._cc = cc
-
-    def run(self, _, futures: Dict[str, Future]) -> None:
+    def run(self, cc: ClustersConfig, _, futures: Dict[str, Future]) -> None:
         [f.result() for (_, f) in futures.items()]
         kc = "/root/kubeconfig.infracluster"
         client = K8sClient(kc)
         lh = host.LocalHost()
         apply_common_pathches(client)
 
-        bf_names = [x["name"] for x in self._cc["workers"] if x["type"] == "bf"]
+        bf_names = [x["name"] for x in cc["workers"] if x["type"] == "bf"]
         ips = [client.get_ip(e) for e in bf_names]
 
         for bf, ip in zip(bf_names, ips):
@@ -214,15 +212,15 @@ class ExtraConfigDpuInfra:
 
 
 # VF Management port requires a new API. We need a new extra config class to handle the API changes.
-class ExtraConfigDpuInfra_NewAPI(ExtraConfigDpuInfra):
-    def run(self, _, futures: Dict[str, Future]) -> None:
+class ExtraConfigDpuInfra_NewAPI:
+    def run(self, cc, _, futures: Dict[str, Future]) -> None:
         [f.result() for (_, f) in futures.items()]
         kc = "/root/kubeconfig.infracluster"
         client = K8sClient(kc)
         lh = host.LocalHost()
         apply_common_pathches(client)
 
-        bf_names = [x["name"] for x in self._cc["workers"] if x["type"] == "bf"]
+        bf_names = [x["name"] for x in cc["workers"] if x["type"] == "bf"]
         ips = [client.get_ip(e) for e in bf_names]
 
         for bf, ip in zip(bf_names, ips):

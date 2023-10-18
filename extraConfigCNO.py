@@ -1,3 +1,4 @@
+from clustersConfig import ClustersConfig
 from k8sClient import K8sClient
 from configOperators import ConfigCVO
 import sys
@@ -7,13 +8,10 @@ from logger import logger
 
 
 class ExtraConfigCNO:
-    def __init__(self, cc):
-        self._cc = cc
-
-    def run(self, cfg, futures: Dict[str, Future]) -> None:
+    def run(self, cc: ClustersConfig, cfg, futures: Dict[str, Future]) -> None:
         [f.result() for (_, f) in futures.items()]
         logger.info("Running post config step to load custom CNO")
-        iclient = K8sClient(self._cc["kubeconfig"])
+        iclient = K8sClient(cc["kubeconfig"])
 
         if "image" not in cfg:
             logger.info("Error image not provided to load custom CNO")

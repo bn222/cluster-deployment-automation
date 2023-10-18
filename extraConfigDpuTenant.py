@@ -1,3 +1,4 @@
+from clustersConfig import ClustersConfig
 from k8sClient import K8sClient
 import host
 from common_patches import apply_common_pathches
@@ -12,10 +13,7 @@ from logger import logger
 
 
 class ExtraConfigDpuTenantMC:
-    def __init__(self, cc):
-        self._cc = cc
-
-    def run(self, cfg, futures: Dict[str, Future]) -> None:
+    def run(self, cc: ClustersConfig, cfg, futures: Dict[str, Future]) -> None:
         [f.result() for (_, f) in futures.items()]
         logger.info("Running post config step")
         tclient = K8sClient("/root/kubeconfig.tenantcluster")
@@ -31,25 +29,22 @@ class ExtraConfigDpuTenantMC:
         tclient.oc("patch mcp dpu-host --type=json -p=\[\{\"op\":\"replace\",\"path\":\"/spec/maxUnavailable\",\"value\":2\}\]")
 
         logger.info("Labeling nodes")
-        for e in self._cc["workers"]:
+        for e in cc["workers"]:
             cmd = f"label node {e['name']} node-role.kubernetes.io/dpu-host="
             logger.info(tclient.oc(cmd))
         logger.info("Need to deploy sriov network operator")
 
 
+def render_sriov_node_policy(policyname: str, bf_port: str, bf_addr: str, numvfs: int, resourcename: str, outfilename: str):
+    with open("./manifests/tenant/SriovNetworkNodePolicy.yaml.j2") as f:
+        j2_template = jinja2.Template(f.read())
+        rendered = j2_template.render(policyName=policyname, bf_port=bf_port, bf_addr=bf_addr, numVfs=numvfs, resourceName=resourcename)
+        logger.info(rendered)
+
+    with open(outfilename, "w") as outFile:
+        outFile.write(rendered)
+
 class ExtraConfigDpuTenant:
-    def __init__(self, cc):
-        self._cc = cc
-
-    def render_sriov_node_policy(self, policyname: str, bf_port: str, bf_addr: str, numvfs: int, resourcename: str, outfilename: str):
-        with open("./manifests/tenant/SriovNetworkNodePolicy.yaml.j2") as f:
-            j2_template = jinja2.Template(f.read())
-            rendered = j2_template.render(policyName=policyname, bf_port=bf_port, bf_addr=bf_addr, numVfs=numvfs, resourceName=resourcename)
-            logger.info(rendered)
-
-        with open(outfilename, "w") as outFile:
-            outFile.write(rendered)
-
     def render_envoverrides_cm(self, client: K8sClient, cfg, ns: str) -> str:
         contents = open("manifests/tenant/envoverrides.yaml").read()
         contents += f"{ns}\n"
@@ -66,14 +61,14 @@ class ExtraConfigDpuTenant:
         open(f"/tmp/envoverrides-{ns}.yaml", "w").write(contents)
         return f"/tmp/envoverrides-{ns}.yaml"
 
-    def run(self, _, futures: Dict[str, Future]) -> None:
+    def run(self, cc: ClustersConfig, _, futures: Dict[str, Future]) -> None:
         [f.result() for (_, f) in futures.items()]
         logger.info("Running post config step")
         tclient = K8sClient("/root/kubeconfig.tenantcluster")
         logger.info("Waiting for mcp dpu-host to become ready")
         tclient.wait_for_mcp("dpu-host")
 
-        first_worker = self._cc["workers"][0]['name']
+        first_worker = cc["workers"][0]['name']
         ip = tclient.get_ip(first_worker)
         if ip is None:
             sys.exit(-1)
@@ -115,8 +110,8 @@ class ExtraConfigDpuTenant:
         mgmtBfPort = f"{bf_port}#0-{numMgmtVfs-1}"
         mgmtPolicyFile = "/tmp/" + mgmtPolicyName + ".yaml"
 
-        self.render_sriov_node_policy(workloadPolicyName, workloadBfPort, bf, numVfs, workloadResourceName, workloadPolicyFile)
-        self.render_sriov_node_policy(mgmtPolicyName, mgmtBfPort, bf, numVfs, mgmtResourceName, mgmtPolicyFile)
+        render_sriov_node_policy(workloadPolicyName, workloadBfPort, bf, numVfs, workloadResourceName, workloadPolicyFile)
+        render_sriov_node_policy(mgmtPolicyName, mgmtBfPort, bf, numVfs, mgmtResourceName, mgmtPolicyFile)
 
         logger.info("Creating sriov pool config")
         tclient.oc("create -f manifests/tenant/sriov-pool-config.yaml")
@@ -128,7 +123,7 @@ class ExtraConfigDpuTenant:
         logger.info("creating config map to put ovn-k into dpu host mode")
         tclient.oc("create -f manifests/tenant/sriovdpuconfigmap.yaml")
 
-        for e in self._cc["workers"]:
+        for e in cc["workers"]:
             cmd = f"label node {e['name']} network.operator.openshift.io/dpu-host="
             logger.info(tclient.oc(cmd))
             ip = tclient.get_ip(e['name'])
@@ -159,12 +154,12 @@ class ExtraConfigDpuTenant:
         tclient.approve_csr()
         iclient.approve_csr()
 
-        ec = ExtraConfigSriovOvSHWOL(self._cc)
-        ec.ensure_pci_realloc(tclient, "dpu-host")
+        ec = ExtraConfigSriovOvSHWOL()
+        ec.ensure_pci_realloc(cc, tclient, "dpu-host")
 
 
-class ExtraConfigDpuTenant_NewAPI(ExtraConfigDpuTenant):
-    def run(self, cfg, futures: Dict[str, Future]) -> None:
+class ExtraConfigDpuTenant_NewAPI:
+    def run(self, cc: ClustersConfig, cfg, futures: Dict[str, Future]) -> None:
         [f.result() for (_, f) in futures.items()]
         logger.info("Running post config step")
         tclient = K8sClient("/root/kubeconfig.tenantcluster")
@@ -179,7 +174,7 @@ class ExtraConfigDpuTenant_NewAPI(ExtraConfigDpuTenant):
         logger.info("Creating DpuClusterConfig cr")
         tclient.oc("create -f manifests/tenant/dpuclusterconfig.yaml")
 
-        first_worker = self._cc["workers"][0]['name']
+        first_worker = cc["workers"][0]['name']
         ip = tclient.get_ip(first_worker)
         if ip is None:
             sys.exit(-1)
@@ -221,8 +216,8 @@ class ExtraConfigDpuTenant_NewAPI(ExtraConfigDpuTenant):
         mgmtBfPort = f"{bf_port}#0-{numMgmtVfs-1}"
         mgmtPolicyFile = "/tmp/" + mgmtPolicyName + ".yaml"
 
-        self.render_sriov_node_policy(workloadPolicyName, workloadBfPort, bf, numVfs, workloadResourceName, workloadPolicyFile)
-        self.render_sriov_node_policy(mgmtPolicyName, mgmtBfPort, bf, numVfs, mgmtResourceName, mgmtPolicyFile)
+        render_sriov_node_policy(workloadPolicyName, workloadBfPort, bf, numVfs, workloadResourceName, workloadPolicyFile)
+        render_sriov_node_policy(mgmtPolicyName, mgmtBfPort, bf, numVfs, mgmtResourceName, mgmtPolicyFile)
 
         logger.info("Creating sriov pool config")
         tclient.oc("create -f manifests/tenant/sriov-pool-config.yaml")
@@ -247,7 +242,7 @@ class ExtraConfigDpuTenant_NewAPI(ExtraConfigDpuTenant):
 
         # DELTA: We don't create env-override to set management port. https://github.com/ovn-org/ovn-kubernetes/pull/3467
 
-        for e in self._cc["workers"]:
+        for e in cc["workers"]:
             cmd = f"label node {e['name']} network.operator.openshift.io/dpu-host="
             logger.info(tclient.oc(cmd))
             ip = tclient.get_ip(e['name'])
@@ -282,8 +277,8 @@ class ExtraConfigDpuTenant_NewAPI(ExtraConfigDpuTenant):
         logger.info("Creating network attachement definition")
         tclient.oc("create -f manifests/tenant/nad.yaml")
 
-        ec = ExtraConfigSriovOvSHWOL(self._cc)
-        ec.ensure_pci_realloc(tclient, "dpu-host")
+        ec = ExtraConfigSriovOvSHWOL()
+        ec.ensure_pci_realloc(cc, tclient, "dpu-host")
 
 
 def create_nm_operator(client: K8sClient):

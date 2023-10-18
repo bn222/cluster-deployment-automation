@@ -1,3 +1,4 @@
+from clustersConfig import ClustersConfig
 import host
 from k8sClient import K8sClient
 import os
@@ -12,12 +13,9 @@ from logger import logger
 
 
 class ExtraConfigSriov:
-    def __init__(self, cc):
-        self._cc = cc
-
-    def run(self, cfg, futures: Dict[str, Future]) -> None:
+    def run(self, cc: ClustersConfig, cfg, futures: Dict[str, Future]) -> None:
         [f.result() for (_, f) in futures.items()]
-        client = K8sClient(self._cc["kubeconfig"])
+        client = K8sClient(cc["kubeconfig"])
         lh = host.LocalHost()
         repo_dir = "/root/sriov-network-operator"
         url = "https://github.com/openshift/sriov-network-operator.git"
@@ -53,11 +51,8 @@ class ExtraConfigSriov:
 
 
 class ExtraConfigSriovOvSHWOL:
-    def __init__(self, cc):
-        self._cc = cc
-
-    def need_pci_realloc(self, client: K8sClient) -> bool:
-        for e in self._cc["workers"]:
+    def need_pci_realloc(self, cc: ClustersConfig, client: K8sClient) -> bool:
+        for e in cc["workers"]:
             ip = client.get_ip(e['name'])
             if ip is None:
                 sys.exit(-1)
@@ -80,8 +75,8 @@ class ExtraConfigSriovOvSHWOL:
         logger.info("Waiting for mcp")
         client.wait_for_mcp(mcp_name, "pci-realloc.yaml")
 
-    def ensure_pci_realloc(self, client: K8sClient, mcp_name: str) -> None:
-        if self.need_pci_realloc(client):
+    def ensure_pci_realloc(self, cc: ClustersConfig, client: K8sClient, mcp_name: str) -> None:
+        if self.need_pci_realloc(cc, client):
             self.enable_pci_realloc(client, mcp_name)
 
     def render_sriov_node_policy(self, policyname: str, pfnames, numvfs: int, resourcename: str, outfilename: str):
@@ -115,9 +110,9 @@ class ExtraConfigSriovOvSHWOL:
         logger.error(f"Failed to find PF name on node {name} using ovs-vsctl")
         sys.exit(-1)
 
-    def run(self, _, futures: Dict[str, Future]) -> None:
+    def run(self, cc: ClustersConfig, _, futures: Dict[str, Future]) -> None:
         [f.result() for (_, f) in futures.items()]
-        client = K8sClient(self._cc["kubeconfig"])
+        client = K8sClient(cc["kubeconfig"])
         client.oc("create -f manifests/nicmode/pool.yaml")
 
         workloadVFsAll = []
@@ -126,7 +121,7 @@ class ExtraConfigSriovOvSHWOL:
         numMgmtVfs = 1
         workloadResourceName = "mlxnics"
         managementResourceName = "mgmtvf"
-        for e in self._cc["workers"]:
+        for e in cc["workers"]:
             name = e["name"]
             logger.info(client.oc(f'label node {name} --overwrite=true feature.node.kubernetes.io/network-sriov.capable=true'))
             logger.info(client.oc(f'label node {name} --overwrite=true network.operator.openshift.io/smart-nic='))
@@ -167,14 +162,14 @@ class ExtraConfigSriovOvSHWOL:
         logger.info(client.oc("create -f manifests/nicmode/nad.yaml"))
         client.wait_for_mcp("sriov", "nad.yaml")
 
-        self.ensure_pci_realloc(client, "sriov")
+        self.ensure_pci_realloc(cc, client, "sriov")
 
 
 # VF Management port requires a new API. We need a new extra config class to handle the API changes.
 class ExtraConfigSriovOvSHWOL_NewAPI(ExtraConfigSriovOvSHWOL):
-    def run(self, _, futures: Dict[str, Future]) -> None:
+    def run(self, cc: ClustersConfig, _, futures: Dict[str, Future]) -> None:
         [f.result() for (_, f) in futures.items()]
-        client = K8sClient(self._cc["kubeconfig"])
+        client = K8sClient(cc["kubeconfig"])
         client.oc("create -f manifests/nicmode/pool.yaml")
 
         workloadVFsAll = []
@@ -183,7 +178,7 @@ class ExtraConfigSriovOvSHWOL_NewAPI(ExtraConfigSriovOvSHWOL):
         numMgmtVfs = 1
         workloadResourceName = "mlxnics"
         managementResourceName = "mgmtvf"
-        for e in self._cc["workers"]:
+        for e in cc["workers"]:
             name = e["name"]
             logger.info(client.oc(f'label node {name} --overwrite=true feature.node.kubernetes.io/network-sriov.capable=true'))
             logger.info(client.oc(f'label node {name} --overwrite=true network.operator.openshift.io/smart-nic='))
@@ -236,7 +231,7 @@ class ExtraConfigSriovOvSHWOL_NewAPI(ExtraConfigSriovOvSHWOL):
 
         logger.info(client.oc("create -f /tmp/hardware-offload-config.yaml"))
 
-        self.ensure_pci_realloc(client, "sriov")
+        self.ensure_pci_realloc(cc, client, "sriov")
 
 
 def main():
