@@ -23,5 +23,5 @@ def configure_logger(lvl: int) -> logging.Logger:
     return logger
 
 
-prev_handler: Optional[logging.StreamHandler[TextIO]] = None
+prev_handler: Optional[logging.StreamHandler] = None
 logger = configure_logger(logging.INFO)
