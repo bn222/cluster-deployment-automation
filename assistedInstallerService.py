@@ -217,11 +217,14 @@ class AssistedInstallerService:
             sys.exit(1)
 
         j = json.loads(result.out)
-        if not isinstance(j, dict):
+        if not isinstance(j, list):
             logger.error(f"Failed to load json from {result.out}")
             sys.exit(-1)
 
         for x in j:
+            if not isinstance(x, dict):
+                logger.error(f"Failed to load json from {x}")
+                sys.exit(-1)
             if x["Name"] == name:
                 return x
         return None
