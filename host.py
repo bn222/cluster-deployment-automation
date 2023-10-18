@@ -25,6 +25,14 @@ from logger import logger
 from abc import ABC, abstractmethod
 
 
+def default_id_rsa_path() -> str:
+    return os.path.join(os.environ["HOME"], ".ssh/id_rsa")
+
+
+def default_ed25519_path() -> str:
+    return os.path.join(os.environ["HOME"], ".ssh/id_ed25519")
+
+
 Result = namedtuple("Result", "out err returncode")
 
 
@@ -510,11 +518,3 @@ def LocalHost() -> Host:
 
 def RemoteHost(ip: str) -> Host:
     return Host(ip)
-
-
-def default_id_rsa_path() -> str:
-    return os.path.join(os.environ["HOME"], ".ssh/id_rsa")
-
-
-def default_ed25519_path() -> str:
-    return os.path.join(os.environ["HOME"], ".ssh/id_ed25519")

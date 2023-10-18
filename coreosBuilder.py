@@ -4,7 +4,7 @@ import json
 import shutil
 from typing import Optional
 import glob
-from git import Repo
+from git.repo import Repo
 from logger import logger
 import host
 

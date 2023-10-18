@@ -2,7 +2,7 @@ from clustersConfig import ClustersConfig
 import host
 from k8sClient import K8sClient
 import os
-from git import Repo
+from git.repo import Repo
 import time
 from concurrent.futures import Future
 import shutil

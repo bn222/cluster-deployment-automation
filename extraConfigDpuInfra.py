@@ -2,7 +2,7 @@ from concurrent.futures import ThreadPoolExecutor
 from clustersConfig import ClustersConfig
 import host
 import time
-from git import Repo
+from git.repo import Repo
 from k8sClient import K8sClient
 from concurrent.futures import Future
 import os
