@@ -6,6 +6,10 @@ import sys
 import re
 import filecmp
 from typing import Optional
+from typing import Dict
+from typing import Union
+from typing import Any
+from typing import Sequence
 import yaml
 import requests
 from requests import get as get_url
@@ -13,7 +17,7 @@ from logger import logger
 import host
 
 
-def load_url_or_file(url_or_file: str):
+def load_url_or_file(url_or_file: str) -> str:
     if url_or_file.startswith("http"):
         return get_url(url_or_file).text
     return open(url_or_file).read()
@@ -72,8 +76,11 @@ class AssistedInstallerService:
     def _last_run_pod(self) -> str:
         return f'{self.workdir}/pod-persistent-last.yml'
 
-    def _customized_configmap(self):
+    def _customized_configmap(self) -> Dict[str, str]:
         y = yaml.safe_load(self.podConfig)
+        if not isinstance(y, dict):
+            logger.error(f"Failed to load yaml: {self.podConfig}")
+            sys.exit(-1)
         y["data"]["IMAGE_SERVICE_BASE_URL"] = f"http://{self._ip}:8888"
         y["data"]["SERVICE_BASE_URL"] = f"http://{self._ip}:8090"
         # https://gitlab.cee.redhat.com/service/app-interface/-/blob/dc9614663fc64bb5aad2c11c8c24d731f1dfa7e4/data/services/assisted-installer/cicd/target/production/assisted-service.yaml#L46-48
@@ -95,8 +102,11 @@ class AssistedInstallerService:
         y["data"]["RELEASE_IMAGES"] = json.dumps([version_contents])
         return y
 
-    def _customized_pod_persistent(self) -> str:
+    def _customized_pod_persistent(self) -> Dict[str, str]:
         y = yaml.safe_load(self.podFile)
+        if not isinstance(y, dict):
+            logger.error(f"Failed to load yaml: {self.podFile}")
+            sys.exit(-1)
 
         saas_version = "v2.18.4"
 
@@ -108,7 +118,7 @@ class AssistedInstallerService:
 
         return y
 
-    def prep_version(self, version):
+    def prep_version(self, version: str) -> Dict[str, Union[str, Sequence[str]]]:
         if re.search(r'4\.12\.[0-9]+', version):
             # Note how 4.12.0 has the -multi suffix because AI requires that
             # for 4.12. CDA hides this and simply expect 4.12.0 from the user
@@ -177,23 +187,37 @@ class AssistedInstallerService:
         ret["cpu_architectures"] = ['x86_64', 'arm64', 'ppc64le', 's390x']
         return ret
 
-    def get_nightly_pullspec(self, version) -> str:
+    def get_nightly_pullspec(self, version: str) -> str:
         version = version.rstrip("-nightly")
         url = f'https://multi.ocp.releases.ci.openshift.org/api/v1/releasestream/{version}-0.nightly-multi/latest'
         response = requests.get(url)
         j = json.loads(response.content)
-        return j["pullSpec"]
+        if not isinstance(j, dict):
+            decoded = response.content.decode('utf-8')
+            logger.error(f"Failed to get json from '{decoded}'")
+            sys.exit(-1)
+        pull_spec = j["pullSpec"]
+        if not isinstance(pull_spec, str):
+            logger.error(f"Unexpected pull spec {pull_spec}")
+            sys.exit(-1)
+        return pull_spec
 
-    def get_normal_pullspec(self, version) -> str:
+    def get_normal_pullspec(self, version: str) -> str:
         return f"quay.io/openshift-release-dev/ocp-release:{version}-multi"
 
-    def find_pod(self, name) -> Optional[dict]:
+    def find_pod(self, name: str) -> Optional[Any]:
         lh = host.LocalHost()
         result = lh.run("podman pod ps --format json")
         if result.err:
             logger.error(f"Error {result.err}")
             sys.exit(1)
-        for x in json.loads(result.out):
+
+        j = json.loads(result.out)
+        if not isinstance(j, dict):
+            logger.error(f"Failed to load json from {result.out}")
+            sys.exit(-1)
+
+        for x in j:
             if x["Name"] == name:
                 return x
         return None
@@ -201,13 +225,13 @@ class AssistedInstallerService:
     def pod_running(self) -> bool:
         return bool(self.find_pod("assisted-installer"))
 
-    def last_cm_is_same(self):
+    def last_cm_is_same(self) -> bool:
         return os.path.exists(self._last_run_cm()) and filecmp.cmp(self._config_map_path(), self._last_run_cm())
 
-    def last_pod_is_same(self):
+    def last_pod_is_same(self) -> bool:
         return os.path.exists(self._last_run_pod()) and filecmp.cmp(self._pod_persistent_path(), self._last_run_pod())
 
-    def stop_needed(self, force) -> bool:
+    def stop_needed(self, force: bool) -> bool:
         name = "assisted-installer"
         ai_pod = self.find_pod(name)
         if not ai_pod:
@@ -227,7 +251,7 @@ class AssistedInstallerService:
         logger.info(f"{name} already running with a different configmap")
         return True
 
-    def _ensure_pod_started(self, force) -> None:
+    def _ensure_pod_started(self, force: bool) -> None:
         if self.stop_needed(force):
             self.stop()
 
@@ -236,7 +260,7 @@ class AssistedInstallerService:
             shutil.copy(self._pod_persistent_path(), self._last_run_pod())
             self._play_kube(self._last_run_cm(), self._last_run_pod())
 
-    def _play_kube(self, cm, pod) -> host.Result:
+    def _play_kube(self, cm: str, pod: str) -> host.Result:
         lh = host.LocalHost()
         r = lh.run_or_die(f"podman play kube --configmap {cm} {pod}")
         return r
@@ -285,15 +309,15 @@ class AssistedInstallerService:
             lh.run(f"podman pod stop {pod_name}")
             lh.run(f"podman pod rm {pod_name}")
 
-    def start(self, force=False) -> None:
+    def start(self, force: bool = False) -> None:
         self._configure()
         self._ensure_pod_started(force)
         self.wait_for_api()
 
-    def export_snapshot(self, path) -> None:
+    def export_snapshot(self, path: str) -> None:
         lh = host.LocalHost()
 
-        def export_vol(path, vol_name):
+        def export_vol(path: str, vol_name: str) -> None:
             nested = f"tar -czf /export_data/{vol_name}.tar.gz -C /source_data ."
             cmd = f"podman run -it --name snapshot --privileged -v {vol_name}:/source_data -v {path}:/export_data alpine sh -c '{nested}'"
             logger.info(cmd)
@@ -305,11 +329,11 @@ class AssistedInstallerService:
         for e in target:
             export_vol(path, e)
 
-    def import_snapshot(self, path) -> None:
+    def import_snapshot(self, path: str) -> None:
         self.stop()
         lh = host.LocalHost()
 
-        def import_vol(path, vol_name):
+        def import_vol(path: str, vol_name: str) -> None:
             nested = "rm -rf /source_data/*"
             cmd = f"podman run -it --name snapshot --privileged -v {vol_name}:/source_data -v {path}:/export_data alpine sh -c '{nested}'"
             lh.run("podman rm snapshot")

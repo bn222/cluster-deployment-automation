@@ -28,27 +28,6 @@ from abc import ABC, abstractmethod
 Result = namedtuple("Result", "out err returncode")
 
 
-def sync_time(src, dst):
-    date = src.run("date").out.strip()
-    return dst.run(f"sudo date -s \"{date}\"")
-
-
-def LocalHost():
-    return Host("localhost")
-
-
-def RemoteHost(ip: str):
-    return Host(ip)
-
-
-def default_id_rsa_path():
-    return os.path.join(os.environ["HOME"], ".ssh/id_rsa")
-
-
-def default_ed25519_path():
-    return os.path.join(os.environ["HOME"], ".ssh/id_ed25519")
-
-
 class Login(ABC):
     @abstractmethod
     def login(self) -> paramiko.SSHClient:
@@ -518,3 +497,24 @@ class HostWithBF2(Host):
 
 
 host_instances: Dict[str, Host] = {}
+
+
+def sync_time(src: Host, dst: Host):
+    date = src.run("date").out.strip()
+    return dst.run(f"sudo date -s \"{date}\"")
+
+
+def LocalHost() -> Host:
+    return Host("localhost")
+
+
+def RemoteHost(ip: str) -> Host:
+    return Host(ip)
+
+
+def default_id_rsa_path() -> str:
+    return os.path.join(os.environ["HOME"], ".ssh/id_rsa")
+
+
+def default_ed25519_path() -> str:
+    return os.path.join(os.environ["HOME"], ".ssh/id_ed25519")
