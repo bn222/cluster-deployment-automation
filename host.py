@@ -435,6 +435,9 @@ class Host:
     def hostname(self) -> str:
         return self._hostname
 
+    def exists(self, path: str) -> bool:
+        return self.run(f"stat {path}", logging.DEBUG).returncode == 0
+
 
 class HostWithBF2(Host):
     def connect_to_bf(self, bf_addr: str):
