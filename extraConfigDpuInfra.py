@@ -134,158 +134,156 @@ def restart_ovs_configuration(ips):
         rh.run("sudo systemctl restart ovs-configuration")
 
 
-class ExtraConfigDpuInfra:
-    def run(self, cc: ClustersConfig, _, futures: Dict[str, Future]) -> None:
-        [f.result() for (_, f) in futures.items()]
-        kc = "/root/kubeconfig.infracluster"
-        client = K8sClient(kc)
-        lh = host.LocalHost()
-        apply_common_pathches(client)
+def ExtraConfigDpuInfra(cc: ClustersConfig, _, futures: Dict[str, Future]) -> None:
+    [f.result() for (_, f) in futures.items()]
+    kc = "/root/kubeconfig.infracluster"
+    client = K8sClient(kc)
+    lh = host.LocalHost()
+    apply_common_pathches(client)
 
-        bf_names = [x["name"] for x in cc["workers"] if x["type"] == "bf"]
-        ips = [client.get_ip(e) for e in bf_names]
+    bf_names = [x["name"] for x in cc["workers"] if x["type"] == "bf"]
+    ips = [client.get_ip(e) for e in bf_names]
 
-        for bf, ip in zip(bf_names, ips):
-            if ip is None:
-                sys.exit(-1)
-            rh = host.RemoteHost(ip)
-            rh.ssh_connect("core")
+    for bf, ip in zip(bf_names, ips):
+        if ip is None:
+            sys.exit(-1)
+        rh = host.RemoteHost(ip)
+        rh.ssh_connect("core")
 
-            def cb():
-                host.sync_time(lh, rh)
+        def cb():
+            host.sync_time(lh, rh)
 
-            client.wait_ready(bf, cb)
+        client.wait_ready(bf, cb)
 
-        # workaround, this will reboot the BF
-        # install_custom_kernel(lh, client, bf_names, ips)
+    # workaround, this will reboot the BF
+    # install_custom_kernel(lh, client, bf_names, ips)
 
-        lh.run("dnf install -y golang")
+    lh.run("dnf install -y golang")
 
-        # workaround, subscription based install broken
-        run_dpu_network_operator_git(lh, kc)
+    # workaround, subscription based install broken
+    run_dpu_network_operator_git(lh, kc)
 
-        logger.info("Waiting for pod to be in running state")
-        while True:
-            pods = client._client.list_namespaced_pod("openshift-dpu-network-operator").items
-            if len(pods) == 1:
-                if pods[0].status.phase == "Running":
-                    break
-                logger.info(f"Pod is in {pods[0].status.phase} state")
-            elif len(pods) > 1:
-                logger.info("unexpected number of pods")
-                sys.exit(-1)
-            time.sleep(5)
+    logger.info("Waiting for pod to be in running state")
+    while True:
+        pods = client._client.list_namespaced_pod("openshift-dpu-network-operator").items
+        if len(pods) == 1:
+            if pods[0].status.phase == "Running":
+                break
+            logger.info(f"Pod is in {pods[0].status.phase} state")
+        elif len(pods) > 1:
+            logger.info("unexpected number of pods")
+            sys.exit(-1)
+        time.sleep(5)
 
-        logger.info("Creating namespace for tenant")
-        client.oc("create -f manifests/infra/ns.yaml")
+    logger.info("Creating namespace for tenant")
+    client.oc("create -f manifests/infra/ns.yaml")
 
-        logger.info("Creating DpuClusterConfig cr")
-        client.oc("create -f manifests/infra/dpuclusterconfig.yaml")
+    logger.info("Creating DpuClusterConfig cr")
+    client.oc("create -f manifests/infra/dpuclusterconfig.yaml")
 
-        logger.info("Patching mcp setting maxUnavailable to 2")
-        client.oc("patch mcp dpu --type=json -p=\[\{\"op\":\"replace\",\"path\":\"/spec/maxUnavailable\",\"value\":2\}\]")
+    logger.info("Patching mcp setting maxUnavailable to 2")
+    client.oc("patch mcp dpu --type=json -p=\[\{\"op\":\"replace\",\"path\":\"/spec/maxUnavailable\",\"value\":2\}\]")
 
-        logger.info("Labeling nodes")
-        for b in bf_names:
-            client.oc(f"label node {b} node-role.kubernetes.io/dpu-worker=")
+    logger.info("Labeling nodes")
+    for b in bf_names:
+        client.oc(f"label node {b} node-role.kubernetes.io/dpu-worker=")
 
-        logger.info("Creating config map")
-        logger.info(client.oc("create -f manifests/infra/cm.yaml"))
+    logger.info("Creating config map")
+    logger.info(client.oc("create -f manifests/infra/cm.yaml"))
 
-        for b in bf_names:
-            client.oc(f"label node {b} network.operator.openshift.io/dpu=")
-        logger.info("Waiting for mcp to be ready")
-        client.wait_for_mcp("dpu", "cm.yaml")
+    for b in bf_names:
+        client.oc(f"label node {b} network.operator.openshift.io/dpu=")
+    logger.info("Waiting for mcp to be ready")
+    client.wait_for_mcp("dpu", "cm.yaml")
 
-        for b in bf_names:
-            ip = client.get_ip(b)
-            if ip is None:
-                logger.error("Failed to get ip for {b}")
-                sys.exit(-1)
-            rh = host.RemoteHost(ip)
-            rh.ssh_connect("core")
-            result = rh.run("sudo ovs-vsctl show")
-            if "c1pf0hpf" not in result.out:
-                logger.info(result.out)
-                logger.info("Did not find interface c1pf0hpf in br-ex. Try to restart ovs-configuration on node.")
-                sys.exit(-1)
+    for b in bf_names:
+        ip = client.get_ip(b)
+        if ip is None:
+            logger.error("Failed to get ip for {b}")
+            sys.exit(-1)
+        rh = host.RemoteHost(ip)
+        rh.ssh_connect("core")
+        result = rh.run("sudo ovs-vsctl show")
+        if "c1pf0hpf" not in result.out:
+            logger.info(result.out)
+            logger.info("Did not find interface c1pf0hpf in br-ex. Try to restart ovs-configuration on node.")
+            sys.exit(-1)
 
 
 # VF Management port requires a new API. We need a new extra config class to handle the API changes.
-class ExtraConfigDpuInfra_NewAPI:
-    def run(self, cc, _, futures: Dict[str, Future]) -> None:
-        [f.result() for (_, f) in futures.items()]
-        kc = "/root/kubeconfig.infracluster"
-        client = K8sClient(kc)
-        lh = host.LocalHost()
-        apply_common_pathches(client)
+def ExtraConfigDpuInfra_NewAPI(cc, _, futures: Dict[str, Future]) -> None:
+    [f.result() for (_, f) in futures.items()]
+    kc = "/root/kubeconfig.infracluster"
+    client = K8sClient(kc)
+    lh = host.LocalHost()
+    apply_common_pathches(client)
 
-        bf_names = [x["name"] for x in cc["workers"] if x["type"] == "bf"]
-        ips = [client.get_ip(e) for e in bf_names]
+    bf_names = [x["name"] for x in cc["workers"] if x["type"] == "bf"]
+    ips = [client.get_ip(e) for e in bf_names]
 
-        for bf, ip in zip(bf_names, ips):
-            if ip is None:
-                sys.exit(-1)
-            rh = host.RemoteHost(ip)
-            rh.ssh_connect("core")
+    for bf, ip in zip(bf_names, ips):
+        if ip is None:
+            sys.exit(-1)
+        rh = host.RemoteHost(ip)
+        rh.ssh_connect("core")
 
-            def cb():
-                host.sync_time(lh, rh)
+        def cb():
+            host.sync_time(lh, rh)
 
-            client.wait_ready(bf, cb)
+        client.wait_ready(bf, cb)
 
-        # workaround, this will reboot the BF
-        # install_custom_kernel(lh, client, bf_names, ips)
+    # workaround, this will reboot the BF
+    # install_custom_kernel(lh, client, bf_names, ips)
 
-        lh.run("dnf install -y golang")
+    lh.run("dnf install -y golang")
 
-        # workaround, subscription based install broken
-        run_dpu_network_operator_git(lh, kc)
+    # workaround, subscription based install broken
+    run_dpu_network_operator_git(lh, kc)
 
-        logger.info("Waiting for pod to be in running state")
-        while True:
-            pods = client._client.list_namespaced_pod("openshift-dpu-network-operator").items
-            if len(pods) == 1:
-                if pods[0].status.phase == "Running":
-                    break
-                logger.info(f"Pod is in {pods[0].status.phase} state")
-            elif len(pods) > 1:
-                logger.info("unexpected number of pods")
-                sys.exit(-1)
-            time.sleep(5)
+    logger.info("Waiting for pod to be in running state")
+    while True:
+        pods = client._client.list_namespaced_pod("openshift-dpu-network-operator").items
+        if len(pods) == 1:
+            if pods[0].status.phase == "Running":
+                break
+            logger.info(f"Pod is in {pods[0].status.phase} state")
+        elif len(pods) > 1:
+            logger.info("unexpected number of pods")
+            sys.exit(-1)
+        time.sleep(5)
 
-        logger.info("Creating namespace for tenant")
-        client.oc("create -f manifests/infra/ns.yaml")
+    logger.info("Creating namespace for tenant")
+    client.oc("create -f manifests/infra/ns.yaml")
 
-        logger.info("Creating DpuClusterConfig cr")
-        client.oc("create -f manifests/infra/dpuclusterconfig.yaml")
+    logger.info("Creating DpuClusterConfig cr")
+    client.oc("create -f manifests/infra/dpuclusterconfig.yaml")
 
-        logger.info("Patching mcp setting maxUnavailable to 2")
-        client.oc("patch mcp dpu --type=json -p=\[\{\"op\":\"replace\",\"path\":\"/spec/maxUnavailable\",\"value\":2\}\]")
+    logger.info("Patching mcp setting maxUnavailable to 2")
+    client.oc("patch mcp dpu --type=json -p=\[\{\"op\":\"replace\",\"path\":\"/spec/maxUnavailable\",\"value\":2\}\]")
 
-        logger.info("Labeling nodes")
-        for b in bf_names:
-            client.oc(f"label node {b} node-role.kubernetes.io/dpu-worker=")
+    logger.info("Labeling nodes")
+    for b in bf_names:
+        client.oc(f"label node {b} node-role.kubernetes.io/dpu-worker=")
 
-        # DELTA: No need to create config map to set dpu mode. https://github.com/openshift/cluster-network-operator/pull/1676
+    # DELTA: No need to create config map to set dpu mode. https://github.com/openshift/cluster-network-operator/pull/1676
 
-        for b in bf_names:
-            client.oc(f"label node {b} network.operator.openshift.io/dpu=")
-        logger.info("Waiting for mcp to be ready")
-        client.wait_for_mcp("dpu", "dpu mcp patch")
+    for b in bf_names:
+        client.oc(f"label node {b} network.operator.openshift.io/dpu=")
+    logger.info("Waiting for mcp to be ready")
+    client.wait_for_mcp("dpu", "dpu mcp patch")
 
-        for b in bf_names:
-            ip = client.get_ip(b)
-            if ip is None:
-                logger.error(f"Failed to get ip for node {b}")
-                sys.exit(-1)
-            rh = host.RemoteHost(ip)
-            rh.ssh_connect("core")
-            result = rh.run("sudo ovs-vsctl show")
-            if "c1pf0hpf" not in result.out:
-                logger.info(result.out)
-                logger.info("Did not find interface c1pf0hpf in br-ex. Try to restart ovs-configuration on node.")
-                sys.exit(-1)
+    for b in bf_names:
+        ip = client.get_ip(b)
+        if ip is None:
+            logger.error(f"Failed to get ip for node {b}")
+            sys.exit(-1)
+        rh = host.RemoteHost(ip)
+        rh.ssh_connect("core")
+        result = rh.run("sudo ovs-vsctl show")
+        if "c1pf0hpf" not in result.out:
+            logger.info(result.out)
+            logger.info("Did not find interface c1pf0hpf in br-ex. Try to restart ovs-configuration on node.")
+            sys.exit(-1)
 
 
 def main():

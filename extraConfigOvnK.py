@@ -7,21 +7,20 @@ from typing import Dict
 from logger import logger
 
 
-class ExtraConfigOvnK:
-    def run(self, cc: ClustersConfig, cfg, futures: Dict[str, Future]) -> None:
-        [f.result() for (_, f) in futures.items()]
-        logger.info("Running post config step to load custom OVN-K")
-        iclient = K8sClient(cc["kubeconfig"])
+def ExtraConfigOvnK(cc: ClustersConfig, cfg, futures: Dict[str, Future]) -> None:
+    [f.result() for (_, f) in futures.items()]
+    logger.info("Running post config step to load custom OVN-K")
+    iclient = K8sClient(cc["kubeconfig"])
 
-        if "image" not in cfg:
-            logger.info("Error image not provided to load custom OVN-K")
-            sys.exit(-1)
+    if "image" not in cfg:
+        logger.info("Error image not provided to load custom OVN-K")
+        sys.exit(-1)
 
-        image = cfg["image"]
+    image = cfg["image"]
 
-        logger.info(f"Image {image} provided to load custom OVN-K")
+    logger.info(f"Image {image} provided to load custom OVN-K")
 
-        patch = f"""spec:
+    patch = f"""spec:
   template:
     spec:
       containers:
@@ -31,11 +30,11 @@ class ExtraConfigOvnK:
           value: {image}
 """
 
-        configCVO = ConfigCVO()
-        configCVO.scaleDown(iclient)
-        iclient.oc(f'patch -p "{patch}" deploy network-operator -n openshift-network-operator')
+    configCVO = ConfigCVO()
+    configCVO.scaleDown(iclient)
+    iclient.oc(f'patch -p "{patch}" deploy network-operator -n openshift-network-operator')
 
-        # TODO: wait for all ovn-k pods to become ready again
+    # TODO: wait for all ovn-k pods to become ready again
 
 
 def main():

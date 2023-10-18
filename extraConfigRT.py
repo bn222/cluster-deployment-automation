@@ -5,21 +5,20 @@ from concurrent.futures import Future
 from typing import Dict
 
 
-class ExtraConfigRT:
-    def run(self, cc: ClustersConfig, cfg, futures: Dict[str, Future]) -> None:
-        [f.result() for (_, f) in futures.items()]
+def ExtraConfigRT(cc: ClustersConfig, cfg, futures: Dict[str, Future]) -> None:
+    [f.result() for (_, f) in futures.items()]
 
-        is_sno = cc.is_sno()
+    is_sno = cc.is_sno()
 
-        logger.info("Running post config command to install rt kernel on worker nodes")
-        client = K8sClient(cc["kubeconfig"])
+    logger.info("Running post config command to install rt kernel on worker nodes")
+    client = K8sClient(cc["kubeconfig"])
 
-        resource = "sno-realtime.yaml" if is_sno else "worker-realtime.yaml"
-        client.oc(f"create -f manifests/rt/{resource}")
+    resource = "sno-realtime.yaml" if is_sno else "worker-realtime.yaml"
+    client.oc(f"create -f manifests/rt/{resource}")
 
-        logger.info("Waiting for mcp to update")
-        name = "master" if is_sno else "worker"
-        client.wait_for_mcp(name, resource)
+    logger.info("Waiting for mcp to update")
+    name = "master" if is_sno else "worker"
+    client.wait_for_mcp(name, resource)
 
 
 def main():

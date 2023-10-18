@@ -25,53 +25,51 @@ to be in a good state.
 """
 
 
-class ExtraConfigBFB:
-    def run(self, cc: ClustersConfig, _, futures: Dict[str, Future]) -> None:
-        coreosBuilder.ensure_fcos_exists()
-        logger.info("Loading BF-2 with BFB image on all workers")
-        lh = host.LocalHost()
-        nfs = NFS(lh, cc["external_port"])
-        iso_url = nfs.host_file("/root/iso/fedora-coreos.iso")
+def ExtraConfigBFB(cc: ClustersConfig, _, futures: Dict[str, Future]) -> None:
+    coreosBuilder.ensure_fcos_exists()
+    logger.info("Loading BF-2 with BFB image on all workers")
+    lh = host.LocalHost()
+    nfs = NFS(lh, cc["external_port"])
+    iso_url = nfs.host_file("/root/iso/fedora-coreos.iso")
 
-        def helper(e) -> None:
-            h = host.HostWithBF2(e["node"], e["bmc_ip"], e["bmc_user"], e["bmc_password"])
+    def helper(e) -> None:
+        h = host.HostWithBF2(e["node"], e["bmc_ip"], e["bmc_user"], e["bmc_password"])
 
-            def check(result: host.Result):
-                if result.returncode != 0:
-                    logger.info(result)
-                    sys.exit(-1)
+        def check(result: host.Result):
+            if result.returncode != 0:
+                logger.info(result)
+                sys.exit(-1)
 
-            h.boot_iso_redfish(iso_url)
-            h.ssh_connect("core")
-            check(h.bf_firmware_upgrade())
-            check(h.bf_firmware_defaults())
-            h.cold_boot()
-            h.boot_iso_redfish(iso_url)
-            h.ssh_connect("core")
-            check(h.bf_load_bfb())
+        h.boot_iso_redfish(iso_url)
+        h.ssh_connect("core")
+        check(h.bf_firmware_upgrade())
+        check(h.bf_firmware_defaults())
+        h.cold_boot()
+        h.boot_iso_redfish(iso_url)
+        h.ssh_connect("core")
+        check(h.bf_load_bfb())
 
-        executor = ThreadPoolExecutor(max_workers=len(cc["workers"]))
-        # Assuming that all workers have BF that need to reset to bfb image in
-        # dpu mode
-        for e in cc["workers"]:
-            futures[e["name"]].result()
-            f = executor.submit(helper, e)
-            futures[e["name"]] = f
-        logger.info("BFB setup complete")
+    executor = ThreadPoolExecutor(max_workers=len(cc["workers"]))
+    # Assuming that all workers have BF that need to reset to bfb image in
+    # dpu mode
+    for e in cc["workers"]:
+        futures[e["name"]].result()
+        f = executor.submit(helper, e)
+        futures[e["name"]] = f
+    logger.info("BFB setup complete")
 
 
-class ExtraConfigSwitchNicMode:
-    def run(self, cc: ClustersConfig, _, futures: Dict[str, Future]) -> None:
-        [f.result() for (_, f) in futures.items()]
-        client = K8sClient(cc["kubeconfig"])
+def ExtraConfigSwitchNicMode(cc: ClustersConfig, _, futures: Dict[str, Future]) -> None:
+    [f.result() for (_, f) in futures.items()]
+    client = K8sClient(cc["kubeconfig"])
 
-        client.oc("create -f manifests/nicmode/pool.yaml")
+    client.oc("create -f manifests/nicmode/pool.yaml")
 
-        # label nodes
-        for e in cc["workers"]:
-            logger.info(client.oc(f'label node {e["name"]} --overwrite=true feature.node.kubernetes.io/network-sriov.capable=true'))
+    # label nodes
+    for e in cc["workers"]:
+        logger.info(client.oc(f'label node {e["name"]} --overwrite=true feature.node.kubernetes.io/network-sriov.capable=true'))
 
-        client.oc("delete -f manifests/nicmode/switch.yaml")
-        client.oc("create -f manifests/nicmode/switch.yaml")
-        logger.info("Waiting for mcp to update")
-        client.wait_for_mcp("sriov", "switch.yaml")
+    client.oc("delete -f manifests/nicmode/switch.yaml")
+    client.oc("create -f manifests/nicmode/switch.yaml")
+    logger.info("Waiting for mcp to update")
+    client.wait_for_mcp("sriov", "switch.yaml")
