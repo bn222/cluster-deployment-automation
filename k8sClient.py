@@ -7,6 +7,7 @@ import requests
 import sys
 from typing import List
 from typing import Optional
+from typing import Callable
 from logger import logger
 
 oc_url = "https://mirror.openshift.com/pub/openshift-v4/clients/ocp/latest/"
@@ -26,13 +27,13 @@ class K8sClient:
             for con in e.status.conditions:
                 if con.type == "Ready":
                     if name == e.metadata.name:
-                        return con.status == "True"
+                        return str(con.status) == "True"
         return False
 
     def get_nodes(self) -> List[str]:
         return [e.metadata.name for e in self._client.list_node().items]
 
-    def wait_ready(self, name: str, cb) -> None:
+    def wait_ready(self, name: str, cb: Optional[Callable[[], None]] = None) -> None:
         logger.info(f"waiting for {name} to be ready")
         while True:
             if self.is_ready(name):
@@ -54,7 +55,7 @@ class K8sClient:
             if name == e.metadata.name:
                 for addr in e.status.addresses:
                     if addr.type == "InternalIP":
-                        return addr.address
+                        return str(addr.address)
         return None
 
     def oc(self, cmd: str) -> host.Result:
@@ -74,7 +75,7 @@ class K8sClient:
             lh.run("rm build/oc.tar.gz")
         self.oc_bin = os.path.join(os.getcwd(), "build/oc")
 
-    def wait_for_mcp(self, mcp_name: str, resource: str = "resource"):
+    def wait_for_mcp(self, mcp_name: str, resource: str = "resource") -> None:
         time.sleep(60)
         iteration = 0
         max_tries = 10

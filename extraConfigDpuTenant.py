@@ -107,6 +107,8 @@ def ExtraConfigDpuTenant(cc: ClustersConfig, _, futures: Dict[str, Future]) -> N
     tclient.oc("create -f manifests/tenant/sriovdpuconfigmap.yaml")
 
     for e in cc["workers"]:
+        if not (isinstance(e, dict) and isinstance(e["name"], str)):
+            sys.exit(-1)
         cmd = f"label node {e['name']} network.operator.openshift.io/dpu-host="
         logger.info(tclient.oc(cmd))
         ip = tclient.get_ip(e['name'])
@@ -224,6 +226,8 @@ def ExtraConfigDpuTenant_NewAPI(cc: ClustersConfig, cfg, futures: Dict[str, Futu
     # DELTA: We don't create env-override to set management port. https://github.com/ovn-org/ovn-kubernetes/pull/3467
 
     for e in cc["workers"]:
+        if not (isinstance(e, dict) and isinstance(e["name"], str)):
+            sys.exit(-1)
         cmd = f"label node {e['name']} network.operator.openshift.io/dpu-host="
         logger.info(tclient.oc(cmd))
         ip = tclient.get_ip(e['name'])

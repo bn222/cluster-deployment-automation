@@ -94,7 +94,7 @@ def install_custom_kernel(lh, client, bf_names, ips):
         rh = host.RemoteHost(ip)
         rh.ssh_connect("core")
 
-        def cb():
+        def cb() -> None:
             host.sync_time(lh, rh)
 
         client.wait_ready(bf, cb)

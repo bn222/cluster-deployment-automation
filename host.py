@@ -15,6 +15,7 @@ from typing import Optional
 from typing import Union
 from typing import List
 from typing import Type
+from typing import Any
 from typing import Dict
 from functools import lru_cache
 from ailib import Redfish
@@ -33,7 +34,11 @@ def default_ed25519_path() -> str:
     return os.path.join(os.environ["HOME"], ".ssh/id_ed25519")
 
 
-Result = namedtuple("Result", "out err returncode")
+class Result:
+    def __init__(self, out: str, err: str, returncode: int):
+        self.out = out
+        self.err = err
+        self.returncode = returncode
 
 
 class Login(ABC):
@@ -88,7 +93,7 @@ class PasswordLogin(Login):
 
 
 class Host:
-    def __new__(cls, hostname: str, bmc_ip: Optional[str] = None, bmc_user: str = "root", bmc_password: str = "calvin"):
+    def __new__(cls, hostname: str, bmc_ip: Optional[str] = None, bmc_user: str = "root", bmc_password: str = "calvin") -> 'Host':
         if hostname not in host_instances:
             host_instances[hostname] = super().__new__(cls)
             logger.debug(f"new instance for {hostname}")
@@ -103,10 +108,10 @@ class Host:
         self.sudo_needed = False
 
     @lru_cache(maxsize=None)
-    def is_localhost(self):
+    def is_localhost(self) -> bool:
         return self._hostname in ("localhost", socket.gethostname())
 
-    def ssh_connect(self, username: str, password: Optional[str] = None, rsa_path: str = default_id_rsa_path(), ed25519_path: str = default_ed25519_path()):
+    def ssh_connect(self, username: str, password: Optional[str] = None, rsa_path: str = default_id_rsa_path(), ed25519_path: str = default_ed25519_path()) -> None:
         assert not self.is_localhost()
         logger.info(f"waiting for '{self._hostname}' to respond to ping")
         self.wait_ping()
@@ -154,7 +159,7 @@ class Host:
                 return x
         return None
 
-    def remove(self, source):
+    def remove(self, source: str) -> None:
         if self.is_localhost():
             if os.path.exists(source):
                 os.remove(source)
@@ -167,7 +172,7 @@ class Host:
                 pass
 
     # Copying local_file to "Host", which can be local or remote
-    def copy_to(self, src_file, dst_file):
+    def copy_to(self, src_file: str, dst_file: str) -> None:
         if not os.path.exists(src_file):
             raise FileNotFoundError(2, f"No such file or dir: {src_file}")
         if self.is_localhost():
@@ -183,10 +188,10 @@ class Host:
                     logger.info("Disconnected during sftpd, reconnecting...")
                     self.ssh_connect_looped(self._logins)
 
-    def need_sudo(self):
+    def need_sudo(self) -> None:
         self.sudo_needed = True
 
-    def run(self, cmd: str, log_level: int = logging.INFO, env: dict = os.environ.copy()) -> Result:
+    def run(self, cmd: str, log_level: int = logging.INFO, env: Dict[str, str] = os.environ.copy()) -> Result:
         if self.sudo_needed:
             cmd = "sudo " + cmd
 
@@ -196,7 +201,7 @@ class Host:
         else:
             return self._run_remote(cmd, log_level)
 
-    def _run_local(self, cmd: str, env: dict) -> Result:
+    def _run_local(self, cmd: str, env: Dict[str, str]) -> Result:
         args = shlex.split(cmd)
         pipe = subprocess.PIPE
         with subprocess.Popen(args, stdout=pipe, stderr=pipe, env=env) as proc:
@@ -213,7 +218,7 @@ class Host:
         return Result(out, err, ret)
 
     def _run_remote(self, cmd: str, log_level: int) -> Result:
-        def read_output(cmd, log_level):
+        def read_output(cmd: str, log_level: int) -> Result:
             assert self._host is not None
             _, stdout, stderr = self._host.exec_command(cmd)
 
@@ -227,10 +232,8 @@ class Host:
                 err.append(line)
 
             exit_code = stdout.channel.recv_exit_status()
-            out = "".join(out)
-            err = "".join(err)
 
-            return Result(out, err, exit_code)
+            return Result("".join(out), "".join(err), exit_code)
 
         # Make sure multiline command is not seen as multiple commands
         cmd = cmd.replace("\n", "\\\n")
@@ -349,7 +352,7 @@ class Host:
         r = lh.run(ping_cmd)
         return r.returncode == 0
 
-    def os_release(self) -> dict:
+    def os_release(self) -> Dict[str, str]:
         d = {}
         for e in self.read_file("/etc/os-release"):
             split_e = e.split("=", maxsplit=1)
@@ -360,9 +363,9 @@ class Host:
             d[k] = v
         return d
 
-    def running_fcos(self):
+    def running_fcos(self) -> bool:
         d = self.os_release()
-        return d["NAME"], d["VARIANT"] == 'Fedora Linux', 'CoreOS'
+        return (d["NAME"], d["VARIANT"]) == ('Fedora Linux', 'CoreOS')
 
     def vm_is_running(self, name: str) -> bool:
         def state_running(out: str) -> bool:
@@ -371,13 +374,13 @@ class Host:
         ret = self.run(f"virsh dominfo {name}")
         return not ret.returncode and state_running(ret.out)
 
-    def ipa(self) -> dict:
+    def ipa(self) -> Any:
         return json.loads(self.run("ip -json a", logging.DEBUG).out)
 
-    def ipr(self) -> dict:
+    def ipr(self) -> Any:
         return json.loads(self.run("ip -json r", logging.DEBUG).out)
 
-    def all_ports(self) -> dict:
+    def all_ports(self) -> Any:
         return json.loads(self.run("ip -json link", logging.DEBUG).out)
 
     def port_exists(self, port_name: str) -> bool:
@@ -389,7 +392,7 @@ class Host:
             return False
         return "NO-CARRIER" not in ports[port_name]["flags"]
 
-    def write(self, fn, contents):
+    def write(self, fn: str, contents: str) -> None:
         if self.is_localhost():
             with open(fn, "w") as f:
                 f.write(contents)
@@ -427,7 +430,7 @@ class Host:
 
 
 class HostWithBF2(Host):
-    def connect_to_bf(self, bf_addr: str):
+    def connect_to_bf(self, bf_addr: str) -> None:
         self.ssh_connect("core")
         prov_host = self._host
         rsa_login = self._rsa_login()
@@ -507,7 +510,7 @@ class HostWithBF2(Host):
 host_instances: Dict[str, Host] = {}
 
 
-def sync_time(src: Host, dst: Host):
+def sync_time(src: Host, dst: Host) -> Result:
     date = src.run("date").out.strip()
     return dst.run(f"sudo date -s \"{date}\"")
 
