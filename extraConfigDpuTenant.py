@@ -3,7 +3,6 @@ import host
 from common_patches import apply_common_pathches
 from concurrent.futures import Future
 from extraConfigDpuInfra import run_dpu_network_operator_git
-from extraConfigSriov import ExtraConfigSriov
 from extraConfigSriov import ExtraConfigSriovOvSHWOL
 from typing import Dict
 import sys
