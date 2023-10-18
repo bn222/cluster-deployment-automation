@@ -191,7 +191,7 @@ class Host:
     def need_sudo(self) -> None:
         self.sudo_needed = True
 
-    def run(self, cmd: str, log_level: int = logging.INFO, env: Dict[str, str] = os.environ.copy()) -> Result:
+    def run(self, cmd: str, log_level: int = logging.DEBUG, env: Dict[str, str] = os.environ.copy()) -> Result:
         if self.sudo_needed:
             cmd = "sudo " + cmd
 
