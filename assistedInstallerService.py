@@ -46,9 +46,10 @@ non-standard way, the web-ui can't be used.
 
 
 class AssistedInstallerService:
-    def __init__(self, version: str, ip: str, branch: str = "master"):
+    def __init__(self, version: str, ip: str, proxy: str = "", branch: str = "master"):
         self._version = version
         self._ip = ip
+        self._proxy = proxy
         base_url = f"https://raw.githubusercontent.com/openshift/assisted-service/{branch}"
         pod_config_url = f"{base_url}/deploy/podman/configmap.yml"
         pod_file = f"{base_url}/deploy/podman/pod-persistent.yml"
@@ -100,6 +101,9 @@ class AssistedInstallerService:
         # version we will be using.
         version_contents = self.prep_version(self._version)
         y["data"]["RELEASE_IMAGES"] = json.dumps([version_contents])
+        if self._proxy:
+            y["data"]["http_proxy"] = self._proxy
+            y["data"]["https_proxy"] = self._proxy
         return y
 
     def _customized_pod_persistent(self) -> Dict[str, str]:
@@ -213,11 +217,14 @@ class AssistedInstallerService:
             sys.exit(1)
 
         j = json.loads(result.out)
-        if not isinstance(j, dict):
+        if not isinstance(j, list):
             logger.error(f"Failed to load json from {result.out}")
             sys.exit(-1)
 
         for x in j:
+            if not isinstance(x, dict):
+                logger.error(f"Failed to load json from {x}")
+                sys.exit(-1)
             if x["Name"] == name:
                 return x
         return None

@@ -191,7 +191,7 @@ class Host:
     def need_sudo(self) -> None:
         self.sudo_needed = True
 
-    def run(self, cmd: str, log_level: int = logging.INFO, env: Dict[str, str] = os.environ.copy()) -> Result:
+    def run(self, cmd: str, log_level: int = logging.DEBUG, env: Dict[str, str] = os.environ.copy()) -> Result:
         if self.sudo_needed:
             cmd = "sudo " + cmd
 
@@ -354,7 +354,7 @@ class Host:
 
     def os_release(self) -> Dict[str, str]:
         d = {}
-        for e in self.read_file("/etc/os-release"):
+        for e in self.read_file("/etc/os-release").split("\n"):
             split_e = e.split("=", maxsplit=1)
             if len(split_e) != 2:
                 continue
