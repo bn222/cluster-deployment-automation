@@ -46,10 +46,11 @@ non-standard way, the web-ui can't be used.
 
 
 class AssistedInstallerService:
-    def __init__(self, version: str, ip: str, proxy: str = "", branch: str = "master"):
+    def __init__(self, version: str, ip: str, proxy: str = "", noproxy: str = "", branch: str = "master"):
         self._version = version
         self._ip = ip
         self._proxy = proxy
+        self._noproxy = noproxy
         base_url = f"https://raw.githubusercontent.com/openshift/assisted-service/{branch}"
         pod_config_url = f"{base_url}/deploy/podman/configmap.yml"
         pod_file = f"{base_url}/deploy/podman/pod-persistent.yml"
@@ -104,6 +105,8 @@ class AssistedInstallerService:
         if self._proxy:
             y["data"]["http_proxy"] = self._proxy
             y["data"]["https_proxy"] = self._proxy
+        if self._noproxy:
+            y["data"]["no_proxy"] = self._noproxy
         return y
 
     def _customized_pod_persistent(self) -> Dict[str, str]:

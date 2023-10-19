@@ -12,7 +12,7 @@ def main_deploy(args: argparse.Namespace) -> None:
     cc = ClustersConfig(args.config)
 
     if args.url == "192.168.122.1":
-        ais = AssistedInstallerService(cc["version"], args.url, cc["proxy"])
+        ais = AssistedInstallerService(cc["version"], args.url, cc["proxy"], cc["noproxy"])
         ais.start()
         # workaround, this will still install 4.14, but AI will think
         # it is 4.13 (see also workaround when setting up versions)
