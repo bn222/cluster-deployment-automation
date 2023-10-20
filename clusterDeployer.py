@@ -23,6 +23,7 @@ from nfs import NFS
 import coreosBuilder
 from typing import Tuple
 import common
+from python_hosts import Hosts, HostsEntry
 from logger import logger
 from extraConfigRunner import ExtraConfigRunner
 
@@ -576,6 +577,9 @@ class ClusterDeployer:
         self._wait_known_state(names, cb)
         self._ai.start_until_success(cluster_name)
 
+        logger.info('updating /etc/hosts')
+        self.update_etc_hosts()
+
         logger.info(f'downloading kubeconfig to {self._cc["kubeconfig"]}')
         self._ai.download_kubeconfig(self._cc["name"], self._cc["kubeconfig"])
 
@@ -585,7 +589,6 @@ class ClusterDeployer:
         self.ensure_linked_to_bridge(lh)
         for e in self._cc["masters"]:
             self._set_password(e)
-        self.update_etc_hosts()
 
     def _print_logs(self, name):
         ip = self._ai.get_ai_ip(name)
@@ -950,17 +953,12 @@ class ClusterDeployer:
         cluster_name = self._cc["name"]
         api_name = f"api.{cluster_name}.redhat.com"
         api_ip = self._ai.info_cluster(cluster_name).api_vip
-        found = False
-        etchost = ""
-        with open("/etc/hosts", "r") as f:
-            etchost = f.read()
-        for e in etchost.split("\n"):
-            if e and e.split()[1] == api_name:
-                found = True
-                break
-        if not found:
-            with open("/etc/hosts", "a") as f:
-                f.write(f"{api_ip} {api_name}\n")
+
+        hosts = Hosts()
+        hosts.remove_all_matching(name=api_name)
+        hosts.add([HostsEntry(entry_type='ipv4', address=api_ip, names=[api_name])])
+        hosts.write()
+
         # libvirtd also runs dnsmasq, and dnsmasq reads /etc/hosts.
         # For that reason, restart libvirtd to re-read the changes.
         lh = host.LocalHost()
