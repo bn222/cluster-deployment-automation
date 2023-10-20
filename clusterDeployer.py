@@ -557,6 +557,9 @@ class ClusterDeployer:
         self._ai.ensure_infraenv_created(infra_env, cfg)
         self._ai.download_iso_with_retry(infra_env)
 
+        logger.info('updating /etc/hosts')
+        self.update_etc_hosts()
+
         lh = host.LocalHost()
         # TODO: clean this up. Currently just skipping this
         # since self.local_host_config() is not present if no local vms
@@ -576,9 +579,6 @@ class ClusterDeployer:
         names = (e["name"] for e in self._cc["masters"])
         self._wait_known_state(names, cb)
         self._ai.start_until_success(cluster_name)
-
-        logger.info('updating /etc/hosts')
-        self.update_etc_hosts()
 
         logger.info(f'downloading kubeconfig to {self._cc["kubeconfig"]}')
         self._ai.download_kubeconfig(self._cc["name"], self._cc["kubeconfig"])
