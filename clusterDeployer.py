@@ -532,7 +532,7 @@ class ClusterDeployer:
         cfg["additional_ntp_source"] = "clock.redhat.com"
         cfg["base_dns_domain"] = "redhat.com"
         cfg["sno"] = self._cc.is_sno()
-        if cfg["proxy"]:
+        if self._cc["proxy"]:
             cfg["proxy"] = self._cc["proxy"]
 
         logger.info("Creating cluster")
@@ -551,7 +551,7 @@ class ClusterDeployer:
         cfg["pull_secret"] = self._secrets_path
         cfg["cpu_architecture"] = "x86_64"
         cfg["openshift_version"] = self._cc["version"]
-        if cfg["proxy"]:
+        if self._cc["proxy"]:
             cfg["proxy"] = self._cc["proxy"]
         self._ai.ensure_infraenv_created(infra_env, cfg)
         self._ai.download_iso_with_retry(infra_env)
@@ -771,7 +771,7 @@ class ClusterDeployer:
         cfg["pull_secret"] = self._secrets_path
         cfg["cpu_architecture"] = "x86_64"
         cfg["openshift_version"] = self._cc["version"]
-        if cfg["proxy"]:
+        if self._cc["proxy"]:
             cfg["proxy"] = self._cc["proxy"]
 
         self._ai.ensure_infraenv_created(infra_env_name, cfg)
@@ -884,7 +884,7 @@ class ClusterDeployer:
         cfg["pull_secret"] = self._secrets_path
         cfg["cpu_architecture"] = "arm64"
         cfg["openshift_version"] = self._cc["version"]
-        if cfg["proxy"]:
+        if self._cc["proxy"]:
             cfg["proxy"] = self._cc["proxy"]
 
         self._ai.ensure_infraenv_created(infra_env_name, cfg)
