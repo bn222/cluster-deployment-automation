@@ -5,7 +5,7 @@ from logger import logger
 from k8sClient import K8sClient
 
 
-def ExtraConfigDualStack(cc: ClustersConfig, _, futures: Dict[str, Future]) -> None:
+def ExtraConfigDualStack(cc: ClustersConfig, _, futures: Dict[str, Future[None]]) -> None:
     # https://docs.openshift.com/container-platform/4.13/networking/ovn_kubernetes_network_provider/converting-to-dual-stack.html
     # https://issues.redhat.com/browse/OCPBUGS-6040
     [f.result() for (_, f) in futures.items()]
@@ -21,7 +21,7 @@ def ExtraConfigDualStack(cc: ClustersConfig, _, futures: Dict[str, Future]) -> N
         client.oc(f"exec -n {ns} {pod} -- ip -6 route add default via fd00:172:22::1 dev br-ex")
 
 
-def main():
+def main() -> None:
     pass
 
 

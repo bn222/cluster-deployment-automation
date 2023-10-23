@@ -12,7 +12,7 @@ from typing import Dict
 from logger import logger
 
 
-def ExtraConfigSriov(cc: ClustersConfig, cfg, futures: Dict[str, Future]) -> None:
+def ExtraConfigSriov(cc: ClustersConfig, cfg, futures: Dict[str, Future[None]]) -> None:
     [f.result() for (_, f) in futures.items()]
     client = K8sClient(cc["kubeconfig"])
     lh = host.LocalHost()
@@ -113,7 +113,7 @@ def try_get_ovs_pf(rh: host.Host, name: str) -> str:
     sys.exit(-1)
 
 
-def ExtraConfigSriovOvSHWOL(cc: ClustersConfig, _, futures: Dict[str, Future]) -> None:
+def ExtraConfigSriovOvSHWOL(cc: ClustersConfig, _, futures: Dict[str, Future[None]]) -> None:
     [f.result() for (_, f) in futures.items()]
     client = K8sClient(cc["kubeconfig"])
     client.oc("create -f manifests/nicmode/pool.yaml")
@@ -169,7 +169,7 @@ def ExtraConfigSriovOvSHWOL(cc: ClustersConfig, _, futures: Dict[str, Future]) -
 
 
 # VF Management port requires a new API. We need a new extra config class to handle the API changes.
-def ExtraConfigSriovOvSHWOL_NewAPI(cc: ClustersConfig, _, futures: Dict[str, Future]) -> None:
+def ExtraConfigSriovOvSHWOL_NewAPI(cc: ClustersConfig, _, futures: Dict[str, Future[None]]) -> None:
     [f.result() for (_, f) in futures.items()]
     client = K8sClient(cc["kubeconfig"])
     client.oc("create -f manifests/nicmode/pool.yaml")
@@ -236,7 +236,7 @@ def ExtraConfigSriovOvSHWOL_NewAPI(cc: ClustersConfig, _, futures: Dict[str, Fut
     ensure_pci_realloc(cc, client, "sriov")
 
 
-def main():
+def main() -> None:
     pass
 
 

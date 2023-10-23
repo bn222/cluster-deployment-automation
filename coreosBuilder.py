@@ -145,7 +145,7 @@ class CoreosBuilder:
                quay.io/coreos-assembler/coreos-assembler:latest
         """
 
-        def build_step(cmd, step):
+        def build_step(cmd: str, step: str) -> None:
             logger.info(f"Building CoreOS: {step}")
             cmd = cmd + " " + step
             r = lh.run(cmd)
@@ -187,7 +187,7 @@ class CoreosBuilder:
         with open(coreos_yaml, "w") as f:
             f.write(core_content)
 
-    def _embed_ign(self, embed_src, dst):
+    def _embed_ign(self, embed_src: str, dst: str) -> None:
         fn_ign = embed_src.replace(".iso", "-embed.ign")
 
         with open(fn_ign, "w") as f:
@@ -246,7 +246,7 @@ class CoreosBuilder:
         self._embed_ign(dst + ".tmp", dst)
 
 
-def main():
+def main() -> None:
     builder = CoreosBuilder("/tmp/build")
     destination = "/root/iso/fedora-coreos.iso"
     builder.build(destination)

@@ -12,7 +12,7 @@ import json
 from logger import logger
 
 
-def ExtraConfigDpuTenantMC(cc: ClustersConfig, cfg, futures: Dict[str, Future]) -> None:
+def ExtraConfigDpuTenantMC(cc: ClustersConfig, cfg, futures: Dict[str, Future[None]]) -> None:
     [f.result() for (_, f) in futures.items()]
     logger.info("Running post config step")
     tclient = K8sClient("/root/kubeconfig.tenantcluster")
@@ -44,7 +44,7 @@ def render_sriov_node_policy(policyname: str, bf_port: str, bf_addr: str, numvfs
         outFile.write(rendered)
 
 
-def ExtraConfigDpuTenant(cc: ClustersConfig, _, futures: Dict[str, Future]) -> None:
+def ExtraConfigDpuTenant(cc: ClustersConfig, _, futures: Dict[str, Future[None]]) -> None:
     [f.result() for (_, f) in futures.items()]
     logger.info("Running post config step")
     tclient = K8sClient("/root/kubeconfig.tenantcluster")
@@ -142,7 +142,7 @@ def ExtraConfigDpuTenant(cc: ClustersConfig, _, futures: Dict[str, Future]) -> N
     extraConfigSriov.ensure_pci_realloc(cc, tclient, "dpu-host")
 
 
-def ExtraConfigDpuTenant_NewAPI(cc: ClustersConfig, cfg, futures: Dict[str, Future]) -> None:
+def ExtraConfigDpuTenant_NewAPI(cc: ClustersConfig, cfg, futures: Dict[str, Future[None]]) -> None:
     [f.result() for (_, f) in futures.items()]
     logger.info("Running post config step")
     tclient = K8sClient("/root/kubeconfig.tenantcluster")
@@ -279,7 +279,7 @@ def restart_dpu_network_operator(iclient: K8sClient):
     iclient.oc("create -f manifests/infra/dpuclusterconfig.yaml")
 
 
-def main():
+def main() -> None:
     pass
 
 

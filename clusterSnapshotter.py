@@ -36,7 +36,7 @@ class ClusterSnapshotter:
         lh.run(f"mkdir -p {self._snapshot_dir()}")
         self._ais.export_snapshot(self._snapshot_dir())
 
-        def save_phys(node):
+        def save_phys(node: str) -> None:
             coreosBuilder.ensure_fcos_exists()
             rh = host.RemoteHost(node)
             nfs = NFS(host.LocalHost(), self._cc["external_port"])
@@ -58,7 +58,7 @@ class ClusterSnapshotter:
             logger.info(f"Finished backing up node {node}")
             rh.run("sudo systemctl reboot")
 
-        def save_vms():
+        def save_vms() -> None:
             lh = host.LocalHost()
             vms = lh.run("virsh list --all --name").out.strip().split()
             for e in self._cc.all_vms():
@@ -80,7 +80,7 @@ class ClusterSnapshotter:
         ai_nodes = [h["requested_hostname"] for h in self._ai.list_hosts()]
         active_vms = [x for x in self._cc.all_vms() if x["name"] in ai_nodes]
 
-        def load_vms():
+        def load_vms() -> None:
             for e in active_vms:
                 self._import_vm(e)
 
@@ -90,7 +90,7 @@ class ClusterSnapshotter:
             for e in active_vms:
                 lh.run(f'virsh start {e["name"]}')
 
-        def load_phys(node):
+        def load_phys(node: str) -> None:
             coreosBuilder.ensure_fcos_exists()
             rh = host.RemoteHost(node)
             nfs = NFS(host.LocalHost(), self._cc["external_port"])
@@ -141,5 +141,5 @@ class ClusterSnapshotter:
         setup_vm(lh, config, config["image_path"])
         ClusterDeployer(self._cc, self._ai, None, "").update_etc_hosts()
 
-    def _snapshot_dir(self):
+    def _snapshot_dir(self) -> str:
         return os.path.join("/root/snapshots", self._name)

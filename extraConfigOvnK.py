@@ -7,7 +7,7 @@ from typing import Dict
 from logger import logger
 
 
-def ExtraConfigOvnK(cc: ClustersConfig, cfg, futures: Dict[str, Future]) -> None:
+def ExtraConfigOvnK(cc: ClustersConfig, cfg, futures: Dict[str, Future[None]]) -> None:
     [f.result() for (_, f) in futures.items()]
     logger.info("Running post config step to load custom OVN-K")
     iclient = K8sClient(cc["kubeconfig"])
@@ -37,7 +37,7 @@ def ExtraConfigOvnK(cc: ClustersConfig, cfg, futures: Dict[str, Future]) -> None
     # TODO: wait for all ovn-k pods to become ready again
 
 
-def main():
+def main() -> None:
     pass
 
 

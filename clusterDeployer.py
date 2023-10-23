@@ -28,7 +28,7 @@ from logger import logger
 from extraConfigRunner import ExtraConfigRunner
 
 
-def ensure_dhcp_entry(h: host.Host, name: str, ip: str, mac: str):
+def ensure_dhcp_entry(h: host.Host, name: str, ip: str, mac: str) -> None:
     # If adding a worker node fails, one might want to retry w/o tearing down
     # the whole cluster. In that case, the DHCP entry might already be present,
     # with wrong mac -> remove it
@@ -59,7 +59,7 @@ def ensure_dhcp_entry(h: host.Host, name: str, ip: str, mac: str):
     h.run_or_die(cmd)
 
 
-def setup_dhcp_entry(h: host.Host, cfg: dict):
+def setup_dhcp_entry(h: host.Host, cfg: dict) -> None:
     name = cfg["name"]
     ip = cfg["ip"]
     mac = "52:54:" + ":".join(re.findall("..", secrets.token_hex()[:8]))
@@ -67,7 +67,7 @@ def setup_dhcp_entry(h: host.Host, cfg: dict):
     ensure_dhcp_entry(h, name, ip, mac)
 
 
-def setup_vm(h: host.Host, cfg: dict, iso_or_image_path: str):
+def setup_vm(h: host.Host, cfg: dict, iso_or_image_path: str) -> host.Result:
     name = cfg["name"]
     mac = cfg["mac"]
     disk_size_gb = cfg["disk_size"]
@@ -120,7 +120,7 @@ def setup_vm(h: host.Host, cfg: dict, iso_or_image_path: str):
     return ret
 
 
-def setup_all_vms(h: host.Host, vms, iso_path) -> list:
+def setup_all_vms(h: host.Host, vms, iso_path) -> List[Future[host.Result]]:
     if not vms:
         return []
 
@@ -381,14 +381,15 @@ class ClusterDeployer:
         if os.path.exists(self._cc["kubeconfig"]):
             os.remove(self._cc["kubeconfig"])
 
-    def _validate_api_port(self, lh) -> Optional[str]:
+    def _validate_api_port(self, lh: host.Host) -> Optional[str]:
         def carrier_no_addr(intf):
             return not intf["addr_info"] and "NO-CARRIER" not in intf["flags"]
 
         host_config = self.local_host_config(lh.hostname())
         if host_config["network_api_port"] == "auto":
-            intif = common.first(carrier_no_addr, lh.ipa())
-            if not intif:
+            try:
+                intif = next(x for x in lh.ipa() if carrier_no_addr(x))
+            except StopIteration:
                 return None
             host_config["network_api_port"] = intif["ifname"]
 
@@ -415,7 +416,7 @@ class ClusterDeployer:
             return
         self._extra_config.run(to_run, self._futures)
 
-    def need_api_network(self):
+    def need_api_network(self) -> bool:
         return len(self._cc.local_vms()) != len(self._cc.all_nodes())
 
     def ensure_linked_to_bridge(self, lh) -> None:
@@ -488,7 +489,7 @@ class ClusterDeployer:
         else:
             logger.info("Skipping post configuration.")
 
-    def _validate(self):
+    def _validate(self) -> None:
         if self._cc.is_sno():
             logger.info("Setting up a Single Node OpenShift (SNO) environment")
             self._cc["api_ip"] = self._cc["masters"][0]["ip"]
@@ -571,7 +572,7 @@ class ClusterDeployer:
             self._create_physical_x86_nodes(self._cc["masters"])
             futures = []
 
-        def cb():
+        def cb() -> None:
             finished = [p for p in futures if p.done()]
             if finished:
                 raise Exception(f"Can't install VMs {finished[0].result()}")
@@ -588,9 +589,10 @@ class ClusterDeployer:
             p.result()
         self.ensure_linked_to_bridge(lh)
         for e in self._cc["masters"]:
-            self._set_password(e)
+            self._set_password(e["name"])
+        self.update_etc_hosts()
 
-    def _print_logs(self, name):
+    def _print_logs(self, name: str) -> None:
         ip = self._ai.get_ai_ip(name)
         if ip is None:
             return
@@ -621,6 +623,9 @@ class ClusterDeployer:
 
     def _verify_package_is_installed(self, worker, package: str) -> bool:
         ai_ip = self._ai.get_ai_ip(worker["name"])
+        if ai_ip is None:
+            logger.error("Failed to get ip for worker with name {worker['name']}")
+            sys.exit(-1)
         rh = host.RemoteHost(ai_ip)
         rh.ssh_connect("core")
         ret = rh.run(f"rpm -qa | grep {package}")
@@ -646,12 +651,12 @@ class ClusterDeployer:
 
         logger.info("Setting password to for root to redhat")
         for w in self._cc["workers"]:
-            self._set_password(w)
+            self._set_password(w["name"])
 
         self._perform_worker_health_check(self._cc["workers"])
 
-    def _set_password(self, node):
-        ai_ip = self._ai.get_ai_ip(node["name"])
+    def _set_password(self, node_name: str) -> None:
+        ai_ip = self._ai.get_ai_ip(node_name)
         assert ai_ip is not None
         rh = host.RemoteHost(ai_ip)
         rh.ssh_connect("core")
@@ -808,7 +813,7 @@ class ClusterDeployer:
         subnet = "192.168.122.0/24"
         logger.info(f"Connectivity established to all workers; checking that they have an IP in {subnet}")
 
-        def addresses(h):
+        def addresses(h: host.Host) -> List[str]:
             ret = []
             for e in h.ipa():
                 if "addr_info" not in e:
@@ -817,7 +822,7 @@ class ClusterDeployer:
                     ret.append(k["local"])
             return ret
 
-        def addr_ok(a):
+        def addr_ok(a: str) -> bool:
             return common.ip_in_subnet(a, subnet)
 
         any_worker_bad = False

@@ -25,7 +25,7 @@ to be in a good state.
 """
 
 
-def ExtraConfigBFB(cc: ClustersConfig, _, futures: Dict[str, Future]) -> None:
+def ExtraConfigBFB(cc: ClustersConfig, _, futures: Dict[str, Future[None]]) -> None:
     coreosBuilder.ensure_fcos_exists()
     logger.info("Loading BF-2 with BFB image on all workers")
     lh = host.LocalHost()
@@ -59,7 +59,7 @@ def ExtraConfigBFB(cc: ClustersConfig, _, futures: Dict[str, Future]) -> None:
     logger.info("BFB setup complete")
 
 
-def ExtraConfigSwitchNicMode(cc: ClustersConfig, _, futures: Dict[str, Future]) -> None:
+def ExtraConfigSwitchNicMode(cc: ClustersConfig, _, futures: Dict[str, Future[None]]) -> None:
     [f.result() for (_, f) in futures.items()]
     client = K8sClient(cc["kubeconfig"])
 

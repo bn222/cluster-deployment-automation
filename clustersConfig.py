@@ -22,7 +22,7 @@ class ClusterInfo:
         self.workers = []  # type: List[str]
 
 
-def read_sheet() -> list:
+def read_sheet() -> List[List[str]]:
     logger.info("Downloading sheet from Google")
     scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
     cred_paths = [os.path.join(os.getcwd(), "credentials.json"), os.path.join(os.environ["HOME"], "credentials.json")]
@@ -125,15 +125,15 @@ class ClustersConfig:
                 if "pre_installed" not in host_config:
                     host_config["pre_installed"] = "True"
 
-    def autodetect_external_port(self):
+    def autodetect_external_port(self) -> None:
         detected = common.route_to_port(host.LocalHost(), "default")
         self.__setitem__("external_port", detected)
 
-    def prepare_external_port(self):
+    def prepare_external_port(self) -> None:
         if self.__getitem__("external_port") == "auto":
             self.autodetect_external_port()
 
-    def validate_external_port(self):
+    def validate_external_port(self) -> bool:
         extif = self.__getitem__("external_port")
         return host.LocalHost().port_exists(extif)
 
@@ -233,7 +233,7 @@ class ClustersConfig:
         return len(self["masters"]) == 1 and len(self["workers"]) == 0
 
 
-def main():
+def main() -> None:
     pass
 
 

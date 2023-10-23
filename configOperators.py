@@ -14,7 +14,7 @@ class ConfigCNO:
         client.oc("scale --replicas=0 deploy/network-operator -n openshift-network-operator")
 
 
-def main():
+def main() -> None:
     pass
 
 

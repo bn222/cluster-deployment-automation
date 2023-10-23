@@ -7,7 +7,7 @@ from typing import Dict
 from logger import logger
 
 
-def ExtraConfigCNO(cc: ClustersConfig, cfg, futures: Dict[str, Future]) -> None:
+def ExtraConfigCNO(cc: ClustersConfig, cfg, futures: Dict[str, Future[None]]) -> None:
     [f.result() for (_, f) in futures.items()]
     logger.info("Running post config step to load custom CNO")
     iclient = K8sClient(cc["kubeconfig"])
@@ -33,7 +33,7 @@ def ExtraConfigCNO(cc: ClustersConfig, cfg, futures: Dict[str, Future]) -> None:
     iclient.oc(f'patch -p "{patch}" deploy network-operator -n openshift-network-operator')
 
 
-def main():
+def main() -> None:
     pass
 
 

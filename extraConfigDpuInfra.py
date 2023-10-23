@@ -10,17 +10,18 @@ import sys
 import shutil
 from common_patches import apply_common_pathches
 from typing import Dict
+from typing import List
 from logger import logger
 
 
-def install_remotely(ip, links):
+def install_remotely(ip: str, links: List[str]):
     try:
         return install_remotelyh(ip, links)
     except Exception as e:
         logger.info(e)
 
 
-def install_remotelyh(ip, links):
+def install_remotelyh(ip: str, links: List[str]):
     logger.info(f"connecting to {ip}")
     rh = host.RemoteHost(ip)
     # Eventhough a buggy kernel can cause connections to drop,
@@ -62,7 +63,7 @@ def install_remotelyh(ip, links):
     return want in rh.run("uname -a").out
 
 
-def install_custom_kernel(lh, client, bf_names, ips):
+def install_custom_kernel(lh: host.Host, client: K8sClient, bf_names, ips):
     logger.info(f"Installing custom kernel on {ips}")
     links = [
         "https://s3.upshift.redhat.com/DH-PROD-CKI/internal-artifacts/696717272/build%20aarch64/3333360250/artifacts/kernel-core-4.18.0-372.35.1.el8_6.mr3440_221116_1544.aarch64.rpm",
@@ -100,7 +101,7 @@ def install_custom_kernel(lh, client, bf_names, ips):
         client.wait_ready(bf, cb)
 
 
-def run_dpu_network_operator_git(lh, kc):
+def run_dpu_network_operator_git(lh: host.Host, kc: str):
     repo_dir = "/root/dpu-network-operator"
     # url = "https://github.com/openshift/dpu-network-operator.git"
     url = "https://github.com/bn222/dpu-network-operator"
@@ -134,7 +135,7 @@ def restart_ovs_configuration(ips):
         rh.run("sudo systemctl restart ovs-configuration")
 
 
-def ExtraConfigDpuInfra(cc: ClustersConfig, _, futures: Dict[str, Future]) -> None:
+def ExtraConfigDpuInfra(cc: ClustersConfig, _, futures: Dict[str, Future[None]]) -> None:
     [f.result() for (_, f) in futures.items()]
     kc = "/root/kubeconfig.infracluster"
     client = K8sClient(kc)
@@ -211,7 +212,7 @@ def ExtraConfigDpuInfra(cc: ClustersConfig, _, futures: Dict[str, Future]) -> No
 
 
 # VF Management port requires a new API. We need a new extra config class to handle the API changes.
-def ExtraConfigDpuInfra_NewAPI(cc, _, futures: Dict[str, Future]) -> None:
+def ExtraConfigDpuInfra_NewAPI(cc, _, futures: Dict[str, Future[None]]) -> None:
     [f.result() for (_, f) in futures.items()]
     kc = "/root/kubeconfig.infracluster"
     client = K8sClient(kc)
@@ -286,7 +287,7 @@ def ExtraConfigDpuInfra_NewAPI(cc, _, futures: Dict[str, Future]) -> None:
             sys.exit(-1)
 
 
-def main():
+def main() -> None:
     pass
 
 
