@@ -67,7 +67,7 @@ class KeyLogin(Login):
     def _is_rsa(self) -> bool:
         lh = LocalHost()
         result = lh.run(f"ssh-keygen -vvv -l -f {self._key_path}")
-        print(result)
+        logger.debug(result.out)
         return "---[RSA " in result.out
 
     def login(self) -> paramiko.SSHClient:
