@@ -40,6 +40,9 @@ class Result:
         self.err = err
         self.returncode = returncode
 
+    def __str__(self):
+        return f"(returncode: {self.returncode}, error: {self.err})"
+
 
 class Login(ABC):
     @abstractmethod
