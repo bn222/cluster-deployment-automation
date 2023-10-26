@@ -1,6 +1,5 @@
 import socket
 import subprocess
-from collections import namedtuple
 import io
 import os
 import re
@@ -95,18 +94,123 @@ class PasswordLogin(Login):
         return host
 
 
+class BMC:
+    def __init__(self, full_url: str, user: str = "root", password: str = "calvin"):
+        self.url = full_url
+        self.user = user
+        self.password = password
+        logger.info(f"{full_url} {user} {password}")
+
+    @staticmethod
+    def from_url(url: str, user: str = "root", password: str = "calvin") -> 'BMC':
+        url = f"{url}/redfish/v1/Systems/System.Embedded.1"
+        return BMC(url, user, password)
+
+    @staticmethod
+    def from_hostname(hostname: str, user: str = "root", password: str = "calvin") -> 'BMC':
+        ip = socket.gethostbyname(hostname)
+        octets = ip.split(".")
+        octets[-1] = str(int(octets[-1]) + 1)
+        res_bmc_ip = ".".join(octets)
+        return BMC.from_ip(res_bmc_ip, user, password)
+
+    @staticmethod
+    def from_ip(ip: str, user: str = "root", password: str = "calvin") -> 'BMC':
+        url = f"https://{ip}/redfish/v1/Systems/System.Embedded.1"
+        return BMC(url, user, password)
+
+    """
+    Red Fish is used to boot ISO images with virtual media.
+    Make sure redfish is enabled on your server. You can verify this by
+    visiting the BMC's web address:
+      https://<ip>/redfish/v1/Systems/System.Embedded.1 (For Dell)
+    Red Fish uses HTTP POST messages to trigger actions. Some requires
+    data. However the Red Fish library takes care of this for you.
+
+    Red Fish heavily depends on iDRAC and IPMI working. For Dell servers:
+    Log into iDRAC, default user is "root" and default password is "calvin".
+     1) Try rebooting iDRAC
+      a) Go to "Maintenance" tab at the top
+      b) Go to the "Diagnostics" sub-tab below the "Maintenance" panel.
+      c) Press the "Reboot iDRAC"
+      d) Wait a while for iDRAC to come up.
+      e) Once the web interface is available, go back to the "Dashboard" tab.
+      f) Monitor the system to post after the "Dell" blue screen.
+     2) Try upgrading firmware
+      a) Go to "Maintenance" tab at the top
+      b) Go to the "System Update" sub-tab below the "Maintenance" panel.
+      c) Change the "Location Type" to "HTTP"
+      d) Under the "HTTP Server Settings", set the "HTTP Address" to be
+         "downloads.dell.com".
+      e) Click "Check for Update".
+      f) Depending on the missing updates, select what is needed then press
+         "Install and Reboot"
+      g) Wait a while for iDRAC to come up.
+      h) Once the web interface is available, go back to the "Dashboard" tab.
+      i) Monitor the system to post after the "Dell" blue screen.
+
+    """
+
+    def boot_iso_redfish(self, iso_path: str) -> None:
+        assert ":" in iso_path
+        self.boot_iso_with_retry(iso_path)
+
+    # @retry(stop=stop_after_attempt(10), wait=wait_fixed(60))
+    def boot_iso_with_retry(self, iso_path: str) -> None:
+        logger.info(iso_path)
+        logger.info(f"Trying to boot {self.url} using {iso_path}")
+        red = self._redfish()
+        try:
+            red.eject_iso()
+        except Exception as e:
+            logger.info(e)
+            logger.info("eject failed, but continuing")
+        logger.info(f"inserting iso {iso_path}")
+        red.insert_iso(iso_path)
+        try:
+            red.set_iso_once()
+        except Exception as e:
+            logger.info(e)
+            raise e
+
+        logger.info("setting to boot from iso")
+        red.restart()
+        time.sleep(10)
+        logger.info(f"Finished sending boot to {self.url}")
+
+    def _redfish(self) -> Redfish:
+        return Redfish(self.url, self.user, self.password, model='dell', debug=False)
+
+    def stop(self) -> None:
+        self._redfish().stop()
+
+    def start(self) -> None:
+        self._redfish().start()
+
+    def cold_boot(self) -> None:
+        self.stop()
+        time.sleep(10)
+        self.start()
+        time.sleep(5)
+
+
+def bmc_from_host_name_or_ip(hostname: str, ip: Optional[str], user: str = "root", password: str = "calvin") -> BMC:
+    if ip is None:
+        return BMC.from_hostname(hostname, user, password)
+    else:
+        return BMC.from_hostname(ip, user, password)
+
+
 class Host:
-    def __new__(cls, hostname: str, bmc_ip: Optional[str] = None, bmc_user: str = "root", bmc_password: str = "calvin") -> 'Host':
+    def __new__(cls, hostname: str, _: Optional[BMC] = None) -> 'Host':
         if hostname not in host_instances:
             host_instances[hostname] = super().__new__(cls)
             logger.debug(f"new instance for {hostname}")
         return host_instances[hostname]
 
-    def __init__(self, hostname: str, bmc_ip: Optional[str] = None, bmc_user: str = "root", bmc_password: str = "calvin"):
+    def __init__(self, hostname: str, bmc: Optional[BMC] = None):
         self._hostname = hostname
-        self._bmc_ip = bmc_ip
-        self._bmc_user = bmc_user
-        self._bmc_password = bmc_password
+        self._bmc = bmc
         self._logins: List[Login] = []
         self.sudo_needed = False
 
@@ -261,89 +365,25 @@ class Host:
         assert self._host is not None
         self._host.close()
 
-    def _bmc_url(self) -> str:
-        res_bmc_ip = self._bmc_ip
-        if res_bmc_ip is None:
-            ip = socket.gethostbyname(self._hostname)
-            octets = ip.split(".")
-            octets[-1] = str(int(octets[-1]) + 1)
-            res_bmc_ip = ".".join(octets)
-        return f"https://{res_bmc_ip}/redfish/v1/Systems/System.Embedded.1"
-
     def boot_iso_redfish(self, iso_path: str) -> None:
-        self._boot_with_overrides(iso_path)
-
-    """
-    Red Fish is used to boot ISO images with virtual media.
-    Make sure redfish is enabled on your server. You can verify this by
-    visiting the BMC's web address:
-      https://<ip>/redfish/v1/Systems/System.Embedded.1 (For Dell)
-    Red Fish uses HTTP POST messages to trigger actions. Some requires
-    data. However the Red Fish library takes care of this for you.
-
-    Red Fish heavily depends on iDRAC and IPMI working. For Dell servers:
-    Log into iDRAC, default user is "root" and default password is "calvin".
-     1) Try rebooting iDRAC
-      a) Go to "Maintenance" tab at the top
-      b) Go to the "Diagnostics" sub-tab below the "Maintenance" panel.
-      c) Press the "Reboot iDRAC"
-      d) Wait a while for iDRAC to come up.
-      e) Once the web interface is available, go back to the "Dashboard" tab.
-      f) Monitor the system to post after the "Dell" blue screen.
-     2) Try upgrading firmware
-      a) Go to "Maintenance" tab at the top
-      b) Go to the "System Update" sub-tab below the "Maintenance" panel.
-      c) Change the "Location Type" to "HTTP"
-      d) Under the "HTTP Server Settings", set the "HTTP Address" to be
-         "downloads.dell.com".
-      e) Click "Check for Update".
-      f) Depending on the missing updates, select what is needed then press
-         "Install and Reboot"
-      g) Wait a while for iDRAC to come up.
-      h) Once the web interface is available, go back to the "Dashboard" tab.
-      i) Monitor the system to post after the "Dell" blue screen.
-
-    """
-
-    @retry(stop=stop_after_attempt(10), wait=wait_fixed(60))
-    def _boot_with_overrides(self, iso_path: str) -> None:
-        assert ":" in iso_path
-        logger.info(f"Trying to boot '{self._hostname}' through {self._bmc_url()} using {iso_path}")
-        red = self._redfish()
-        try:
-            red.eject_iso()
-        except Exception as e:
-            logger.info(e)
-            logger.info("eject failed, but continuing")
-        logger.info(f"inserting iso {iso_path}")
-        red.insert_iso(iso_path)
-        try:
-            red.set_iso_once()
-        except Exception as e:
-            logger.info(e)
-            raise e
-
-        logger.info("setting to boot from iso")
-        red.restart()
-        time.sleep(10)
-        logger.info(f"Finished sending boot to {self._bmc_url()}")
+        if self._bmc is None:
+            raise Exception(f"Can't boot iso without bmc on {self.hostname()}")
+        self._bmc.boot_iso_redfish(iso_path)
 
     def stop(self) -> None:
-        red = self._redfish()
-        red.stop()
+        if self._bmc is None:
+            raise Exception(f"Can't stop host without bmc on {self.hostname()}")
+        self._bmc.stop()
 
     def start(self) -> None:
-        red = self._redfish()
-        red.start()
+        if self._bmc is None:
+            raise Exception(f"Can't start host without bmc on {self.hostname()}")
+        self._bmc.start()
 
     def cold_boot(self) -> None:
-        self.stop()
-        time.sleep(10)
-        self.start()
-        time.sleep(5)
-
-    def _redfish(self) -> Redfish:
-        return Redfish(self._bmc_url(), self._bmc_user, self._bmc_password, model='dell', debug=False)
+        if self._bmc is None:
+            raise Exception(f"Can't cold boot host without bmc on {self.hostname()}")
+        self._bmc.cold_boot()
 
     def wait_ping(self) -> None:
         while not self.ping():

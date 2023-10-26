@@ -33,7 +33,8 @@ def ExtraConfigBFB(cc: ClustersConfig, _, futures: Dict[str, Future[None]]) -> N
     iso_url = nfs.host_file("/root/iso/fedora-coreos.iso")
 
     def helper(e) -> None:
-        h = host.HostWithBF2(e["node"], e["bmc_ip"], e["bmc_user"], e["bmc_password"])
+        bmc = host.bmc_from_host_name_or_ip(e["node"], e["bmc_ip"], e["bmc_user"], e["bmc_password"])
+        h = host.HostWithBF2(e["node"], bmc)
 
         def check(result: host.Result):
             if result.returncode != 0:
