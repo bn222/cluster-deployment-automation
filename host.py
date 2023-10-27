@@ -155,7 +155,7 @@ class BMC:
         assert ":" in iso_path
         self.boot_iso_with_retry(iso_path)
 
-    # @retry(stop=stop_after_attempt(10), wait=wait_fixed(60))
+    @retry(stop=stop_after_attempt(10), wait=wait_fixed(60))
     def boot_iso_with_retry(self, iso_path: str) -> None:
         logger.info(iso_path)
         logger.info(f"Trying to boot {self.url} using {iso_path}")
@@ -414,7 +414,7 @@ class Host:
         def state_running(out: str) -> bool:
             return re.search("State:.*running", out) is not None
 
-        ret = self.run(f"virsh dominfo {name}")
+        ret = self.run(f"virsh dominfo {name}", logging.DEBUG)
         return not ret.returncode and state_running(ret.out)
 
     def ipa(self) -> Any:

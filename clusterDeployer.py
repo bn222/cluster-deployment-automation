@@ -912,7 +912,7 @@ class ClusterDeployer:
         coreosBuilder.ensure_fcos_exists()
         shutil.copyfile(ssh_priv_key_path, os.path.join(self._iso_path, "ssh_priv_key"))
 
-        def boot_iso_bf_helper(worker, iso):
+        def boot_iso_bf_helper(worker, iso) -> str:
             return self.boot_iso_bf(worker, iso)
 
         executor = ThreadPoolExecutor(max_workers=len(self._cc["workers"]))

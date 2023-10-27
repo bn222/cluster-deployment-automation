@@ -41,27 +41,20 @@ def read_sheet() -> List[List[str]]:
     return [list(e.values()) for e in sheet.get_all_records()]
 
 
+# Run the hostname command and only take the first part. For example
+# "my-host.test.redhat.com" would return "my-host" here.
+# This is only required if we are using the Google sheets integration
+# to match the node name syntax in the spreadsheet.
+def current_host() -> str:
+    lh = host.LocalHost()
+    return lh.run("hostname").out.strip().split(".")[0]
+
+
 class ClustersConfig:
-    def __init__(self, yamlPath: str):
+    def __init__(self, yaml_path: str):
         self._clusters = {}  # type: Dict[str, ClusterInfo]
-
-        lh = host.LocalHost()
-        # Run the hostname command and only take the first part. For example
-        # "my-host.test.redhat.com" would return "my-host" here.
-        # This is only required if we are using the Google sheets integration
-        # to match the node name syntax in the spreadsheet.
-        self._current_host = lh.run("hostname").out.strip().split(".")[0]
-
-        if not path.exists(yamlPath):
-            logger.error(f"could not find config in path: '{yamlPath}'")
-            sys.exit(1)
-
-        with open(yamlPath, 'r') as f:
-            contents = f.read()
-            # load it twice, so that self-reference becomes possible
-            self.fullConfig = safe_load(io.StringIO(contents))
-            contents = self._apply_jinja(contents)
-            self.fullConfig = safe_load(io.StringIO(contents))
+        self._current_host = current_host()
+        self._load_full_config(yaml_path)
 
         # Some config may be left out from the yaml. Try to provide defaults.
         for cc in self.fullConfig["clusters"]:
@@ -125,6 +118,18 @@ class ClustersConfig:
                 if "pre_installed" not in host_config:
                     host_config["pre_installed"] = "True"
 
+    def _load_full_config(self, yaml_path: str) -> None:
+        if not path.exists(yaml_path):
+            logger.error(f"could not find config in path: '{yaml_path}'")
+            sys.exit(1)
+
+        with open(yaml_path, 'r') as f:
+            contents = f.read()
+            # load it twice, so that self-reference becomes possible
+            self.fullConfig = safe_load(io.StringIO(contents))["clusters"][0]
+            contents = self._apply_jinja(contents)
+            self.fullConfig = safe_load(io.StringIO(contents))["clusters"][0]
+
     def autodetect_external_port(self) -> None:
         detected = common.route_to_port(host.LocalHost(), "default")
         self.__setitem__("external_port", detected)
@@ -159,7 +164,7 @@ class ClustersConfig:
         template.globals['api_network'] = api_network
 
         kwargs = {}
-        kwargs["cluster_name"] = self.fullConfig["clusters"][0]["name"]
+        kwargs["cluster_name"] = self.fullConfig["name"]
 
         t = template.render(**kwargs)
         return t
@@ -206,10 +211,10 @@ class ClustersConfig:
                     sys.exit(-1)
 
     def __getitem__(self, key):
-        return self.fullConfig["clusters"][0][key]
+        return self.fullConfig[key]
 
     def __setitem__(self, key, value) -> None:
-        self.fullConfig["clusters"][0][key] = value
+        self.fullConfig[key] = value
 
     def all_nodes(self) -> list:
         return self["masters"] + self["workers"]
