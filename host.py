@@ -39,7 +39,7 @@ class Result:
         self.err = err
         self.returncode = returncode
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"(returncode: {self.returncode}, error: {self.err})"
 
 
