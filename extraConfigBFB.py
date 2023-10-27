@@ -25,18 +25,15 @@ to be in a good state.
 """
 
 
-def ExtraConfigBFB(cc: ClustersConfig, _, futures: Dict[str, Future[None]]) -> None:
+def ExtraConfigBFB(cc: ClustersConfig, _: Dict[str, str], futures: Dict[str, Future[None]]) -> None:
     coreosBuilder.ensure_fcos_exists()
     logger.info("Loading BF-2 with BFB image on all workers")
     lh = host.LocalHost()
     nfs = NFS(lh, cc["external_port"])
     iso_url = nfs.host_file("/root/iso/fedora-coreos.iso")
 
-    def helper(e) -> None:
-        bmc = host.bmc_from_host_name_or_ip(e["node"], e["bmc_ip"], e["bmc_user"], e["bmc_password"])
-        h = host.HostWithBF2(e["node"], bmc)
-
-        def check(result: host.Result):
+    def helper(h: host.HostWithBF2) -> None:
+        def check(result: host.Result) -> None:
             if result.returncode != 0:
                 logger.info(result)
                 sys.exit(-1)
@@ -54,13 +51,15 @@ def ExtraConfigBFB(cc: ClustersConfig, _, futures: Dict[str, Future[None]]) -> N
     # Assuming that all workers have BF that need to reset to bfb image in
     # dpu mode
     for e in cc["workers"]:
+        bmc = host.bmc_from_host_name_or_ip(e["node"], e["bmc_ip"], e["bmc_user"], e["bmc_password"])
+        h = host.HostWithBF2(e["node"], bmc)
         futures[e["name"]].result()
-        f = executor.submit(helper, e)
+        f = executor.submit(helper, h)
         futures[e["name"]] = f
     logger.info("BFB setup complete")
 
 
-def ExtraConfigSwitchNicMode(cc: ClustersConfig, _, futures: Dict[str, Future[None]]) -> None:
+def ExtraConfigSwitchNicMode(cc: ClustersConfig, _: Dict[str, str], futures: Dict[str, Future[None]]) -> None:
     [f.result() for (_, f) in futures.items()]
     client = K8sClient(cc["kubeconfig"])
 

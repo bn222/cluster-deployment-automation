@@ -9,10 +9,11 @@ import shutil
 import jinja2
 import sys
 from typing import Dict
+from typing import List
 from logger import logger
 
 
-def ExtraConfigSriov(cc: ClustersConfig, cfg, futures: Dict[str, Future[None]]) -> None:
+def ExtraConfigSriov(cc: ClustersConfig, cfg: Dict[str, str], futures: Dict[str, Future[None]]) -> None:
     [f.result() for (_, f) in futures.items()]
     client = K8sClient(cc["kubeconfig"])
     lh = host.LocalHost()
@@ -80,7 +81,7 @@ def ensure_pci_realloc(cc: ClustersConfig, client: K8sClient, mcp_name: str) -> 
         enable_pci_realloc(client, mcp_name)
 
 
-def render_sriov_node_policy(policyname: str, pfnames, numvfs: int, resourcename: str, outfilename: str):
+def render_sriov_node_policy(policyname: str, pfnames: List[str], numvfs: int, resourcename: str, outfilename: str) -> None:
     with open('./manifests/nicmode/sriov-node-policy.yaml.j2') as f:
         j2_template = jinja2.Template(f.read())
         rendered = j2_template.render(policyName=policyname, pfNamesAll=pfnames, numVfs=numvfs, resourceName=resourcename)
@@ -113,7 +114,7 @@ def try_get_ovs_pf(rh: host.Host, name: str) -> str:
     sys.exit(-1)
 
 
-def ExtraConfigSriovOvSHWOL(cc: ClustersConfig, _, futures: Dict[str, Future[None]]) -> None:
+def ExtraConfigSriovOvSHWOL(cc: ClustersConfig, _: Dict[str, str], futures: Dict[str, Future[None]]) -> None:
     [f.result() for (_, f) in futures.items()]
     client = K8sClient(cc["kubeconfig"])
     client.oc("create -f manifests/nicmode/pool.yaml")
@@ -169,7 +170,7 @@ def ExtraConfigSriovOvSHWOL(cc: ClustersConfig, _, futures: Dict[str, Future[Non
 
 
 # VF Management port requires a new API. We need a new extra config class to handle the API changes.
-def ExtraConfigSriovOvSHWOL_NewAPI(cc: ClustersConfig, _, futures: Dict[str, Future[None]]) -> None:
+def ExtraConfigSriovOvSHWOL_NewAPI(cc: ClustersConfig, _: Dict[str, str], futures: Dict[str, Future[None]]) -> None:
     [f.result() for (_, f) in futures.items()]
     client = K8sClient(cc["kubeconfig"])
     client.oc("create -f manifests/nicmode/pool.yaml")

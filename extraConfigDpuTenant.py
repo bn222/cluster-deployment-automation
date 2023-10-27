@@ -12,7 +12,7 @@ import json
 from logger import logger
 
 
-def ExtraConfigDpuTenantMC(cc: ClustersConfig, cfg, futures: Dict[str, Future[None]]) -> None:
+def ExtraConfigDpuTenantMC(cc: ClustersConfig, _: Dict[str, str], futures: Dict[str, Future[None]]) -> None:
     [f.result() for (_, f) in futures.items()]
     logger.info("Running post config step")
     tclient = K8sClient("/root/kubeconfig.tenantcluster")
@@ -34,7 +34,7 @@ def ExtraConfigDpuTenantMC(cc: ClustersConfig, cfg, futures: Dict[str, Future[No
     logger.info("Need to deploy sriov network operator")
 
 
-def render_sriov_node_policy(policyname: str, bf_port: str, bf_addr: str, numvfs: int, resourcename: str, outfilename: str):
+def render_sriov_node_policy(policyname: str, bf_port: str, bf_addr: str, numvfs: int, resourcename: str, outfilename: str) -> None:
     with open("./manifests/tenant/SriovNetworkNodePolicy.yaml.j2") as f:
         j2_template = jinja2.Template(f.read())
         rendered = j2_template.render(policyName=policyname, bf_port=bf_port, bf_addr=bf_addr, numVfs=numvfs, resourceName=resourcename)
@@ -44,7 +44,7 @@ def render_sriov_node_policy(policyname: str, bf_port: str, bf_addr: str, numvfs
         outFile.write(rendered)
 
 
-def ExtraConfigDpuTenant(cc: ClustersConfig, _, futures: Dict[str, Future[None]]) -> None:
+def ExtraConfigDpuTenant(cc: ClustersConfig, _: Dict[str, str], futures: Dict[str, Future[None]]) -> None:
     [f.result() for (_, f) in futures.items()]
     logger.info("Running post config step")
     tclient = K8sClient("/root/kubeconfig.tenantcluster")
@@ -142,7 +142,7 @@ def ExtraConfigDpuTenant(cc: ClustersConfig, _, futures: Dict[str, Future[None]]
     extraConfigSriov.ensure_pci_realloc(cc, tclient, "dpu-host")
 
 
-def ExtraConfigDpuTenant_NewAPI(cc: ClustersConfig, cfg, futures: Dict[str, Future[None]]) -> None:
+def ExtraConfigDpuTenant_NewAPI(cc: ClustersConfig, _: Dict[str, str], futures: Dict[str, Future[None]]) -> None:
     [f.result() for (_, f) in futures.items()]
     logger.info("Running post config step")
     tclient = K8sClient("/root/kubeconfig.tenantcluster")
@@ -265,12 +265,12 @@ def ExtraConfigDpuTenant_NewAPI(cc: ClustersConfig, cfg, futures: Dict[str, Futu
     extraConfigSriov.ensure_pci_realloc(cc, tclient, "dpu-host")
 
 
-def create_nm_operator(client: K8sClient):
+def create_nm_operator(client: K8sClient) -> None:
     logger.info("Apply NMO subscription")
     client.oc("create -f manifests/tenant/nmo-subscription.yaml")
 
 
-def restart_dpu_network_operator(iclient: K8sClient):
+def restart_dpu_network_operator(iclient: K8sClient) -> None:
     lh = host.LocalHost()
     logger.info("Restarting dpu-network-operator")
     run_dpu_network_operator_git(lh, "/root/kubeconfig.infracluster")

@@ -251,8 +251,8 @@ class ClusterDeployer:
         os.makedirs(self._iso_path, exist_ok=True)
         self._extra_config = ExtraConfigRunner(cc)
 
-        def empty():
-            f = Future()
+        def empty() -> Future[None]:
+            f: Future[None] = Future()
             f.set_result(None)
             return f
 

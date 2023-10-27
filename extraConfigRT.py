@@ -5,7 +5,7 @@ from concurrent.futures import Future
 from typing import Dict
 
 
-def ExtraConfigRT(cc: ClustersConfig, cfg, futures: Dict[str, Future[None]]) -> None:
+def ExtraConfigRT(cc: ClustersConfig, _: Dict[str, str], futures: Dict[str, Future[None]]) -> None:
     [f.result() for (_, f) in futures.items()]
 
     is_sno = cc.is_sno()

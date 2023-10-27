@@ -124,14 +124,14 @@ class ClusterSnapshotter:
 
         self._ai.download_kubeconfig(self._cc["name"], self._cc["kubeconfig"])
 
-    def _export_vm(self, config):
+    def _export_vm(self, config) -> None:
         lh = host.LocalHost()
         src = config["image_path"]
         dst = os.path.join(self._snapshot_dir(), os.path.basename(src))
         logger.info(f"Copying {src} to {dst}")
         lh.copy_to(src, dst)
 
-    def _import_vm(self, config):
+    def _import_vm(self, config) -> None:
         lh = host.LocalHost()
         src = config["image_path"]
         os.makedirs(os.path.dirname(src), exist_ok=True)

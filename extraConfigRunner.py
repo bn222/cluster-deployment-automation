@@ -33,7 +33,7 @@ class ExtraConfigRunner:
             "dualstack": ExtraConfigDualStack,
         }
 
-    def run(self, to_run, futures: Dict[str, Future[None]]) -> None:
+    def run(self, to_run: Dict[str, str], futures: Dict[str, Future[None]]) -> None:
         if to_run["name"] not in self._extra_config:
             logger.info(f"{to_run['name']} is not an extra config")
             sys.exit(-1)
