@@ -3,42 +3,14 @@ import os
 import io
 import sys
 import re
-from typing import List
-from typing import Dict
+from typing import Optional
 import jinja2
 from yaml import safe_load
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
 import host
 from logger import logger
 import common
-
-
-class ClusterInfo:
-    def __init__(self, name: str):
-        self.name = name
-        self.provision_host = ""
-        self.network_api_port = ""
-        self.workers = []  # type: List[str]
-
-
-def read_sheet() -> List[List[str]]:
-    logger.info("Downloading sheet from Google")
-    scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
-    cred_paths = [os.path.join(os.getcwd(), "credentials.json"), os.path.join(os.environ["HOME"], "credentials.json")]
-    cred_path = None
-    for e in cred_paths:
-        if os.path.exists(e):
-            cred_path = e
-    if cred_path is None:
-        logger.info("Missing credentials.json while using templated config file")
-        sys.exit(-1)
-    credentials = ServiceAccountCredentials.from_json_keyfile_name(cred_path, scopes)
-    file = gspread.authorize(credentials)
-    sheet = file.open("ANL lab HW enablement clusters and connections")
-    sheet = sheet.sheet1
-
-    return [list(e.values()) for e in sheet.get_all_records()]
+from clusterInfo import ClusterInfo
+from clusterInfo import load_all_cluster_info
 
 
 # Run the hostname command and only take the first part. For example
@@ -52,7 +24,7 @@ def current_host() -> str:
 
 class ClustersConfig:
     def __init__(self, yaml_path: str):
-        self._clusters = {}  # type: Dict[str, ClusterInfo]
+        self._clusters: Optional[ClusterInfo] = None
         self._current_host = current_host()
         self._load_full_config(yaml_path)
 
@@ -145,16 +117,19 @@ class ClustersConfig:
     def _apply_jinja(self, contents: str) -> str:
         def worker_number(a):
             self._ensure_clusters_loaded()
-            name = self._clusters[self._current_host].workers[a]
+            assert self._clusters is not None
+            name = self._clusters.workers[a]
             return re.sub("[^0-9]", "", name)
 
         def worker_name(a):
             self._ensure_clusters_loaded()
-            return self._clusters[self._current_host].workers[a]
+            assert self._clusters is not None
+            return self._clusters.workers[a]
 
         def api_network():
             self._ensure_clusters_loaded()
-            return self._clusters[self._current_host].network_api_port
+            assert self._clusters is not None
+            return self._clusters.network_api_port
 
         format_string = contents
 
@@ -170,45 +145,14 @@ class ClustersConfig:
         return t
 
     def _ensure_clusters_loaded(self) -> None:
-        if self._clusters:
+        if self._clusters is not None:
             return
-        self._clusters = self._load_clusters()
-        self._validate_clusters()
-
-    def _load_clusters(self) -> Dict[str, ClusterInfo]:
-        cluster = None
-        ret = []
-        logger.info("loading cluster information")
-        for e in read_sheet():
-            if e[0].startswith("Cluster"):
-                if cluster is not None:
-                    ret.append(cluster)
-                cluster = ClusterInfo(e[0])
-            if cluster is None:
-                continue
-            if e[0].startswith("BF2"):
-                continue
-            if e[7] == "yes":
-                cluster.provision_host = e[0]
-                cluster.network_api_port = e[3]
-            elif e[7] == "no":
-                cluster.workers.append(e[0])
-        if cluster is not None:
-            ret.append(cluster)
-        return {x.provision_host: x for x in ret}
-
-    def _validate_clusters(self) -> None:
-        for _, v in self._clusters.items():
-            if v.provision_host == "":
-                logger.info(f"Provision host missing for cluster {v.name}")
-                sys.exit(-1)
-            if v.network_api_port == "":
-                logger.info(f"Network api port missing for cluster {v.name}")
-                sys.exit(-1)
-            for e in v.workers:
-                if e == "":
-                    logger.info("Unnamed worker found for cluster {c.name}")
-                    sys.exit(-1)
+        all_cluster_info = load_all_cluster_info()
+        ch = current_host()
+        if ch in all_cluster_info:
+            self._clusters = all_cluster_info[ch]
+        else:
+            sys.exit(-1)
 
     def __getitem__(self, key):
         return self.fullConfig[key]
