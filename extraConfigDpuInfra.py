@@ -143,7 +143,7 @@ def ExtraConfigDpuInfra(cc: ClustersConfig, _: Dict[str, str], futures: Dict[str
     lh = host.LocalHost()
     apply_common_pathches(client)
 
-    bf_names = [x["name"] for x in cc["workers"] if x["type"] == "bf"]
+    bf_names = [x.name for x in cc.workers if x.kind == "bf"]
     ips = [client.get_ip(e) for e in bf_names]
 
     for bf, ip in zip(bf_names, ips):
@@ -220,7 +220,7 @@ def ExtraConfigDpuInfra_NewAPI(cc: ClustersConfig, _: Dict[str, str], futures: D
     lh = host.LocalHost()
     apply_common_pathches(client)
 
-    bf_names = [x["name"] for x in cc["workers"] if x["type"] == "bf"]
+    bf_names = [x.name for x in cc.workers if x.kind == "bf"]
     ips = [client.get_ip(e) for e in bf_names]
 
     for bf, ip in zip(bf_names, ips):

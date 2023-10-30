@@ -28,8 +28,8 @@ def ExtraConfigDpuTenantMC(cc: ClustersConfig, _: Dict[str, str], futures: Dict[
     tclient.oc("patch mcp dpu-host --type=json -p=\[\{\"op\":\"replace\",\"path\":\"/spec/maxUnavailable\",\"value\":2\}\]")
 
     logger.info("Labeling nodes")
-    for e in cc["workers"]:
-        cmd = f"label node {e['name']} node-role.kubernetes.io/dpu-host="
+    for e in cc.workers:
+        cmd = f"label node {e.name} node-role.kubernetes.io/dpu-host="
         logger.info(tclient.oc(cmd))
     logger.info("Need to deploy sriov network operator")
 
@@ -51,7 +51,7 @@ def ExtraConfigDpuTenant(cc: ClustersConfig, _: Dict[str, str], futures: Dict[st
     logger.info("Waiting for mcp dpu-host to become ready")
     tclient.wait_for_mcp("dpu-host")
 
-    first_worker = cc["workers"][0]['name']
+    first_worker = cc.workers[0].name
     ip = tclient.get_ip(first_worker)
     if ip is None:
         sys.exit(-1)
@@ -72,8 +72,8 @@ def ExtraConfigDpuTenant(cc: ClustersConfig, _: Dict[str, str], futures: Dict[st
             continue
 
         d = {}
-        for e in ret.out.strip().split("\n"):
-            key, value = e.split(":", 1)
+        for part in ret.out.strip().split("\n"):
+            key, value = part.split(":", 1)
             d[key] = value
         if d["bus-info"].endswith(bf):
             bf_port = port["ifname"]
@@ -106,14 +106,12 @@ def ExtraConfigDpuTenant(cc: ClustersConfig, _: Dict[str, str], futures: Dict[st
     logger.info("creating config map to put ovn-k into dpu host mode")
     tclient.oc("create -f manifests/tenant/sriovdpuconfigmap.yaml")
 
-    for e in cc["workers"]:
-        if not (isinstance(e, dict) and isinstance(e["name"], str)):
-            sys.exit(-1)
-        cmd = f"label node {e['name']} network.operator.openshift.io/dpu-host="
+    for e in cc.workers:
+        cmd = f"label node {e.name} network.operator.openshift.io/dpu-host="
         logger.info(tclient.oc(cmd))
-        ip = tclient.get_ip(e['name'])
+        ip = tclient.get_ip(e.name)
         if ip is None:
-            logger.error(f"Failed to get ip for node {e['name']}")
+            logger.error(f"Failed to get ip for node {e.name}")
             sys.exit(-1)
         rh = host.RemoteHost(ip)
         rh.ssh_connect("core")
@@ -157,7 +155,7 @@ def ExtraConfigDpuTenant_NewAPI(cc: ClustersConfig, _: Dict[str, str], futures: 
     logger.info("Creating DpuClusterConfig cr")
     tclient.oc("create -f manifests/tenant/dpuclusterconfig.yaml")
 
-    first_worker = cc["workers"][0]['name']
+    first_worker = cc.workers[0].name
     ip = tclient.get_ip(first_worker)
     if ip is None:
         sys.exit(-1)
@@ -178,8 +176,8 @@ def ExtraConfigDpuTenant_NewAPI(cc: ClustersConfig, _: Dict[str, str], futures: 
             continue
 
         d = {}
-        for e in ret.out.strip().split("\n"):
-            key, value = e.split(":", 1)
+        for part in ret.out.strip().split("\n"):
+            key, value = part.split(":", 1)
             d[key] = value
         if d["bus-info"].endswith(bf):
             bf_port = port["ifname"]
@@ -225,14 +223,12 @@ def ExtraConfigDpuTenant_NewAPI(cc: ClustersConfig, _: Dict[str, str], futures: 
 
     # DELTA: We don't create env-override to set management port. https://github.com/ovn-org/ovn-kubernetes/pull/3467
 
-    for e in cc["workers"]:
-        if not (isinstance(e, dict) and isinstance(e["name"], str)):
-            sys.exit(-1)
-        cmd = f"label node {e['name']} network.operator.openshift.io/dpu-host="
+    for e in cc.workers:
+        cmd = f"label node {e.name} network.operator.openshift.io/dpu-host="
         logger.info(tclient.oc(cmd))
-        ip = tclient.get_ip(e['name'])
+        ip = tclient.get_ip(e.name)
         if ip is None:
-            logger.error(f"Failed to get ip for node {e['name']}")
+            logger.error(f"Failed to get ip for node {e.name}")
             sys.exit(-1)
         rh = host.RemoteHost(ip)
         rh.ssh_connect("core")

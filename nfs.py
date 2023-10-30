@@ -1,6 +1,9 @@
 import host
 import os
 import common
+from logger import logger
+from typing import Optional
+import sys
 
 
 """
@@ -20,7 +23,12 @@ class NFS:
         if not self._exists(dir_name):
             self._add(dir_name)
         self._export_fs()
-        return f"{self._ip()}:{file}"
+        ip = self._ip()
+        if ip is None:
+            logger.error(f"Failed to get ip when hosting file {file} on nfs")
+            sys.exit(-1)
+        ret = f"{self._ip()}:{file}"
+        return ret
 
     def _exists(self, dir_name: str) -> bool:
         exports = self._host.read_file("/etc/exports")
@@ -34,5 +42,5 @@ class NFS:
         self._host.run("systemctl enable nfs-server")
         self._host.run("systemctl restart nfs-server")
 
-    def _ip(self) -> str:
+    def _ip(self) -> Optional[str]:
         return common.port_to_ip(self._host, self._port)

@@ -11,7 +11,7 @@ def ExtraConfigRT(cc: ClustersConfig, _: Dict[str, str], futures: Dict[str, Futu
     is_sno = cc.is_sno()
 
     logger.info("Running post config command to install rt kernel on worker nodes")
-    client = K8sClient(cc["kubeconfig"])
+    client = K8sClient(cc.kubeconfig)
 
     resource = "sno-realtime.yaml" if is_sno else "worker-realtime.yaml"
     client.oc(f"create -f manifests/rt/{resource}")

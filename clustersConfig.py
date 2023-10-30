@@ -4,13 +4,77 @@ import io
 import sys
 import re
 from typing import Optional
+from typing import List
+from typing import Dict
 import jinja2
 from yaml import safe_load
 import host
 from logger import logger
+import secrets
 import common
 from clusterInfo import ClusterInfo
 from clusterInfo import load_all_cluster_info
+from dataclasses import dataclass
+
+
+def random_mac() -> str:
+    return "52:54:" + ":".join(re.findall("..", secrets.token_hex()[:8]))
+
+
+@dataclass
+class NodeConfig:
+    name: str
+    kind: str
+    node: str
+    image_path: str
+    mac: str
+    disk_size: str
+    preallocated: str
+    os_variant: str
+    ip: Optional[str] = None
+    bmc_ip: Optional[str] = None
+    bmc_user: str = "root"
+    bmc_password: str = "calvin"
+
+
+    def __init__(self, cluster_name: str, **kwargs: str):
+        if 'image_path' not in kwargs:
+            base_path = f'/home/{cluster_name}_guests_images'
+            qemu_img_name = f'{kwargs["name"]}.qcow2'
+            kwargs['image_path'] = os.path.join(base_path, qemu_img_name)
+        if "type" in kwargs:
+            logger.warn("Deprecated 'type' in node config. Use 'kind' instead")
+            kwargs["kind"] = kwargs["type"]
+            del kwargs["type"]
+        if "mac" not in kwargs:
+            kwargs["mac"] = random_mac()
+        if "disk_size" not in kwargs:
+            kwargs["disk_size"] = "48"
+        if "preallocated" not in kwargs:
+            kwargs["preallocated"] = "true"
+        if "os_variant" not in kwargs:
+            kwargs["os_variant"] = "rhel8.6"
+        super().__init__(**kwargs)
+
+    def is_preallocated(self) -> bool:
+        return self.preallocated == "true"
+
+
+@dataclass
+class HostConfig:
+    name: str
+    network_api_port: str
+    username: str = "core"
+    password: Optional[str] = None
+    pre_installed: str = "true"
+
+    def __init__(self, network_api_port: str, **kwargs: str):
+        if "network_api_port" not in kwargs:
+            kwargs["network_api_port"] = network_api_port
+        super().__init__(**kwargs)
+
+    def is_preinstalled(self) -> bool:
+        return self.pre_installed == "true"
 
 
 # Run the hostname command and only take the first part. For example
@@ -23,9 +87,23 @@ def current_host() -> str:
 
 
 class ClustersConfig:
+    name: str
+    kubeconfig: str
+    api_ip: str
+    ingress_ip: str
+    external_port: str = "auto"
+    version: str = "4.13.0-ec.3"
+    network_api_port: str = "auto"
+    masters: List[NodeConfig] = []
+    workers: List[NodeConfig] = []
+    hosts: List[HostConfig] = []
+    proxy: Optional[str] = None
+    noproxy: Optional[str] = None
+    preconfig: List[Dict[str, str]] = []
+    postconfig: List[Dict[str, str]] = []
+
     def __init__(self, yaml_path: str):
         self._cluster_info: Optional[ClusterInfo] = None
-        self._current_host = current_host()
         self._load_full_config(yaml_path)
 
         cc = self.fullConfig
@@ -37,58 +115,47 @@ class ClustersConfig:
         if "kubeconfig" not in cc:
             cc["kubeconfig"] = path.join(getcwd(), f'kubeconfig.{cc["name"]}')
         if "preconfig" not in cc:
-            cc["preconfig"] = ""
+            cc["preconfig"] = []
         if "postconfig" not in cc:
-            cc["postconfig"] = ""
-        if "version" not in cc:
-            cc["version"] = "4.13.0-ec.3"
-        if "external_port" not in cc:
-            cc["external_port"] = "auto"
-        if "network_api_port" not in cc:
-            cc["network_api_port"] = "auto"
+            cc["postconfig"] = []
         if "proxy" not in cc:
             cc["proxy"] = None
 
         if "hosts" not in cc:
             cc["hosts"] = []
-
         # creates hosts entries for each referenced node name
-        all_nodes = cc["masters"] + cc["workers"]
-        for n in all_nodes:
-            if "disk_size" not in n:
-                n["disk_size"] = 48
-            if "preallocated" not in n:
-                n["preallocated"] = True
-            if "os_variant" not in n:
-                n["os_variant"] = "rhel8.6"
-
         node_names = set(x["name"] for x in cc["hosts"])
-        for h in all_nodes:
-            if h["node"] not in node_names:
-                cc["hosts"].append({"name": h["node"]})
-                node_names.add(h["node"])
+        for node in self.all_nodes():
+            if node.node not in node_names:
+                cc["hosts"].append({"name": node.node})
+                node_names.add(node.node)
 
-        # Set default value for optional parameters for workers.
-        for node in all_nodes:
-            if "bmc_ip" not in node:
-                node["bmc_ip"] = None
-            if "bmc_user" not in node:
-                node["bmc_user"] = "root"
-            if "bmc_password" not in node:
-                node["bmc_password"] = "calvin"
-            if "image_path" not in node:
-                base_path = f'/home/{cc["name"]}_guests_images'
-                qemu_img_name = f'{node["name"]}.qcow2'
-                node["image_path"] = os.path.join(base_path, qemu_img_name)
-        for host_config in cc["hosts"]:
-            if "network_api_port" not in host_config:
-                host_config["network_api_port"] = cc["network_api_port"]
-            if "username" not in host_config:
-                host_config["username"] = "core"
-            if "password" not in host_config:
-                host_config["password"] = None
-            if "pre_installed" not in host_config:
-                host_config["pre_installed"] = "True"
+        if "proxy" in cc:
+            self.proxy = cc["proxy"]
+        if "noproxy" in cc:
+            self.noproxy = cc["noproxy"]
+        if "external_port" in cc:
+            self.external_port = cc["external_port"]
+        if "version" in cc:
+            self.version = cc["version"]
+        if "network_api_port" in cc:
+            self.network_api_port = cc["network_api_port"]
+        self.preconfig = cc["preconfig"]
+        self.postconfig = cc["postconfig"]
+        self.name = cc["name"]
+        self.api_ip = cc["api_ip"]
+        self.ingress_ip = cc["ingress_ip"]
+
+        self.kubeconfig = path.join(getcwd(), f'kubeconfig.{cc["name"]}')
+        if "kubeconfig" in cc:
+            self.kubeconfig = cc["kubeconfig"]
+
+        for n in cc["masters"]:
+            self.masters.append(NodeConfig(**n))
+        for n in cc["workers"]:
+            self.workers.append(NodeConfig(**n))
+        for e in cc["hosts"]:
+            self.hosts.append(HostConfig(**e))
 
     def _load_full_config(self, yaml_path: str) -> None:
         if not path.exists(yaml_path):
@@ -97,36 +164,40 @@ class ClustersConfig:
 
         with open(yaml_path, 'r') as f:
             contents = f.read()
-            # load it twice, so that self-reference becomes possible
-            self.fullConfig = safe_load(io.StringIO(contents))["clusters"][0]
-            contents = self._apply_jinja(contents)
+            # load it twice, to get the name of the cluster so
+            # that that can be used as a var
+            loaded = safe_load(io.StringIO(contents))["clusters"][0]
+            contents = self._apply_jinja(contents, loaded["name"])
             self.fullConfig = safe_load(io.StringIO(contents))["clusters"][0]
 
     def autodetect_external_port(self) -> None:
-        detected = common.route_to_port(host.LocalHost(), "default")
-        self.__setitem__("external_port", detected)
+        candidate = common.route_to_port(host.LocalHost(), "default")
+        if candidate is None:
+            logger.error("Failed to found port from default route")
+            sys.exit(-1)
+
+        self.external_port = candidate
 
     def prepare_external_port(self) -> None:
-        if self.__getitem__("external_port") == "auto":
+        if self.external_port == "auto":
             self.autodetect_external_port()
 
     def validate_external_port(self) -> bool:
-        extif = self.__getitem__("external_port")
-        return host.LocalHost().port_exists(extif)
+        return host.LocalHost().port_exists(self.external_port)
 
-    def _apply_jinja(self, contents: str) -> str:
-        def worker_number(a):
+    def _apply_jinja(self, contents: str, cluster_name: str) -> str:
+        def worker_number(a: int) -> str:
             self._ensure_clusters_loaded()
             assert self._cluster_info is not None
             name = self._cluster_info.workers[a]
             return re.sub("[^0-9]", "", name)
 
-        def worker_name(a):
+        def worker_name(a: int) -> str:
             self._ensure_clusters_loaded()
             assert self._cluster_info is not None
             return self._cluster_info.workers[a]
 
-        def api_network():
+        def api_network() -> str:
             self._ensure_clusters_loaded()
             assert self._cluster_info is not None
             return self._cluster_info.network_api_port
@@ -139,7 +210,7 @@ class ClustersConfig:
         template.globals['api_network'] = api_network
 
         kwargs = {}
-        kwargs["cluster_name"] = self.fullConfig["name"]
+        kwargs["cluster_name"] = cluster_name
 
         t = template.render(**kwargs)
         return t
@@ -154,32 +225,29 @@ class ClustersConfig:
         else:
             sys.exit(-1)
 
-    def __getitem__(self, key):
-        return self.fullConfig[key]
+    # def __getitem__(self, key):
+    #     return self.fullConfig[key]
 
-    def __setitem__(self, key, value) -> None:
-        self.fullConfig[key] = value
+    # def __setitem__(self, key, value) -> None:
+    #     self.fullConfig[key] = value
 
-    def all_nodes(self) -> list:
-        return self["masters"] + self["workers"]
+    def all_nodes(self) -> List[NodeConfig]:
+        return self.masters + self.workers
 
-    def all_hosts(self) -> list:
-        return self["hosts"]
+    def all_vms(self) -> List[NodeConfig]:
+        return [x for x in self.all_nodes() if x.kind == "vm"]
 
-    def all_vms(self) -> list:
-        return [x for x in self.all_nodes() if x["type"] == "vm"]
+    def worker_vms(self) -> List[NodeConfig]:
+        return [x for x in self.workers if x.kind == "vm"]
 
-    def worker_vms(self) -> list:
-        return [x for x in self["workers"] if x["type"] == "vm"]
+    def master_vms(self) -> List[NodeConfig]:
+        return [x for x in self.masters if x.kind == "vm"]
 
-    def master_vms(self) -> list:
-        return [x for x in self["masters"] if x["type"] == "vm"]
-
-    def local_vms(self) -> list:
-        return [x for x in self.all_vms() if x["node"] == "localhost"]
+    def local_vms(self) -> List[NodeConfig]:
+        return [x for x in self.all_vms() if x.node == "localhost"]
 
     def is_sno(self) -> bool:
-        return len(self["masters"]) == 1 and len(self["workers"]) == 0
+        return len(self.masters) == 1 and len(self.workers) == 0
 
 
 def main() -> None:

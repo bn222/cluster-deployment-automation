@@ -46,7 +46,7 @@ non-standard way, the web-ui can't be used.
 
 
 class AssistedInstallerService:
-    def __init__(self, version: str, ip: str, proxy: str = "", noproxy: str = "", branch: str = "master"):
+    def __init__(self, version: str, ip: str, proxy: Optional[str] = None, noproxy: Optional[str] = None, branch: str = "master"):
         self._version = version
         self._ip = ip
         self._proxy = proxy

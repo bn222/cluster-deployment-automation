@@ -12,15 +12,15 @@ def main_deploy(args: argparse.Namespace) -> None:
     cc = ClustersConfig(args.config)
 
     if args.url == "192.168.122.1":
-        ais = AssistedInstallerService(cc["version"], args.url, cc["proxy"], cc["noproxy"])
+        ais = AssistedInstallerService(cc.version, args.url, cc.proxy, cc.noproxy)
         ais.start()
         # workaround, this will still install 4.14, but AI will think
         # it is 4.13 (see also workaround when setting up versions)
-        if cc["version"][: len("4.14")] == "4.14":
+        if cc.version[: len("4.14")] == "4.14":
             logger.warn("Applying workaround for assisted installer issue")
             logger.warn("Will pretend to install 4.13, but using 4.14 pullsec")
             logger.warn("Ignore all output from Assisted that mentions 4.13")
-            cc["version"] = "4.13.0-nightly"
+            cc.version = "4.13.0-nightly"
     else:
         logger.info(f"Will use Assisted Installer running at {args.url}")
         ais = None
@@ -32,7 +32,7 @@ def main_deploy(args: argparse.Namespace) -> None:
         https://aicli.readthedocs.io/en/latest/
     """
     ai = AssistedClientAutomation(f"{args.url}:8090")
-    cd = ClusterDeployer(cc, ai, args, args.secrets_path)
+    cd = ClusterDeployer(cc, ai, args.steps, args.secrets_path)
 
     if args.teardown or args.teardown_full:
         cd.teardown()
@@ -47,10 +47,10 @@ def main_snapshot(args: argparse.Namespace) -> None:
     args = parse_args()
     cc = ClustersConfig(args.config)
 
-    ais = AssistedInstallerService(cc["version"], args.url)
+    ais = AssistedInstallerService(cc.version, args.url)
     ai = AssistedClientAutomation(f"{args.url}:8090")
 
-    name = cc["name"] if args.name is None else args.name
+    name = cc.name if args.name is None else args.name
     cs = ClusterSnapshotter(cc, ais, ai, name)
 
     if args.loadsave == "load":

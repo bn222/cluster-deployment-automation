@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 import time
 import os
 import json
@@ -8,6 +9,18 @@ import common
 from logger import logger
 from typing import Dict
 import sys
+
+
+@dataclass
+class AssistedClientClusterInfo:
+    id: str
+    api_vip: str
+
+
+@dataclass
+class AssistedClientHostInfo:
+    status: str
+    inventory: str
 
 
 class AssistedClientAutomation(AssistedClient):  # type: ignore
@@ -100,17 +113,17 @@ class AssistedClientAutomation(AssistedClient):  # type: ignore
             time.sleep(10)
         logger.info(f"Took {tries} tries to start cluster {cluster_name}")
 
-    def get_ai_host(self, name: str):
+    def get_ai_host(self, name: str) -> Optional[AssistedClientHostInfo]:
         for h in filter(lambda x: "inventory" in x, self.list_hosts()):
             rhn = h["requested_hostname"]
             if rhn == name:
-                return h
+                return AssistedClientHostInfo(h["status"], h["inventory"])
         return None
 
     def get_ai_ip(self, name: str) -> Optional[str]:
         ai_host = self.get_ai_host(name)
         if ai_host:
-            inventory = json.loads(ai_host["inventory"])
+            inventory = json.loads(ai_host.inventory)
             routes = inventory["routes"]
 
             default_nics = [x['interface'] for x in routes if x['destination'] == '0.0.0.0']
@@ -122,5 +135,14 @@ class AssistedClientAutomation(AssistedClient):  # type: ignore
         return None
 
     def allow_add_workers(self, cluster_name: str) -> None:
-        uuid = self.info_cluster(cluster_name).to_dict()["id"]
+        uuid = self.get_ai_cluster_info(cluster_name).id
         requests.post(f"http://{self.url}/api/assisted-install/v2/clusters/{uuid}/actions/allow-add-workers")
+
+    def get_ai_cluster_info(self, cluster_name: str) -> AssistedClientClusterInfo:
+        cluster_info = self.info_cluster(cluster_name).to_dict()
+        if "id" not in cluster_info:
+            logger.error(f"ID is missing in cluster info for cluster {cluster_name}")
+            sys.exit(-1)
+        if "api_ip" not in cluster_info:
+            logger.error(f"Missing api ip in cluster info for cluster {cluster_name}")
+        return AssistedClientClusterInfo(cluster_info.id, cluster_info.api_vip)

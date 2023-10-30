@@ -15,7 +15,7 @@ from logger import logger
 
 def ExtraConfigSriov(cc: ClustersConfig, cfg: Dict[str, str], futures: Dict[str, Future[None]]) -> None:
     [f.result() for (_, f) in futures.items()]
-    client = K8sClient(cc["kubeconfig"])
+    client = K8sClient(cc.kubeconfig)
     lh = host.LocalHost()
     repo_dir = "/root/sriov-network-operator"
     url = "https://github.com/openshift/sriov-network-operator.git"
@@ -51,14 +51,14 @@ def ExtraConfigSriov(cc: ClustersConfig, cfg: Dict[str, str], futures: Dict[str,
 
 
 def need_pci_realloc(cc: ClustersConfig, client: K8sClient) -> bool:
-    for e in cc["workers"]:
-        ip = client.get_ip(e['name'])
+    for e in cc.workers:
+        ip = client.get_ip(e.name)
         if ip is None:
             sys.exit(-1)
         rh = host.RemoteHost(ip)
         rh.ssh_connect("core")
         if "switchdev-configuration-before-nm.service" in rh.run("systemctl list-units --state=failed --plain --no-legend").out:
-            logger.info(f"switchdev-configuration is failing in {e['name']}, additional machine configuration is required")
+            logger.info(f"switchdev-configuration is failing in {e.name}, additional machine configuration is required")
             return True
     return False
 
@@ -116,7 +116,7 @@ def try_get_ovs_pf(rh: host.Host, name: str) -> str:
 
 def ExtraConfigSriovOvSHWOL(cc: ClustersConfig, _: Dict[str, str], futures: Dict[str, Future[None]]) -> None:
     [f.result() for (_, f) in futures.items()]
-    client = K8sClient(cc["kubeconfig"])
+    client = K8sClient(cc.kubeconfig)
     client.oc("create -f manifests/nicmode/pool.yaml")
 
     workloadVFsAll = []
@@ -125,8 +125,8 @@ def ExtraConfigSriovOvSHWOL(cc: ClustersConfig, _: Dict[str, str], futures: Dict
     numMgmtVfs = 1
     workloadResourceName = "mlxnics"
     managementResourceName = "mgmtvf"
-    for e in cc["workers"]:
-        name = e["name"]
+    for e in cc.workers:
+        name = e.name
         logger.info(client.oc(f'label node {name} --overwrite=true feature.node.kubernetes.io/network-sriov.capable=true'))
         logger.info(client.oc(f'label node {name} --overwrite=true network.operator.openshift.io/smart-nic='))
         # Find out what the PF attached to br-ex is (uplink port). We only do HWOL on uplink ports.
@@ -172,7 +172,7 @@ def ExtraConfigSriovOvSHWOL(cc: ClustersConfig, _: Dict[str, str], futures: Dict
 # VF Management port requires a new API. We need a new extra config class to handle the API changes.
 def ExtraConfigSriovOvSHWOL_NewAPI(cc: ClustersConfig, _: Dict[str, str], futures: Dict[str, Future[None]]) -> None:
     [f.result() for (_, f) in futures.items()]
-    client = K8sClient(cc["kubeconfig"])
+    client = K8sClient(cc.kubeconfig)
     client.oc("create -f manifests/nicmode/pool.yaml")
 
     workloadVFsAll = []
@@ -181,16 +181,15 @@ def ExtraConfigSriovOvSHWOL_NewAPI(cc: ClustersConfig, _: Dict[str, str], future
     numMgmtVfs = 1
     workloadResourceName = "mlxnics"
     managementResourceName = "mgmtvf"
-    for e in cc["workers"]:
-        name = e["name"]
-        logger.info(client.oc(f'label node {name} --overwrite=true feature.node.kubernetes.io/network-sriov.capable=true'))
-        logger.info(client.oc(f'label node {name} --overwrite=true network.operator.openshift.io/smart-nic='))
+    for e in cc.workers:
+        logger.info(client.oc(f'label node {e.name} --overwrite=true feature.node.kubernetes.io/network-sriov.capable=true'))
+        logger.info(client.oc(f'label node {e.name} --overwrite=true network.operator.openshift.io/smart-nic='))
         # Find out what the PF attached to br-ex is (uplink port). We only do HWOL on uplink ports.
-        ip = client.get_ip(name)
+        ip = client.get_ip(e.name)
         if ip is None:
             sys.exit(-1)
         rh = host.RemoteHost(ip)
-        result = try_get_ovs_pf(rh, name)
+        result = try_get_ovs_pf(rh, e.name)
 
         # Reserve VF(s) for management port(s).
         workloadVFs = f"{result}#{numMgmtVfs}-{numVfs - 1}"

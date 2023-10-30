@@ -11,7 +11,7 @@ def ExtraConfigDualStack(cc: ClustersConfig, _: Dict[str, str], futures: Dict[st
     [f.result() for (_, f) in futures.items()]
     logger.info("Running post config step to load custom OVN-K")
 
-    client = K8sClient(cc["kubeconfig"])
+    client = K8sClient(cc.kubeconfig)
     client.oc("patch network.config.openshift.io cluster --type='json' --patch-file manifests/patch_dual.yaml")
 
     ns = "openshift-cluster-node-tuning-operator"
