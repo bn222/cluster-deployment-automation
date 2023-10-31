@@ -45,4 +45,4 @@ jobs:
         python -m pip install types-PyYAML
         python -m pip install types-requests
     - name: Run mypy
-      run: mypy cda.py --config-file mypy.ini
+      run: mypy --strict cda.py --config-file mypy.ini
