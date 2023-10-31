@@ -211,7 +211,7 @@ class ClustersConfig:
         kwargs = {}
         kwargs["cluster_name"] = cluster_name
 
-        t = template.render(**kwargs)
+        t: str = template.render(**kwargs)
         return t
 
     def _ensure_clusters_loaded(self) -> None:
