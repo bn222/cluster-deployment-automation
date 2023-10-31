@@ -143,6 +143,6 @@ class AssistedClientAutomation(AssistedClient):  # type: ignore
         if "id" not in cluster_info:
             logger.error(f"ID is missing in cluster info for cluster {cluster_name}")
             sys.exit(-1)
-        if "api_ip" not in cluster_info:
+        if "api_vip" not in cluster_info:
             logger.error(f"Missing api ip in cluster info for cluster {cluster_name}")
-        return AssistedClientClusterInfo(cluster_info.id, cluster_info.api_vip)
+        return AssistedClientClusterInfo(cluster_info["id"], cluster_info["api_vip"])

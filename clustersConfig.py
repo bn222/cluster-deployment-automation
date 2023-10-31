@@ -121,16 +121,8 @@ class ClustersConfig:
             cc["postconfig"] = []
         if "proxy" not in cc:
             cc["proxy"] = None
-
         if "hosts" not in cc:
             cc["hosts"] = []
-        # creates hosts entries for each referenced node name
-        node_names = set(x["name"] for x in cc["hosts"])
-        for node in self.all_nodes():
-            if node.node not in node_names:
-                cc["hosts"].append({"name": node.node})
-                node_names.add(node.node)
-
         if "proxy" in cc:
             self.proxy = cc["proxy"]
         if "noproxy" in cc:
@@ -155,6 +147,13 @@ class ClustersConfig:
             self.masters.append(NodeConfig(self.name, **n))
         for n in cc["workers"]:
             self.workers.append(NodeConfig(self.name, **n))
+        # creates hosts entries for each referenced node name
+        node_names = set(x["name"] for x in cc["hosts"])
+        for node in self.all_nodes():
+            if node.node not in node_names:
+                cc["hosts"].append({"name": node.node})
+                node_names.add(node.node)
+
         for e in cc["hosts"]:
             self.hosts.append(HostConfig(self.network_api_port, **e))
 
