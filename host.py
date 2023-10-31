@@ -18,7 +18,6 @@ from typing import Any
 from typing import Dict
 from functools import lru_cache
 from ailib import Redfish
-from tenacity import retry, stop_after_attempt, wait_fixed
 import paramiko
 from paramiko import ssh_exception, RSAKey, Ed25519Key
 from logger import logger
@@ -153,9 +152,13 @@ class BMC:
 
     def boot_iso_redfish(self, iso_path: str) -> None:
         assert ":" in iso_path
-        self.boot_iso_with_retry(iso_path)
+        for _ in range(10):
+            try:
+                self.boot_iso_with_retry(iso_path)
+                break
+            except Exception:
+                time.sleep(60)
 
-    @retry(stop=stop_after_attempt(10), wait=wait_fixed(60))
     def boot_iso_with_retry(self, iso_path: str) -> None:
         logger.info(iso_path)
         logger.info(f"Trying to boot {self.url} using {iso_path}")
