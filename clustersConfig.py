@@ -53,7 +53,8 @@ class NodeConfig:
             kwargs["preallocated"] = "true"
         if "os_variant" not in kwargs:
             kwargs["os_variant"] = "rhel8.6"
-        super().__init__(**kwargs)
+        for k, v in kwargs.items():
+            setattr(self, k, v)
 
     def is_preallocated(self) -> bool:
         return self.preallocated == "true"
@@ -70,7 +71,8 @@ class HostConfig:
     def __init__(self, network_api_port: str, **kwargs: str):
         if "network_api_port" not in kwargs:
             kwargs["network_api_port"] = network_api_port
-        super().__init__(**kwargs)
+        for k, v in kwargs.items():
+            setattr(self, k, v)
 
     def is_preinstalled(self) -> bool:
         return self.pre_installed == "true"
@@ -150,11 +152,11 @@ class ClustersConfig:
             self.kubeconfig = cc["kubeconfig"]
 
         for n in cc["masters"]:
-            self.masters.append(NodeConfig(**n))
+            self.masters.append(NodeConfig(self.name, **n))
         for n in cc["workers"]:
-            self.workers.append(NodeConfig(**n))
+            self.workers.append(NodeConfig(self.name, **n))
         for e in cc["hosts"]:
-            self.hosts.append(HostConfig(**e))
+            self.hosts.append(HostConfig(self.network_api_port, **e))
 
     def _load_full_config(self, yaml_path: str) -> None:
         if not path.exists(yaml_path):
