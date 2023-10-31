@@ -152,12 +152,16 @@ class BMC:
 
     def boot_iso_redfish(self, iso_path: str) -> None:
         assert ":" in iso_path
-        for _ in range(10):
+        retries = 10
+        for attempt in range(retries):
             try:
                 self.boot_iso_with_retry(iso_path)
-                break
-            except Exception:
-                time.sleep(60)
+                return
+            except Exception as e:
+                if attempt == retries - 1:
+                    raise e
+                else:
+                    time.sleep(60)
 
     def boot_iso_with_retry(self, iso_path: str) -> None:
         logger.info(iso_path)
