@@ -51,6 +51,13 @@ def ExtraConfigDpuTenant(cc: ClustersConfig, _: Dict[str, str], futures: Dict[st
     logger.info("Waiting for mcp dpu-host to become ready")
     tclient.wait_for_mcp("dpu-host")
 
+    # Since the kubeconfig we pass into secrets will have the role "system:admin", this is not allowed
+    # from the local node running operator pods point of view. A possible fix is to somehow download
+    # the kubeconfig from the tenant host nodes and use that as the secret. For now, let's disable the
+    # webhook
+    logger.info("creating config map to disable ovn-k node_admission webhook on tenant cluster")
+    tclient.oc("create configmap -n openshift-network-operator network-node-identity --from-literal=enabled=false")
+
     first_worker = cc.workers[0].name
     ip = tclient.get_ip(first_worker)
     if ip is None:
@@ -119,6 +126,13 @@ def ExtraConfigDpuTenant(cc: ClustersConfig, _: Dict[str, str], futures: Dict[st
         logger.info(rh.run("sudo ovs-vsctl del-port br-int ovn-k8s-mp0"))
 
     logger.info("creating mc to disable ovs")
+    # At this point we error out, because the patch ports on the DPU OvS side does not get created
+    # patch ports are created on the OVN side. TODO: FIXME For now try this to make OVN-K on DPU happy:
+    for e in cc.workers:
+        cmd = f"annotate --overwrite node/{e.name} k8s.ovn.org/node-mgmt-port={{\"PfId\":0,\"FuncId\":0}}"
+        logger.info(cmd)
+        logger.info(tclient.oc(cmd))
+
     tclient.oc("create -f manifests/tenant/disable-ovs.yaml")
     logger.info("Waiting for mcp")
     tclient.wait_for_mcp("dpu-host", "dpu host mode")
@@ -131,6 +145,7 @@ def ExtraConfigDpuTenant(cc: ClustersConfig, _: Dict[str, str], futures: Dict[st
     logger.info(iclient.oc(f"create secret generic tenant-cluster-1-kubeconf --from-file=config={tclient._kc}"))
     patch = json.dumps({"spec": {"kubeConfigFile": "tenant-cluster-1-kubeconf"}})
     r = iclient.oc(f"patch --type merge -p '{patch}' DpuClusterConfig dpuclusterconfig-sample -n two-cluster-design")
+    logger.info(patch)
     logger.info(r)
     logger.info("Creating network attachement definition")
     tclient.oc("create -f manifests/tenant/nad.yaml")
