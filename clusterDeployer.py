@@ -67,6 +67,7 @@ def setup_dhcp_entry(h: host.Host, cfg: NodeConfig) -> None:
     cmd = f"virsh net-update default add ip-dhcp-host \"{host_xml}\" --live --config"
     h.run_or_die(cmd)
 
+
 def setup_vm(h: host.Host, cfg: NodeConfig, iso_or_image_path: str) -> host.Result:
     name = cfg.name
     mac = cfg.mac

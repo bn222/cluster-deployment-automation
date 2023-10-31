@@ -36,7 +36,6 @@ class NodeConfig:
     bmc_user: str = "root"
     bmc_password: str = "calvin"
 
-
     def __init__(self, cluster_name: str, **kwargs: str):
         if 'image_path' not in kwargs:
             base_path = f'/home/{cluster_name}_guests_images'
