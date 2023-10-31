@@ -23,7 +23,7 @@ class IPRouteAdressEntry:
 
 
 def ipa(host: host.Host) -> str:
-    return host.run("ip a -json").out
+    return host.run("ip -json a").out
 
 
 def ipa_to_entries(input: str) -> List[IPRouteAdressEntry]:
@@ -41,7 +41,7 @@ def ipa_to_entries(input: str) -> List[IPRouteAdressEntry]:
 
 
 def ipr(host: host.Host) -> str:
-    return host.run("ip r -json").out
+    return host.run("ip -json r").out
 
 
 @dataclass
