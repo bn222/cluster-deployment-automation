@@ -51,7 +51,7 @@ def render_envoverrides_cm(client: K8sClient, cfg: Dict[str, str], ns: str) -> s
     contents += f"{ns}\n"
     contents += "data:\n"
     for e in cfg["mapping"]:
-        a = Dict[str, str] = {}
+        a: Dict[str, str] = {}
         a["TENANT_K8S_NODE"] = e['worker']
         # Can be removed since API is replaced https://github.com/openshift/dpu-network-operator/pull/67
         a["DPU_IP"] = client.get_ip(e['bf'])
@@ -137,7 +137,7 @@ def ExtraConfigDpuTenant(cc: ClustersConfig, cfg: Dict[str, str], futures: Dict[
     logger.info(os.getcwd())
     contents = open("manifests/tenant/setenvovnkube.yaml").read()
     for e in cfg["mapping"]:
-        a: Dict[str,str] = {}
+        a: Dict[str, str] = {}
         mp = re.sub('np\d$', '', bf_port)
         a["OVNKUBE_NODE_MGMT_PORT_NETDEV"] = f"{mp}v0"
         contents += f"  {e['worker']}: |\n"
