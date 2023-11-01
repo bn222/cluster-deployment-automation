@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from clustersConfig import ClustersConfig
 from k8sClient import K8sClient
 import host
@@ -6,12 +7,27 @@ from concurrent.futures import Future
 from extraConfigDpuInfra import run_dpu_network_operator_git
 import extraConfigSriov
 from typing import Dict
+from typing import List
+from typing import Union
 import sys
 import jinja2
 import json
 import os
 import re
 from logger import logger
+
+
+@dataclass
+class MappingEntry:
+    bf: str
+    worker: str
+
+
+@dataclass
+class DpuMapping:
+    name: str
+    kubeconfig: str
+    mapping: List[MappingEntry]
 
 
 def ExtraConfigDpuTenantMC(cc: ClustersConfig, _: Dict[str, str], futures: Dict[str, Future[None]]) -> None:
@@ -46,17 +62,22 @@ def render_sriov_node_policy(policyname: str, bf_port: str, bf_addr: str, numvfs
         outFile.write(rendered)
 
 
-def render_envoverrides_cm(client: K8sClient, cfg: Dict[str, str], ns: str) -> str:
+def render_envoverrides_cm(client: K8sClient, cfg: DpuMapping, ns: str) -> str:
     contents = open("manifests/tenant/envoverrides.yaml").read()
     contents += f"{ns}\n"
     contents += "data:\n"
-    for e in cfg["mapping"]:
+    for e in cfg.mapping:
         a: Dict[str, str] = {}
-        a["TENANT_K8S_NODE"] = e['worker']
+        a["TENANT_K8S_NODE"] = e.worker
         # Can be removed since API is replaced https://github.com/openshift/dpu-network-operator/pull/67
-        a["DPU_IP"] = client.get_ip(e['bf'])
+        dpu_ip = client.get_ip(e.bf)
+        if isinstance(dpu_ip, str):
+            a["DPU_IP"] = dpu_ip
+        else:
+            logger.error(f"Failed to retrieve ip for {e.bf}")
+            sys.exit(1)
         a["MGMT_IFNAME"] = "c1pf0vf0"
-        contents += f"  {e['bf']}: |\n"
+        contents += f"  {e.bf}: |\n"
         for (k, v) in a.items():
             contents += f"    {k}={v}\n"
 
@@ -64,7 +85,7 @@ def render_envoverrides_cm(client: K8sClient, cfg: Dict[str, str], ns: str) -> s
     return f"/tmp/envoverrides-{ns}.yaml"
 
 
-def ExtraConfigDpuTenant(cc: ClustersConfig, cfg: Dict[str, str], futures: Dict[str, Future[None]]) -> None:
+def ExtraConfigDpuTenant(cc: ClustersConfig, cfg: Dict[str, Union[str, list[MappingEntry]]], futures: Dict[str, Future[None]]) -> None:
     [f.result() for (_, f) in futures.items()]
     logger.info("Running post config step")
     tclient = K8sClient("/root/kubeconfig.tenantcluster")
@@ -136,11 +157,14 @@ def ExtraConfigDpuTenant(cc: ClustersConfig, cfg: Dict[str, str], futures: Dict[
     logger.info("setting ovn kube node env-override to set management port")
     logger.info(os.getcwd())
     contents = open("manifests/tenant/setenvovnkube.yaml").read()
-    for e in cfg["mapping"]:
+
+    dpu_mapping = DpuMapping(**cfg)
+
+    for bfmap in dpu_mapping.mapping:
         a: Dict[str, str] = {}
         mp = re.sub('np\d$', '', bf_port)
         a["OVNKUBE_NODE_MGMT_PORT_NETDEV"] = f"{mp}v0"
-        contents += f"  {e['worker']}: |\n"
+        contents += f"  {bfmap.worker}: |\n"
         for (k, v) in a.items():
             contents += f"    {k}={v}\n"
     open("/tmp/1.yaml", "w").write(contents)
@@ -148,12 +172,12 @@ def ExtraConfigDpuTenant(cc: ClustersConfig, cfg: Dict[str, str], futures: Dict[
     logger.info("Running create")
     logger.info(tclient.oc("create -f /tmp/1.yaml"))
 
-    for e in cc.workers:
-        cmd = f"label node {e.name} network.operator.openshift.io/dpu-host="
+    for nc in cc.workers:
+        cmd = f"label node {nc.name} network.operator.openshift.io/dpu-host="
         logger.info(tclient.oc(cmd))
-        ip = tclient.get_ip(e.name)
+        ip = tclient.get_ip(nc.name)
         if ip is None:
-            logger.error(f"Failed to get ip for node {e.name}")
+            logger.error(f"Failed to get ip for node {nc.name}")
             sys.exit(-1)
         rh = host.RemoteHost(ip)
         rh.ssh_connect("core")
@@ -181,9 +205,9 @@ def ExtraConfigDpuTenant(cc: ClustersConfig, cfg: Dict[str, str], futures: Dict[
 
     tc_namespace = "two-cluster-design"
     dpu_namespace = "openshift-dpu-network-operator"
-    file = render_envoverrides_cm(iclient, cfg, tc_namespace)
+    file = render_envoverrides_cm(iclient, dpu_mapping, tc_namespace)
     logger.info(iclient.oc(f"create -f {file}"))
-    file = render_envoverrides_cm(iclient, cfg, dpu_namespace)
+    file = render_envoverrides_cm(iclient, dpu_mapping, dpu_namespace)
     logger.info(iclient.oc(f"create -f {file}"))
 
     # Restart DPU network operator to apply env-overrides cm
