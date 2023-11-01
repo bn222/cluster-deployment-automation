@@ -16,6 +16,7 @@ from typing import List
 from typing import Type
 from typing import Any
 from typing import Dict
+from typing import Tuple
 from functools import lru_cache
 from ailib import Redfish
 import paramiko
@@ -209,11 +210,12 @@ def bmc_from_host_name_or_ip(hostname: str, ip: Optional[str], user: str = "root
 
 
 class Host:
-    def __new__(cls, hostname: str, _: Optional[BMC] = None) -> 'Host':
-        if hostname not in host_instances:
-            host_instances[hostname] = super().__new__(cls)
+    def __new__(cls, hostname: str, bmc: Optional[BMC] = None) -> Host:
+        key = (hostname, bmc.url if bmc else None)
+        if key not in host_instances:
+            host_instances[key] = super().__new__(cls)
             logger.debug(f"new instance for {hostname}")
-        return host_instances[hostname]
+        return host_instances[key]
 
     def __init__(self, hostname: str, bmc: Optional[BMC] = None):
         self._hostname = hostname
@@ -557,7 +559,7 @@ class HostWithBF2(Host):
         return self.run_in_container("/bfb")
 
 
-host_instances: Dict[str, Host] = {}
+host_instances: Dict[Tuple[str, str], Host] = {}
 
 
 def sync_time(src: Host, dst: Host) -> Result:
