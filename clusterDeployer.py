@@ -89,7 +89,6 @@ def setup_vm(h: host.Host, cfg: NodeConfig, iso_or_image_path: str) -> host.Resu
         cdrom_line = ""
         append = "--noautoconsole"
 
-    RAM_MB = 32784
     CPU_CORE = 8
     if h.is_localhost():
         network = "network=default"
@@ -99,7 +98,7 @@ def setup_vm(h: host.Host, cfg: NodeConfig, iso_or_image_path: str) -> host.Resu
     virt-install
         --connect qemu:///system
         -n {name}
-        -r {RAM_MB}
+        -r {cfg.ram}
         --cpu host
         --vcpus {CPU_CORE}
         --os-variant={cfg.os_variant}
