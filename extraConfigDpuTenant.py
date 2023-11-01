@@ -9,6 +9,8 @@ from typing import Dict
 import sys
 import jinja2
 import json
+import os
+import re
 from logger import logger
 
 
@@ -179,9 +181,9 @@ def ExtraConfigDpuTenant(cc: ClustersConfig, cfg: Dict[str, str], futures: Dict[
 
     tc_namespace = "two-cluster-design"
     dpu_namespace = "openshift-dpu-network-operator"
-    file = self.render_envoverrides_cm(iclient, cc, tc_namespace)
+    file = render_envoverrides_cm(iclient, cfg, tc_namespace)
     logger.info(iclient.oc(f"create -f {file}"))
-    file = self.render_envoverrides_cm(iclient, cc, dpu_namespace)
+    file = render_envoverrides_cm(iclient, cfg, dpu_namespace)
     logger.info(iclient.oc(f"create -f {file}"))
 
     # Restart DPU network operator to apply env-overrides cm
