@@ -30,6 +30,7 @@ class NodeConfig:
     mac: str
     disk_size: str
     ram: str
+    cpu: str
     preallocated: str
     os_variant: str
     ip: Optional[str] = None
@@ -56,6 +57,8 @@ class NodeConfig:
             kwargs["os_variant"] = "rhel8.6"
         if "ram" not in kwargs:
             kwargs["ram"] = "32768"
+        if "cpu" not in kwargs:
+            kwargs["cpu"] = "8"
         for k, v in kwargs.items():
             setattr(self, k, v)
 
