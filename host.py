@@ -210,7 +210,7 @@ def bmc_from_host_name_or_ip(hostname: str, ip: Optional[str], user: str = "root
 
 
 class Host:
-    def __new__(cls, hostname: str, bmc: Optional[BMC] = None) -> Host:
+    def __new__(cls, hostname: str, bmc: Optional[BMC] = None) -> 'Host':
         key = (hostname, bmc.url if bmc else None)
         if key not in host_instances:
             host_instances[key] = super().__new__(cls)
@@ -559,7 +559,7 @@ class HostWithBF2(Host):
         return self.run_in_container("/bfb")
 
 
-host_instances: Dict[Tuple[str, str], Host] = {}
+host_instances: Dict[Tuple[str, Optional[str]], Host] = {}
 
 
 def sync_time(src: Host, dst: Host) -> Result:
