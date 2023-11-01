@@ -246,6 +246,9 @@ class ClustersConfig:
     def local_vms(self) -> List[NodeConfig]:
         return [x for x in self.all_vms() if x.node == "localhost"]
 
+    def local_worker_vms(self) -> List[NodeConfig]:
+        return [x for x in self.worker_vms() if x.node == "localhost"]
+
     def is_sno(self) -> bool:
         return len(self.masters) == 1 and len(self.workers) == 0
 
