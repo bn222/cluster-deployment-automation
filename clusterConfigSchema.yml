@@ -10,6 +10,8 @@ clusters:
       type: "<vm / physical / bf>"
       node: ""
       ip: ""
+      ram: "in MB - default = 32768 MB"
+      cpu: "number of vcpus if this is a VM - default = 8"
     workers:
     - name: "A"
       type: "<vm / physical / bf>"
@@ -20,6 +22,8 @@ clusters:
       bmc_password: "required if physical or bf"
       disk_size: "in GB - default = 48 GB"
       sparse: "False or True"
+      ram: "in MB - default = 32768 GB"
+      cpu: "number of vcpus if this is a VM - default = 8"
     # optionally describe additional node attributes
     hosts:
     - name: "A"
