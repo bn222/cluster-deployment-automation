@@ -22,6 +22,14 @@ def random_mac() -> str:
 
 
 @dataclass
+class ExtraConfigArgs:
+    name: str
+    image: Optional[str] = None
+    kubeconfig: Optional[str] = None
+    mapping: Optional[List[Dict[str, str]]] = None
+
+
+@dataclass
 class NodeConfig:
     name: str
     kind: str
@@ -100,8 +108,8 @@ class ClustersConfig:
     hosts: List[HostConfig] = []
     proxy: Optional[str] = None
     noproxy: Optional[str] = None
-    preconfig: List[Dict[str, str]] = []
-    postconfig: List[Dict[str, str]] = []
+    preconfig: List[ExtraConfigArgs] = []
+    postconfig: List[ExtraConfigArgs] = []
 
     def __init__(self, yaml_path: str):
         self._cluster_info: Optional[ClusterInfo] = None
@@ -133,8 +141,6 @@ class ClustersConfig:
             self.version = cc["version"]
         if "network_api_port" in cc:
             self.network_api_port = cc["network_api_port"]
-        self.preconfig = cc["preconfig"]
-        self.postconfig = cc["postconfig"]
         self.name = cc["name"]
         self.api_ip = cc["api_ip"]
         self.ingress_ip = cc["ingress_ip"]
@@ -156,6 +162,11 @@ class ClustersConfig:
 
         for e in cc["hosts"]:
             self.hosts.append(HostConfig(self.network_api_port, **e))
+
+        for c in cc["preconfig"]:
+            self.preconfig.append(ExtraConfigArgs(**c))
+        for c in cc["postconfig"]:
+            self.postconfig.append(ExtraConfigArgs(**c))
 
     def _load_full_config(self, yaml_path: str) -> None:
         if not path.exists(yaml_path):

@@ -3,9 +3,10 @@ from k8sClient import K8sClient
 from logger import logger
 from concurrent.futures import Future
 from typing import Dict
+from clustersConfig import ExtraConfigArgs
 
 
-def ExtraConfigRT(cc: ClustersConfig, _: Dict[str, str], futures: Dict[str, Future[None]]) -> None:
+def ExtraConfigRT(cc: ClustersConfig, _: ExtraConfigArgs, futures: Dict[str, Future[None]]) -> None:
     [f.result() for (_, f) in futures.items()]
 
     is_sno = cc.is_sno()

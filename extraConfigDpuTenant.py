@@ -15,22 +15,10 @@ import json
 import os
 import re
 from logger import logger
+from clustersConfig import ExtraConfigArgs
 
 
-@dataclass
-class MappingEntry:
-    bf: str
-    worker: str
-
-
-@dataclass
-class DpuMapping:
-    name: str
-    kubeconfig: str
-    mapping: List[MappingEntry]
-
-
-def ExtraConfigDpuTenantMC(cc: ClustersConfig, _: Dict[str, str], futures: Dict[str, Future[None]]) -> None:
+def ExtraConfigDpuTenantMC(cc: ClustersConfig, _: ExtraConfigArgs, futures: Dict[str, Future[None]]) -> None:
     [f.result() for (_, f) in futures.items()]
     logger.info("Running post config step")
     tclient = K8sClient("/root/kubeconfig.tenantcluster")
@@ -62,22 +50,22 @@ def render_sriov_node_policy(policyname: str, bf_port: str, bf_addr: str, numvfs
         outFile.write(rendered)
 
 
-def render_envoverrides_cm(client: K8sClient, cfg: DpuMapping, ns: str) -> str:
+def render_envoverrides_cm(client: K8sClient, mapping: List[Dict[str, str]], ns: str) -> str:
     contents = open("manifests/tenant/envoverrides.yaml").read()
     contents += f"{ns}\n"
     contents += "data:\n"
-    for e in cfg.mapping:
+    for e in mapping:
         a: Dict[str, str] = {}
-        a["TENANT_K8S_NODE"] = e.worker
+        a["TENANT_K8S_NODE"] = e["worker"]
         # Can be removed since API is replaced https://github.com/openshift/dpu-network-operator/pull/67
-        dpu_ip = client.get_ip(e.bf)
+        dpu_ip = client.get_ip(e["bf"])
         if isinstance(dpu_ip, str):
             a["DPU_IP"] = dpu_ip
         else:
-            logger.error(f"Failed to retrieve ip for {e.bf}")
+            logger.error(f"Failed to retrieve ip for {e['bf']}")
             sys.exit(1)
         a["MGMT_IFNAME"] = "c1pf0vf0"
-        contents += f"  {e.bf}: |\n"
+        contents += f"  {e['bf']}: |\n"
         for (k, v) in a.items():
             contents += f"    {k}={v}\n"
 
@@ -85,9 +73,13 @@ def render_envoverrides_cm(client: K8sClient, cfg: DpuMapping, ns: str) -> str:
     return f"/tmp/envoverrides-{ns}.yaml"
 
 
-def ExtraConfigDpuTenant(cc: ClustersConfig, cfg: Dict[str, Union[str, list[MappingEntry]]], futures: Dict[str, Future[None]]) -> None:
+def ExtraConfigDpuTenant(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: Dict[str, Future[None]]) -> None:
     [f.result() for (_, f) in futures.items()]
     logger.info("Running post config step")
+
+    if cfg.mapping is None:
+        logger.error("BF to Worker mapping not provided for tenant deployment")
+        sys.exit(1)
     tclient = K8sClient("/root/kubeconfig.tenantcluster")
     logger.info("Waiting for mcp dpu-host to become ready")
     tclient.wait_for_mcp("dpu-host")
@@ -158,13 +150,11 @@ def ExtraConfigDpuTenant(cc: ClustersConfig, cfg: Dict[str, Union[str, list[Mapp
     logger.info(os.getcwd())
     contents = open("manifests/tenant/setenvovnkube.yaml").read()
 
-    dpu_mapping = DpuMapping(**cfg)
-
-    for bfmap in dpu_mapping.mapping:
+    for bfmap in cfg.mapping:
         a: Dict[str, str] = {}
         mp = re.sub('np\d$', '', bf_port)
         a["OVNKUBE_NODE_MGMT_PORT_NETDEV"] = f"{mp}v0"
-        contents += f"  {bfmap.worker}: |\n"
+        contents += f"  {bfmap['workers']}: |\n"
         for (k, v) in a.items():
             contents += f"    {k}={v}\n"
     open("/tmp/1.yaml", "w").write(contents)
@@ -205,9 +195,9 @@ def ExtraConfigDpuTenant(cc: ClustersConfig, cfg: Dict[str, Union[str, list[Mapp
 
     tc_namespace = "two-cluster-design"
     dpu_namespace = "openshift-dpu-network-operator"
-    file = render_envoverrides_cm(iclient, dpu_mapping, tc_namespace)
+    file = render_envoverrides_cm(iclient, cfg.mapping, tc_namespace)
     logger.info(iclient.oc(f"create -f {file}"))
-    file = render_envoverrides_cm(iclient, dpu_mapping, dpu_namespace)
+    file = render_envoverrides_cm(iclient, cfg.mapping, dpu_namespace)
     logger.info(iclient.oc(f"create -f {file}"))
 
     # Restart DPU network operator to apply env-overrides cm
@@ -225,7 +215,7 @@ def ExtraConfigDpuTenant(cc: ClustersConfig, cfg: Dict[str, Union[str, list[Mapp
     extraConfigSriov.ensure_pci_realloc(cc, tclient, "dpu-host")
 
 
-def ExtraConfigDpuTenant_NewAPI(cc: ClustersConfig, _: Dict[str, str], futures: Dict[str, Future[None]]) -> None:
+def ExtraConfigDpuTenant_NewAPI(cc: ClustersConfig, _: ExtraConfigArgs, futures: Dict[str, Future[None]]) -> None:
     [f.result() for (_, f) in futures.items()]
     logger.info("Running post config step")
     tclient = K8sClient("/root/kubeconfig.tenantcluster")

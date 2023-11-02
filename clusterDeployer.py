@@ -19,7 +19,7 @@ import logging
 import paramiko
 from assistedInstaller import AssistedClientAutomation
 import host
-from clustersConfig import ClustersConfig, NodeConfig, HostConfig
+from clustersConfig import ClustersConfig, NodeConfig, HostConfig, ExtraConfigArgs
 from k8sClient import K8sClient
 from nfs import NFS
 import coreosBuilder
@@ -27,6 +27,7 @@ from typing import Tuple
 import common
 from python_hosts import Hosts, HostsEntry
 from logger import logger
+from dataclasses import dataclass
 from extraConfigRunner import ExtraConfigRunner
 import argparse
 
@@ -407,7 +408,7 @@ class ClusterDeployer:
         for e in self._cc.postconfig:
             self._prepost_config(e)
 
-    def _prepost_config(self, to_run: Dict[str, str]) -> None:
+    def _prepost_config(self, to_run: ExtraConfigArgs) -> None:
         if not to_run:
             return
         self._extra_config.run(to_run, self._futures)

@@ -7,6 +7,7 @@ from extraConfigCNO import ExtraConfigCNO
 from extraConfigRT import ExtraConfigRT
 from extraConfigDualStack import ExtraConfigDualStack
 from clustersConfig import ClustersConfig
+from clustersConfig import ExtraConfigArgs
 from concurrent.futures import Future
 from typing import Dict
 from logger import logger
@@ -33,10 +34,10 @@ class ExtraConfigRunner:
             "dualstack": ExtraConfigDualStack,
         }
 
-    def run(self, to_run: Dict[str, str], futures: Dict[str, Future[None]]) -> None:
-        if to_run["name"] not in self._extra_config:
-            logger.info(f"{to_run['name']} is not an extra config")
+    def run(self, to_run: ExtraConfigArgs, futures: Dict[str, Future[None]]) -> None:
+        if to_run.name not in self._extra_config:
+            logger.info(f"{to_run.name} is not an extra config")
             sys.exit(-1)
         else:
-            logger.info(f"running extra config {to_run['name']}")
-            self._extra_config[to_run['name']](self._cc, to_run, futures)
+            logger.info(f"running extra config {to_run.name}")
+            self._extra_config[to_run.name](self._cc, to_run, futures)

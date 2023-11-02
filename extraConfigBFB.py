@@ -8,6 +8,7 @@ from concurrent.futures import Future
 from typing import Dict
 import sys
 from logger import logger
+from clustersConfig import ExtraConfigArgs
 
 """
 The "ExtraConfigBFB" is used to put the BF2 in a known good state. This is achieved by
@@ -25,7 +26,7 @@ to be in a good state.
 """
 
 
-def ExtraConfigBFB(cc: ClustersConfig, _: Dict[str, str], futures: Dict[str, Future[None]]) -> None:
+def ExtraConfigBFB(cc: ClustersConfig, _: ExtraConfigArgs, futures: Dict[str, Future[None]]) -> None:
     coreosBuilder.ensure_fcos_exists()
     logger.info("Loading BF-2 with BFB image on all workers")
     lh = host.LocalHost()
@@ -59,7 +60,7 @@ def ExtraConfigBFB(cc: ClustersConfig, _: Dict[str, str], futures: Dict[str, Fut
     logger.info("BFB setup complete")
 
 
-def ExtraConfigSwitchNicMode(cc: ClustersConfig, _: Dict[str, str], futures: Dict[str, Future[None]]) -> None:
+def ExtraConfigSwitchNicMode(cc: ClustersConfig, _: ExtraConfigArgs, futures: Dict[str, Future[None]]) -> None:
     [f.result() for (_, f) in futures.items()]
     client = K8sClient(cc.kubeconfig)
 
