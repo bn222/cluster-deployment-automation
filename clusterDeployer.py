@@ -687,12 +687,12 @@ class ClusterDeployer:
     def _create_vm_x86_workers(self) -> None:
         cluster_name = self._cc.name
         infra_env = f"{cluster_name}-x86"
-        vm = self._cc.local_vms()
+        vm = self._cc.local_worker_vms()
         logger.info(infra_env)
         lh = host.LocalHost()
         # TODO: clean this up. Currently just skipping this
         # since self.local_host_config() is not present if no local vms
-        if self._cc.local_vms():
+        if self._cc.local_worker_vms():
             for e in vm:
                 setup_dhcp_entry(lh, e)
             _ = setup_all_vms(lh, vm, os.path.join(os.getcwd(), f"{infra_env}.iso"))
