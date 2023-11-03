@@ -3,9 +3,10 @@ from typing import Dict
 from clustersConfig import ClustersConfig
 from logger import logger
 from k8sClient import K8sClient
+from clustersConfig import ExtraConfigArgs
 
 
-def ExtraConfigDualStack(cc: ClustersConfig, _: Dict[str, str], futures: Dict[str, Future[None]]) -> None:
+def ExtraConfigDualStack(cc: ClustersConfig, _: ExtraConfigArgs, futures: Dict[str, Future[None]]) -> None:
     # https://docs.openshift.com/container-platform/4.13/networking/ovn_kubernetes_network_provider/converting-to-dual-stack.html
     # https://issues.redhat.com/browse/OCPBUGS-6040
     [f.result() for (_, f) in futures.items()]

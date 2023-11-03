@@ -12,6 +12,7 @@ from common_patches import apply_common_pathches
 from typing import Dict
 from typing import List
 from logger import logger
+from clustersConfig import ExtraConfigArgs
 
 
 def install_remotely(ip: str, links: List[str]) -> bool:
@@ -119,7 +120,7 @@ def run_dpu_network_operator_git(lh: host.Host, kc: str) -> None:
     lh.run("rm -rf bin")
     env = os.environ.copy()
     env["KUBECONFIG"] = kc
-    env["IMG"] = "quay.io/wizhao/dpu-network-operator:Oct18_WZ_DPU_DS_Test_1"
+    env["IMG"] = "quay.io/wizhao/dpu-network-operator:Nov1_WZ_DPU_DS_Test_1"
     # cleanup first, to make this script idempotent
     logger.info("running make undeploy")
     logger.info(lh.run("make undeploy", env=env))
@@ -137,7 +138,7 @@ def restart_ovs_configuration(ips: List[str]) -> None:
         rh.run("sudo systemctl restart ovs-configuration")
 
 
-def ExtraConfigDpuInfra(cc: ClustersConfig, _: Dict[str, str], futures: Dict[str, Future[None]]) -> None:
+def ExtraConfigDpuInfra(cc: ClustersConfig, _: ExtraConfigArgs, futures: Dict[str, Future[None]]) -> None:
     [f.result() for (_, f) in futures.items()]
     kc = "/root/kubeconfig.infracluster"
     client = K8sClient(kc)
@@ -214,7 +215,7 @@ def ExtraConfigDpuInfra(cc: ClustersConfig, _: Dict[str, str], futures: Dict[str
 
 
 # VF Management port requires a new API. We need a new extra config class to handle the API changes.
-def ExtraConfigDpuInfra_NewAPI(cc: ClustersConfig, _: Dict[str, str], futures: Dict[str, Future[None]]) -> None:
+def ExtraConfigDpuInfra_NewAPI(cc: ClustersConfig, _: ExtraConfigArgs, futures: Dict[str, Future[None]]) -> None:
     [f.result() for (_, f) in futures.items()]
     kc = "/root/kubeconfig.infracluster"
     client = K8sClient(kc)
