@@ -162,7 +162,7 @@ class ClustersConfig:
         # creates hosts entries for each referenced node name
         node_names = set(x["name"] for x in cc["hosts"])
         for node in self.all_nodes():
-            if node.node not in node_names:
+            if node.kind != "physical" and node.node not in node_names:
                 cc["hosts"].append({"name": node.node})
                 node_names.add(node.node)
 
