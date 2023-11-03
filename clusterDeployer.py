@@ -375,6 +375,8 @@ class ClusterDeployer:
                     logger.info("can't find network API port")
                 else:
                     logger.info(h.run(f"ip link set {intif} nomaster"))
+                    logger.info(f"Setting interface {intif} as managed in NetworkManager")
+                    lh.run(f"nmcli device set {intif} managed yes")
 
         if os.path.exists(self._cc.kubeconfig):
             os.remove(self._cc.kubeconfig)
@@ -443,6 +445,9 @@ class ClusterDeployer:
         elif interface.master != bridge:
             logger.info(f"Incorrect master set for interface {api_network}")
             sys.exit(-1)
+
+        logger.info(f"Setting interface {api_network} as unmanaged in NetworkManager")
+        lh.run(f"nmcli device set {api_network} managed no")
 
     def need_external_network(self) -> bool:
         vm_bm = list(x for x in self._cc.workers if x.kind == "vm" and x.node != "localhost")
