@@ -1029,7 +1029,7 @@ class ClusterDeployer:
         logger.info(f'Will try {tries} times to get an IP on {" or ".join(bf_interfaces)}')
         ip = None
         for _ in range(tries):
-            ipa = json.loads(h.run_on_bf("ip -json a").out)
+            ipa = h.run_on_bf("ip -json a").out
             detected = common.ipa_to_entries(ipa)
             found = [e for e in detected if e.ifname in bf_interfaces]
             if len(found) != 1:
