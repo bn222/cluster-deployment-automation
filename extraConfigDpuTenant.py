@@ -154,7 +154,7 @@ def ExtraConfigDpuTenant(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: Dict
         a: Dict[str, str] = {}
         mp = re.sub('np\d$', '', bf_port)
         a["OVNKUBE_NODE_MGMT_PORT_NETDEV"] = f"{mp}v0"
-        contents += f"  {bfmap['workers']}: |\n"
+        contents += f"  {bfmap['worker']}: |\n"
         for (k, v) in a.items():
             contents += f"    {k}={v}\n"
     open("/tmp/1.yaml", "w").write(contents)
