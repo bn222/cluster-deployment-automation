@@ -1,6 +1,6 @@
 GitPython
 aicli
-PyYAML==5.4.1
+PyYAML
 requests
 setuptools-rust
 wheel
