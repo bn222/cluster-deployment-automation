@@ -206,7 +206,7 @@ def bmc_from_host_name_or_ip(hostname: str, ip: Optional[str], user: str = "root
     if ip is None:
         return BMC.from_hostname(hostname, user, password)
     else:
-        return BMC.from_hostname(ip, user, password)
+        return BMC.from_ip(ip, user, password)
 
 
 class Host:
