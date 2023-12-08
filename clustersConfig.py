@@ -148,8 +148,6 @@ class ClustersConfig:
         if "network_api_port" in cc:
             self.network_api_port = cc["network_api_port"]
         self.name = cc["name"]
-        self.api_ip = cc["api_ip"]
-        self.ingress_ip = cc["ingress_ip"]
 
         self.kubeconfig = path.join(getcwd(), f'kubeconfig.{cc["name"]}')
         if "kubeconfig" in cc:
@@ -165,6 +163,10 @@ class ClustersConfig:
             if node.kind != "physical" and node.node not in node_names:
                 cc["hosts"].append({"name": node.node})
                 node_names.add(node.node)
+
+        if not self.is_sno():
+            self.api_ip = cc["api_ip"]
+            self.ingress_ip = cc["ingress_ip"]
 
         for e in cc["hosts"]:
             self.hosts.append(HostConfig(self.network_api_port, **e))
