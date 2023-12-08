@@ -495,8 +495,6 @@ class ClusterDeployer:
             if self._cc.masters[0].ip is None:
                 logger.error("Missing ip on master")
                 sys.exit(-1)
-            self._cc.api_ip = self._cc.masters[0].ip
-            self._cc.ingress_ip = self._cc.masters[0].ip
 
         lh = host.LocalHost()
         min_cores = 28
@@ -531,8 +529,10 @@ class ClusterDeployer:
         cfg["pull_secret"] = self._secrets_path
         cfg["infraenv"] = "false"
 
-        cfg["api_ip"] = self._cc.api_ip
-        cfg["ingress_ip"] = self._cc.ingress_ip
+        if not self._cc.is_sno():
+            cfg["api_ip"] = self._cc.api_ip
+            cfg["ingress_ip"] = self._cc.ingress_ip
+
         cfg["vip_dhcp_allocation"] = False
         cfg["additional_ntp_source"] = "clock.redhat.com"
         cfg["base_dns_domain"] = "redhat.com"
