@@ -107,7 +107,7 @@ class ClustersConfig:
     api_ip: str
     ingress_ip: str
     external_port: str = "auto"
-    version: str = "4.13.0-ec.3"
+    version: str = "4.14.0-nightly"
     network_api_port: str = "auto"
     masters: List[NodeConfig] = []
     workers: List[NodeConfig] = []
