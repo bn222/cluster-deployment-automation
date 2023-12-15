@@ -534,8 +534,8 @@ class ClusterDeployer:
             cfg["ingress_ip"] = self._cc.ingress_ip
 
         cfg["vip_dhcp_allocation"] = False
-        cfg["additional_ntp_source"] = "clock.redhat.com"
-        cfg["base_dns_domain"] = "redhat.com"
+        cfg["additional_ntp_source"] = self._cc.ntp_source
+        cfg["base_dns_domain"] = self._cc.base_dns_domain
         cfg["sno"] = self._cc.is_sno()
         if self._cc.proxy:
             cfg["proxy"] = self._cc.proxy

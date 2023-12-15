@@ -107,7 +107,7 @@ class ClustersConfig:
     api_ip: str
     ingress_ip: str
     external_port: str = "auto"
-    version: str = "4.13.0-ec.3"
+    version: str = "4.14.0-nightly"
     network_api_port: str = "auto"
     masters: List[NodeConfig] = []
     workers: List[NodeConfig] = []
@@ -116,6 +116,8 @@ class ClustersConfig:
     noproxy: Optional[str] = None
     preconfig: List[ExtraConfigArgs] = []
     postconfig: List[ExtraConfigArgs] = []
+    ntp_source: str = "clock.redhat.com"
+    base_dns_domain: str = "redhat.com"
 
     def __init__(self, yaml_path: str):
         self._cluster_info: Optional[ClusterInfo] = None
@@ -148,6 +150,10 @@ class ClustersConfig:
         if "network_api_port" in cc:
             self.network_api_port = cc["network_api_port"]
         self.name = cc["name"]
+        if "ntp_source" in cc:
+            self.ntp_source = cc["ntp_source"]
+        if "base_dns_domain" in cc:
+            self.base_dns_domain = cc["base_dns_domain"]
 
         self.kubeconfig = path.join(getcwd(), f'kubeconfig.{cc["name"]}')
         if "kubeconfig" in cc:
