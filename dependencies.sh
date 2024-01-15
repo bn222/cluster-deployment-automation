@@ -1,6 +1,6 @@
-dnf install -y python3.11 pip
-pip3.11 install --upgrade pip
-pip3.11 install PyYAML --ignore-installed
+# assumes venv was created with `python3.11 -m venv ocp-venv`
+python -m ensurepip --upgrade
+python -m pip install PyYAML --ignore-installed
 cat <<EOF | sudo tee /etc/yum.repos.d/kubernetes.repo
 [kubernetes]
 name=Kubernetes
@@ -15,4 +15,4 @@ if ! command -v -- oc; then
     curl $OPENSHIFT_CLIENT_TOOLS_URL | sudo tar -U -C /usr/local/bin -xzf -
 fi
 
-cat requirements.txt  | xargs -n1 pip3.11 install
+cat requirements.txt  | xargs -n1 python -m pip install
