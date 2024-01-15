@@ -9,13 +9,13 @@ from the repository root directory.
 NOTE: starting with Fedora 33 RSA keys are considered not secure enough; use
 ed25519 instead.
 
-```
+```bash
 ssh-keygen -t ed25519 -a 64 -N '' -f ~/.ssh/id_ed25519
 ```
 
 ## Install required software and Python packages by starting a Python virtual environment
 NOTE: Requires Python3.11 or higher
-```
+```bash
 python -m venv ocp-venv
 source ocp-venv/bin/activate
 ./dependencies.sh
@@ -23,14 +23,14 @@ systemctl enable libvirtd
 ```
 
 ## Activate and deactivate Python virtual environment
-```
+```bash
 source ocp-venv/bin/activate
 ...
 deactivate
 ```
 
 ## Generate a baremetal worker cluster configuration file (1)
-```
+```yaml
 cat > cluster.yaml << EOF
 clusters:
   - name : "mycluster"
@@ -59,7 +59,7 @@ EOF
 ```
 
 ## Generate a vm worker cluster configuration file (2)
-```
+```yaml
 cat > cluster.yaml << EOF
 clusters:
   - name : "vm"
@@ -92,7 +92,7 @@ EOF
 ```
 
 ## Generate a vm Single Node OpenShift (SNO) cluster configuration file (3)
-```
+```yaml
 cat > cluster.yaml << EOF
 clusters:
   - name : "vm-sno"
@@ -105,7 +105,7 @@ EOF
 ```
 
 ## Start the installation
-```
+```bash
 source ocp-venv/bin/activate
 python cda.py cluster.yaml deploy
 deactivate
@@ -115,7 +115,7 @@ deactivate
 The scripts don't rely on the OpenShift Client (oc) being installed locally.
 For a better user experience it might still be a good idea to install the
 latest 4.x version:
-```
+```bash
 pushd /tmp/
 wget https://mirror.openshift.com/pub/openshift-v4/clients/ocp/latest/openshift-client-linux.tar.gz
 tar xf openshift-client-linux.tar.gz oc
@@ -125,13 +125,13 @@ popd
 ```
 
 ## Set the kubeconfig after a successful installation
-```
+```bash
 export KUBECONFIG=/root/kubeconfig.vm
 ```
 
 We can now access the cluster, e.g.:
 
-```
+```bash
 # oc get nodes
 NAME          STATUS   ROLES                         AGE    VERSION
 vm-master-1   Ready    control-plane,master,worker   4d1h   v1.25.4+77bec7a
