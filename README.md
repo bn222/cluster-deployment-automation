@@ -20,6 +20,7 @@ python3.11 -m venv ocp-venv
 source ocp-venv/bin/activate
 ./dependencies.sh
 systemctl enable libvirtd
+usermod -a -G root qemu
 ```
 
 ## Activate and deactivate Python virtual environment
