@@ -1,11 +1,11 @@
 #!/bin/bash
 
-if [ -z "$VIRTUAL_ENV" ]; then
-    PYTHON_CMD="python3.11"
-    sudo dnf install -y python3.11
-else
-    # assumes venv was created with `python3.11 -m venv ocp-venv`
+if [ "$(which python)" = "$(pwd)/ocp-venv/bin/python" ]; then
     PYTHON_CMD="python"
+else
+    PYTHON_CMD="python3.11"
+    # Install Python 3.11 if not using the virtual environment interpreter
+    sudo dnf install -y python3.11
 fi
 
 $PYTHON_CMD -m ensurepip --upgrade
