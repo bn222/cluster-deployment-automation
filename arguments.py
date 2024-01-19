@@ -91,9 +91,7 @@ def parse_args() -> argparse.Namespace:
         args.worker_range = common.RangeList(args.workers)
         args.worker_range.exclude(args.skip_workers)
 
-    log_levels = {'debug': logging.DEBUG, 'info': logging.INFO, 'warning': logging.WARNING, 'error': logging.ERROR, 'critical': logging.CRITICAL}
-    args.verbosity = log_levels[args.verbosity]
-    configure_logger(args.verbosity)
+    configure_logger(getattr(logging, args.verbosity.upper()))
 
     if not args.secrets_path:
         args.secrets_path = os.path.join(os.getcwd(), "pull_secret.json")
