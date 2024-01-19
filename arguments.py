@@ -8,7 +8,6 @@ from logger import logger, configure_logger
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description='Cluster deployment automation')
     parser.add_argument('config', metavar='config', type=str, help='Yaml file with config')
-    steps = "pre,masters,workers,post"
     parser.add_argument('-v', '--verbosity', choices=['debug', 'info', 'warning', 'error', 'critical'], default='info', help='Set the logging level (default: info)')
     parser.add_argument('--secret', dest='secrets_path', default='', action='store', type=str, help='pull_secret.json path (default is in cwd)')
     parser.add_argument('--assisted-installer-url', dest='url', default='192.168.122.1', action='store', type=str, help='If set to 0.0.0.0 (the default), Assisted Installer will be started locally')
@@ -19,7 +18,7 @@ def parse_args() -> argparse.Namespace:
     deploy_parser.add_argument('-f', '--teardown-full', dest='teardown_full', action='store_true', help='Remove anything that would be created by setting up the cluster(s), included ai')
     steps = "pre,masters,workers,post"
     deploy_parser.add_argument('-s', '--steps', dest='steps', type=str, default=steps, help=f'Comma-separated list of steps to run (by default: {steps})')
-    deploy_parser.add_argument('-d', '--skip-steps', dest='skip_steps', type=str, default="", help=f"CommComma-separated list of steps to skip")
+    deploy_parser.add_argument('-d', '--skip-steps', dest='skip_steps', type=str, default="", help=f"Comma-separated list of steps to skip")
 
     snapshot_parser = subparsers.add_parser('snapshot', help='Take or restore snapshots')
     snapshot_parser.add_argument('loadsave', metavar='loadsave', type=str, help='Load or save a snapshot')
@@ -31,9 +30,7 @@ def parse_args() -> argparse.Namespace:
         args.skip_steps = args.skip_steps.split(",")
         args.steps = [x for x in args.steps if x not in args.skip_steps]
 
-    log_levels = {'debug': logging.DEBUG, 'info': logging.INFO, 'warning': logging.WARNING, 'error': logging.ERROR, 'critical': logging.CRITICAL}
-    args.verbosity = log_levels[args.verbosity]
-    configure_logger(args.verbosity)
+    configure_logger(getattr(logging, args.verbosity.upper()))
 
     if not args.secrets_path:
         args.secrets_path = os.path.join(os.getcwd(), "pull_secret.json")
