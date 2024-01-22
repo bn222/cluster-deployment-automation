@@ -214,24 +214,28 @@ class ClustersConfig:
         def worker_number(a: int) -> str:
             self._ensure_clusters_loaded()
             assert self._cluster_info is not None
-            name = self._cluster_info.workers[a]
+            name = self._cluster_info.workers[a][0]
             return re.sub("[^0-9]", "", name)
 
         def worker_name(a: int) -> str:
             self._ensure_clusters_loaded()
             assert self._cluster_info is not None
-            return self._cluster_info.workers[a]
-
+            return self._cluster_info.workers[a][0]
+        
+        def bmc_ip(a: int) -> str:
+            self._ensure_clusters_loaded()
+            assert self._cluster_info is not None
+            return self._cluster_info.workers[a][1]
+        
         def api_network() -> str:
             self._ensure_clusters_loaded()
             assert self._cluster_info is not None
             return self._cluster_info.network_api_port
 
-        format_string = contents
-
-        template = jinja2.Template(format_string)
+        template = jinja2.Template(contents)
         template.globals['worker_number'] = worker_number
         template.globals['worker_name'] = worker_name
+        template.globals['bmc_ip'] = bmc_ip
         template.globals['api_network'] = api_network
 
         kwargs = {}

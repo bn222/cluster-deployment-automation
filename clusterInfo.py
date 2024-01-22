@@ -12,7 +12,7 @@ class ClusterInfo:
         self.name = name
         self.provision_host = ""
         self.network_api_port = ""
-        self.workers = []  # type: List[str]
+        self.workers = []  # type: List[(str, str)]
 
 
 def read_sheet() -> List[List[str]]:
@@ -51,7 +51,8 @@ def load_all_cluster_info() -> Dict[str, ClusterInfo]:
             cluster.provision_host = e[0]
             cluster.network_api_port = e[3]
         elif e[7] == "no":
-            cluster.workers.append(e[0])
+            # appends the worker name and IMPI ip address
+            cluster.workers.append((e[0], e[1]))
     if cluster is not None:
         ret.append(cluster)
     return {x.provision_host: x for x in ret}
@@ -65,8 +66,11 @@ def validate_cluster_info(cluster_info: ClusterInfo) -> None:
         logger.info(f"Network api port missing for cluster {cluster_info.name}")
         sys.exit(-1)
     for e in cluster_info.workers:
-        if e == "":
-            logger.info("Unnamed worker found for cluster {c.name}")
+        if e[0] == "":
+            logger.info("Unnamed worker found for cluster {cluster_info.name}")
+            sys.exit(-1)
+        if e[1] == "":
+            logger.info("Unfilled IMPI address found for cluster {cluster_info.name}")
             sys.exit(-1)
 
 
