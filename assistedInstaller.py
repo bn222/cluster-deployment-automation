@@ -55,12 +55,16 @@ class AssistedClientAutomation(AssistedClient):  # type: ignore
     def download_iso_with_retry(self, infra_env: str) -> None:
         logger.info(self.info_iso(infra_env, {}))
         logger.info("Downloading iso (will retry if not ready)...")
-        while True:
+        retries = 25
+        for attempt in range(retries):
             try:
                 self.download_iso(infra_env, os.getcwd())
                 break
             except Exception:
                 time.sleep(30)
+        else:
+            logger.error(f"Failed to download the ISO after {retries} attempts")
+
 
     def wait_cluster_ready(self, cluster_name: str) -> None:
         logger.info("Waiting for cluster state to be ready")
