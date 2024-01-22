@@ -65,7 +65,6 @@ class AssistedClientAutomation(AssistedClient):  # type: ignore
         else:
             logger.error(f"Failed to download the ISO after {retries} attempts")
 
-
     def wait_cluster_ready(self, cluster_name: str) -> None:
         logger.info("Waiting for cluster state to be ready")
         cur_state = None
