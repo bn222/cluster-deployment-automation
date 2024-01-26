@@ -34,7 +34,7 @@ deactivate
 cat > cluster.yaml << EOF
 clusters:
   - name : "mycluster"
-    api_ip: "192.168.122.99"
+    api_vip: "192.168.122.99"
     ingress_ip: "192.168.122.101"
     masters:
     - name: "mycluster-master-1"
@@ -63,7 +63,7 @@ EOF
 cat > cluster.yaml << EOF
 clusters:
   - name : "vm"
-    api_ip: "192.168.122.99"
+    api_vip: "192.168.122.99"
     ingress_ip: "192.168.122.101"
     kubeconfig: "/root/kubeconfig.vm"
     masters:

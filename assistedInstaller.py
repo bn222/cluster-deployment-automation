@@ -139,10 +139,16 @@ class AssistedClientAutomation(AssistedClient):  # type: ignore
         requests.post(f"http://{self.url}/api/assisted-install/v2/clusters/{uuid}/actions/allow-add-workers")
 
     def get_ai_cluster_info(self, cluster_name: str) -> AssistedClientClusterInfo:
-        cluster_info = self.info_cluster(cluster_name).to_dict()
-        if "id" not in cluster_info:
+        cluster_info = self.info_cluster(cluster_name)
+        if not hasattr(cluster_info, "id"):
             logger.error(f"ID is missing in cluster info for cluster {cluster_name}")
             sys.exit(-1)
-        if "api_vip" not in cluster_info:
-            logger.error(f"Missing api ip in cluster info for cluster {cluster_name}")
-        return AssistedClientClusterInfo(cluster_info["id"], cluster_info["api_vip"])
+        if not hasattr(cluster_info, "api_vips"):
+            logger.error(f"Missing api_vips in cluster info for cluster {cluster_name}")
+            sys.exit(-1)
+
+        if len(cluster_info.api_vips) == 0:
+            logger.error(f"Missing api vip in cluster info for cluster {cluster_name}")
+            sys.exit(-1)
+
+        return AssistedClientClusterInfo(cluster_info.id, cluster_info.api_vips[0].ip)

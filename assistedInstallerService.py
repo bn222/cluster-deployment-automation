@@ -46,6 +46,17 @@ non-standard way, the web-ui can't be used.
 
 
 class AssistedInstallerService:
+    # Freeze SAAS version to avoid unexpected breakages.
+    # The values are taken from:
+    # https://gitlab.cee.redhat.com/service/app-interface/-/blob/ee5f631ce539537085b5ef043bbd9593fa74f860/data/services/assisted-installer/cicd/target/production/assisted-service.yaml#L44-47
+    #
+    # NOTE: aicli is compatible only with v2.29.0+ but the AI API doesn't come
+    # up unless we use the installer and agent versions from v2.27.0.
+    SAAS_VERSION = "v2.29.0"
+    INSTALLER_IMAGE = "registry.redhat.io/rhai-tech-preview/assisted-installer-rhel8:v1.0.0-306"
+    CONTROLLER_IMAGE = "registry.redhat.io/rhai-tech-preview/assisted-installer-reporter-rhel8:v1.0.0-383"
+    AGENT_DOCKER_IMAGE = "registry.redhat.io/rhai-tech-preview/assisted-installer-agent-rhel8:v1.0.0-295"
+
     def __init__(self, version: str, ip: str, proxy: Optional[str] = None, noproxy: Optional[str] = None, branch: str = "master"):
         self._version = version
         self._ip = ip
@@ -85,10 +96,9 @@ class AssistedInstallerService:
             sys.exit(-1)
         y["data"]["IMAGE_SERVICE_BASE_URL"] = f"http://{self._ip}:8888"
         y["data"]["SERVICE_BASE_URL"] = f"http://{self._ip}:8090"
-        # https://gitlab.cee.redhat.com/service/app-interface/-/blob/dc9614663fc64bb5aad2c11c8c24d731f1dfa7e4/data/services/assisted-installer/cicd/target/production/assisted-service.yaml#L46-48
-        y["data"]["INSTALLER_IMAGE"] = f"registry.redhat.io/rhai-tech-preview/assisted-installer-rhel8:v1.0.0-269"
-        y["data"]["CONTROLLER_IMAGE"] = f"registry.redhat.io/rhai-tech-preview/assisted-installer-reporter-rhel8:v1.0.0-340"
-        y["data"]["AGENT_DOCKER_IMAGE"] = f"registry.redhat.io/rhai-tech-preview/assisted-installer-agent-rhel8:v1.0.0-257"
+        y["data"]["INSTALLER_IMAGE"] = AssistedInstallerService.INSTALLER_IMAGE
+        y["data"]["CONTROLLER_IMAGE"] = AssistedInstallerService.CONTROLLER_IMAGE
+        y["data"]["AGENT_DOCKER_IMAGE"] = AssistedInstallerService.AGENT_DOCKER_IMAGE
 
         j = json.loads(y["data"]["HW_VALIDATOR_REQUIREMENTS"])
         j[0]["master"]["disk_size_gb"] = 8
@@ -115,13 +125,11 @@ class AssistedInstallerService:
             logger.error(f"Failed to load yaml: {self.podFile}")
             sys.exit(-1)
 
-        saas_version = "v2.18.4"
-
         containers = y['spec']['containers']
         for container in containers:
             image = container.get('image', '')
             if image.startswith('quay.io/edge-infrastructure/assisted'):
-                container['image'] = image.replace(':latest', f':{saas_version}')
+                container['image'] = image.replace(':latest', f':{AssistedInstallerService.SAAS_VERSION}')
 
         return y
 

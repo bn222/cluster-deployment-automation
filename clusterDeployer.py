@@ -523,14 +523,14 @@ class ClusterDeployer:
 
     def create_cluster(self) -> None:
         cluster_name = self._cc.name
-        cfg: Dict[str, Union[str, bool]] = {}
+        cfg: Dict[str, Union[str, bool, List[str], List[Dict[str, str]]]] = {}
         cfg["openshift_version"] = self._cc.version
         cfg["cpu_architecture"] = "multi"
         cfg["pull_secret"] = self._secrets_path
         cfg["infraenv"] = "false"
 
         if not self._cc.is_sno():
-            cfg["api_ip"] = self._cc.api_ip
+            cfg["api_vips"] = [self._cc.api_vip]
             cfg["ingress_ip"] = self._cc.ingress_ip
 
         cfg["vip_dhcp_allocation"] = False
@@ -971,11 +971,11 @@ class ClusterDeployer:
     def update_etc_hosts(self) -> None:
         cluster_name = self._cc.name
         api_name = f"api.{cluster_name}.redhat.com"
-        api_ip = self._ai.get_ai_cluster_info(cluster_name).api_vip
+        api_vip = self._ai.get_ai_cluster_info(cluster_name).api_vip
 
         hosts = Hosts()
         hosts.remove_all_matching(name=api_name)
-        hosts.add([HostsEntry(entry_type='ipv4', address=api_ip, names=[api_name])])
+        hosts.add([HostsEntry(entry_type='ipv4', address=api_vip, names=[api_name])])
         hosts.write()
 
         # libvirtd also runs dnsmasq, and dnsmasq reads /etc/hosts.
