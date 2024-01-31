@@ -927,7 +927,7 @@ class ClusterDeployer:
             f = executor.submit(boot_iso_bf_helper, h, f"{infra_env_name}.iso")
             futures.append(f)
 
-        for (h, f) in zip(self._cc.workers, futures):
+        for h, f in zip(self._cc.workers, futures):
             h.ip = f.result()
             if h.ip is None:
                 logger.info(f"Couldn't find ip of worker {h.name}")

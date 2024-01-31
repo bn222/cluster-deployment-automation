@@ -66,7 +66,7 @@ def render_envoverrides_cm(client: K8sClient, mapping: List[Dict[str, str]], ns:
             sys.exit(1)
         a["MGMT_IFNAME"] = "c1pf0vf0"
         contents += f"  {e['bf']}: |\n"
-        for (k, v) in a.items():
+        for k, v in a.items():
             contents += f"    {k}={v}\n"
 
     open(f"/tmp/envoverrides-{ns}.yaml", "w").write(contents)
@@ -155,7 +155,7 @@ def ExtraConfigDpuTenant(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: Dict
         mp = re.sub('np\d$', '', bf_port)
         a["OVNKUBE_NODE_MGMT_PORT_NETDEV"] = f"{mp}v0"
         contents += f"  {bfmap['worker']}: |\n"
-        for (k, v) in a.items():
+        for k, v in a.items():
             contents += f"    {k}={v}\n"
     open("/tmp/1.yaml", "w").write(contents)
 
