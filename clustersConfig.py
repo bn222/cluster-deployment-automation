@@ -104,7 +104,7 @@ def current_host() -> str:
 class ClustersConfig:
     name: str
     kubeconfig: str
-    api_ip: str
+    api_vip: Dict[str, str]
     ingress_ip: str
     external_port: str = "auto"
     version: str = "4.14.0-nightly"
@@ -119,9 +119,14 @@ class ClustersConfig:
     ntp_source: str = "clock.redhat.com"
     base_dns_domain: str = "redhat.com"
 
+    # All configurations that used to be supported but are not anymore.
+    # Used to warn the user to change their config.
+    deprecated_configs: Dict[str, Optional[str]] = {"api_ip": "api_vip"}
+
     def __init__(self, yaml_path: str):
         self._cluster_info: Optional[ClusterInfo] = None
         self._load_full_config(yaml_path)
+        self._check_deprecated_config()
 
         cc = self.fullConfig
         # Some config may be left out from the yaml. Try to provide defaults.
@@ -171,7 +176,7 @@ class ClustersConfig:
                 node_names.add(node.node)
 
         if not self.is_sno():
-            self.api_ip = cc["api_ip"]
+            self.api_vip = {'ip': cc["api_vip"]}
             self.ingress_ip = cc["ingress_ip"]
 
         for e in cc["hosts"]:
@@ -194,6 +199,19 @@ class ClustersConfig:
             loaded = safe_load(io.StringIO(contents))["clusters"][0]
             contents = self._apply_jinja(contents, loaded["name"])
             self.fullConfig = safe_load(io.StringIO(contents))["clusters"][0]
+
+    def _check_deprecated_config(self) -> None:
+        deprecated = self.deprecated_configs.keys() & self.fullConfig.keys()
+
+        for key in deprecated:
+            value = self.deprecated_configs[key]
+            err = f"Deprecated config \"{key}\" found"
+            if value is not None:
+                err += f", please use \"{value}\" instead"
+            logger.error(err)
+
+        if len(deprecated):
+            sys.exit(-1)
 
     def autodetect_external_port(self) -> None:
         candidate = common.route_to_port(host.LocalHost(), "default")

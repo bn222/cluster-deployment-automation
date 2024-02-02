@@ -1,5 +1,5 @@
 GitPython
-aicli
+aicli==99.0.202401221550
 PyYAML
 requests
 setuptools-rust
