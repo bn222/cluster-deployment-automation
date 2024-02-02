@@ -1,10 +1,55 @@
 from dataclasses import dataclass
 import ipaddress
 from threading import local
-from typing import List
-from typing import Optional
+from typing import List, Optional, Set, Tuple, TypeVar
 import host
 import json
+
+
+T = TypeVar("T")
+
+
+def str_to_list(input_str: str) -> List[int]:
+    result: Set[int] = set()
+    parts = input_str.split(',')
+
+    for part in parts:
+        if '-' in part:
+            start, end = map(int, part.split('-'))
+            result.update(range(start, end + 1))
+        else:
+            result.add(int(part))
+
+    return sorted(result)
+
+
+class RangeList:
+    _range: List[Tuple[bool, List[int]]] = []
+    initial_values: Optional[List[int]] = None
+
+    def __init__(self, initial_values: Optional[List[int]] = None):
+        self.initial_values = initial_values
+
+    def _append(self, l: List[int], expand: bool) -> None:
+        self._range.append((expand, l))
+
+    def include(self, l: List[int]) -> None:
+        self._append(l, True)
+
+    def exclude(self, l: List[int]) -> None:
+        self._append(l, False)
+
+    def filter_list(self, initial: List[T]) -> List[T]:
+        applied = set(range(len(initial)))
+        if self.initial_values is not None:
+            applied &= set(self.initial_values)
+
+        for expand, l in self._range:
+            if expand:
+                applied = applied | set(l)
+            else:
+                applied = applied - set(l)
+        return [initial[x] for x in sorted(applied) if x < len(initial)]
 
 
 @dataclass

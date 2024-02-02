@@ -9,7 +9,7 @@ from clusterSnapshotter import ClusterSnapshotter
 
 
 def main_deploy(args: argparse.Namespace) -> None:
-    cc = ClustersConfig(args.config)
+    cc = ClustersConfig(args.config, args.worker_range)
 
     if args.url == "192.168.122.1":
         ais = AssistedInstallerService(cc.version, args.url, cc.proxy, cc.noproxy)
@@ -45,7 +45,7 @@ def main_deploy(args: argparse.Namespace) -> None:
 
 def main_snapshot(args: argparse.Namespace) -> None:
     args = parse_args()
-    cc = ClustersConfig(args.config)
+    cc = ClustersConfig(args.config, args.worker_range)
 
     ais = AssistedInstallerService(cc.version, args.url)
     ai = AssistedClientAutomation(f"{args.url}:8090")
