@@ -6,6 +6,7 @@ from extraConfigOvnK import ExtraConfigOvnK
 from extraConfigCNO import ExtraConfigCNO
 from extraConfigRT import ExtraConfigRT
 from extraConfigDualStack import ExtraConfigDualStack
+from extraConfigCX import ExtraConfigCX
 from clustersConfig import ClustersConfig
 from clustersConfig import ExtraConfigArgs
 from concurrent.futures import Future
@@ -32,6 +33,7 @@ class ExtraConfigRunner:
             "cno": ExtraConfigCNO,
             "rt": ExtraConfigRT,
             "dualstack": ExtraConfigDualStack,
+            "cx_firmware": ExtraConfigCX,
         }
 
     def run(self, to_run: ExtraConfigArgs, futures: Dict[str, Future[None]]) -> None:
