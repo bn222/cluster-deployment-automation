@@ -123,7 +123,7 @@ class ClustersConfig:
     # Used to warn the user to change their config.
     deprecated_configs: Dict[str, Optional[str]] = {"api_ip": "api_vip"}
 
-    def __init__(self, yaml_path: str):
+    def __init__(self, yaml_path: str, worker_range: common.RangeList):
         self._cluster_info: Optional[ClusterInfo] = None
         self._load_full_config(yaml_path)
         self._check_deprecated_config()
@@ -166,8 +166,10 @@ class ClustersConfig:
 
         for n in cc["masters"]:
             self.masters.append(NodeConfig(self.name, **n))
-        for n in cc["workers"]:
-            self.workers.append(NodeConfig(self.name, **n))
+
+        for w in worker_range.filter_list(cc["workers"]):
+            self.workers.append(NodeConfig(self.name, **w))
+
         # creates hosts entries for each referenced node name
         node_names = set(x["name"] for x in cc["hosts"])
         for node in self.all_nodes():

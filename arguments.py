@@ -1,3 +1,4 @@
+import common
 import os
 import argparse
 import sys
@@ -20,6 +21,8 @@ def parse_args() -> argparse.Namespace:
     steps = "pre,masters,workers,post"
     deploy_parser.add_argument('-s', '--steps', dest='steps', type=str, default=steps, help=f'Comma-separated list of steps to run (by default: {steps})')
     deploy_parser.add_argument('-d', '--skip-steps', dest='skip_steps', type=str, default="", help=f"CommComma-separated list of steps to skip")
+    deploy_parser.add_argument('-w', '--workers', dest='workers', type=common.str_to_list, nargs='?', help='Range and/or list of workers to include')
+    deploy_parser.add_argument('-sw', '--skip-workers', dest='skip_workers', type=common.str_to_list, nargs='?', default=[], help='Range and/or list of workers to exclude')
 
     snapshot_parser = subparsers.add_parser('snapshot', help='Take or restore snapshots')
     snapshot_parser.add_argument('loadsave', metavar='loadsave', type=str, help='Load or save a snapshot')
@@ -30,6 +33,8 @@ def parse_args() -> argparse.Namespace:
         args.steps = args.steps.split(",")
         args.skip_steps = args.skip_steps.split(",")
         args.steps = [x for x in args.steps if x not in args.skip_steps]
+        args.worker_range = common.RangeList(args.workers)
+        args.worker_range.exclude(args.skip_workers)
 
     log_levels = {'debug': logging.DEBUG, 'info': logging.INFO, 'warning': logging.WARNING, 'error': logging.ERROR, 'critical': logging.CRITICAL}
     args.verbosity = log_levels[args.verbosity]
