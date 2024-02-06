@@ -1,8 +1,8 @@
 ## config cluster schema ##
 clusters:
   - name: "cluster name"
-    api_ip: "..."
-    ingress_ip: "..."
+    api_vip: "..."
+    ingress_vip: "..."
     external_port: "<auto / device name>"
     network_api_port: "<auto / device name>"
     masters:
