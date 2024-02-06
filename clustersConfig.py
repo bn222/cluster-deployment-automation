@@ -92,13 +92,10 @@ class HostConfig:
         return self.pre_installed == "true"
 
 
-# Run the hostname command and only take the first part. For example
-# "my-host.test.redhat.com" would return "my-host" here.
-# This is only required if we are using the Google sheets integration
-# to match the node name syntax in the spreadsheet.
+# Run the full hostname command
 def current_host() -> str:
     lh = host.LocalHost()
-    return lh.run("hostname").out.strip().split(".")[0]
+    return lh.run("hostname -f").out.strip()
 
 
 class ClustersConfig:
@@ -273,7 +270,10 @@ class ClustersConfig:
         ch = current_host()
         if ch in all_cluster_info:
             self._cluster_info = all_cluster_info[ch]
+        elif ch.split(".")[0] in all_cluster_info:
+            self._cluster_info = all_cluster_info[ch.split(".")[0]]
         else:
+            logger.error(f"Hostname {ch} not found in {all_cluster_info}")
             sys.exit(-1)
 
     # def __getitem__(self, key):
