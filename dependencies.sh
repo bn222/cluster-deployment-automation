@@ -16,3 +16,5 @@ if ! command -v -- oc; then
 fi
 
 cat requirements.txt  | xargs -n1 pip3.11 install
+
+sudo activate-global-python-argcomplete

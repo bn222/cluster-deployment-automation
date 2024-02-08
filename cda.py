@@ -1,3 +1,4 @@
+# PYTHON_ARGCOMPLETE_OK
 from assistedInstaller import AssistedClientAutomation
 from assistedInstallerService import AssistedInstallerService
 from clustersConfig import ClustersConfig
