@@ -64,6 +64,11 @@ def main_snapshot(args: argparse.Namespace) -> None:
 
 def main() -> None:
     args = parse_args()
+
+    if not (args.config.endswith('.yaml') or args.config.endswith('.yml')):
+        print("Please specify a yaml configuration file")
+        raise SystemExit(1)
+
     if args.subcommand == "deploy":
         main_deploy(args)
     elif args.subcommand == "snapshot":

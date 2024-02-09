@@ -9,28 +9,29 @@ from the repository root directory.
 NOTE: starting with Fedora 33 RSA keys are considered not secure enough; use
 ed25519 instead.
 
-```
+```bash
 ssh-keygen -t ed25519 -a 64 -N '' -f ~/.ssh/id_ed25519
 ```
 
 ## Install required software and Python packages by starting a Python virtual environment
-NOTE: Requires Python3.11 or higher
-```
-python -m venv ocp-venv
+NOTE: Requires Python3.11 or higher (run `dnf install -y python3.11`)
+```bash
+python3.11 -m venv ocp-venv
 source ocp-venv/bin/activate
 ./dependencies.sh
 systemctl enable libvirtd
+usermod -a -G root qemu
 ```
 
 ## Activate and deactivate Python virtual environment
-```
+```bash
 source ocp-venv/bin/activate
 ...
 deactivate
 ```
 
 ## Generate a baremetal worker cluster configuration file (1)
-```
+```yaml
 cat > cluster.yaml << EOF
 clusters:
   - name : "mycluster"
@@ -38,20 +39,20 @@ clusters:
     ingress_ip: "192.168.122.101"
     masters:
     - name: "mycluster-master-1"
-      type: "vm"
+      kind: "vm"
       node: "localhost"
       ip: "192.168.122.41"
     - name: "mycluster-master-2"
-      type: "vm"
+      kind: "vm"
       node: "localhost"
       ip: "192.168.122.42"
     - name: "mycluster-master-3"
-      type: "vm"
+      kind: "vm"
       node: "localhost"
       ip: "192.168.122.43"
     workers:
     - name: "mycluster-worker-1"
-      type: "physical"
+      kind: "physical"
       node: "..."
       bmc_user: "root"
       bmc_password: "..."
@@ -59,7 +60,7 @@ EOF
 ```
 
 ## Generate a vm worker cluster configuration file (2)
-```
+```yaml
 cat > cluster.yaml << EOF
 clusters:
   - name : "vm"
@@ -68,44 +69,44 @@ clusters:
     kubeconfig: "/root/kubeconfig.vm"
     masters:
     - name: "vm-master-1"
-      type: "vm"
+      kind: "vm"
       node: "localhost"
       ip: "192.168.122.141"
     - name: "vm-master-2"
-      type: "vm"
+      kind: "vm"
       node: "localhost"
       ip: "192.168.122.142"
     - name: "vm-master-3"
-      type: "vm"
+      kind: "vm"
       node: "localhost"
       ip: "192.168.122.143"
     workers:
     - name: "vm-worker-1"
-      type: "vm"
+      kind: "vm"
       node: "localhost"
       ip: "192.168.122.144"
     - name: "vm-worker-2"
-      type: "vm"
+      kind: "vm"
       node: "localhost"
       ip: "192.168.122.145"
 EOF
 ```
 
 ## Generate a vm Single Node OpenShift (SNO) cluster configuration file (3)
-```
+```yaml
 cat > cluster.yaml << EOF
 clusters:
   - name : "vm-sno"
     masters:
     - name: "sno-master"
-      type: "vm"
+      kind: "vm"
       node: "localhost"
       ip: "192.168.122.41"
 EOF
 ```
 
 ## Start the installation
-```
+```bash
 source ocp-venv/bin/activate
 python cda.py cluster.yaml deploy
 deactivate
@@ -115,7 +116,7 @@ deactivate
 The scripts don't rely on the OpenShift Client (oc) being installed locally.
 For a better user experience it might still be a good idea to install the
 latest 4.x version:
-```
+```bash
 pushd /tmp/
 wget https://mirror.openshift.com/pub/openshift-v4/clients/ocp/latest/openshift-client-linux.tar.gz
 tar xf openshift-client-linux.tar.gz oc
@@ -125,13 +126,13 @@ popd
 ```
 
 ## Set the kubeconfig after a successful installation
-```
+```bash
 export KUBECONFIG=/root/kubeconfig.vm
 ```
 
 We can now access the cluster, e.g.:
 
-```
+```bash
 # oc get nodes
 NAME          STATUS   ROLES                         AGE    VERSION
 vm-master-1   Ready    control-plane,master,worker   4d1h   v1.25.4+77bec7a
