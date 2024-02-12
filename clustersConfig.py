@@ -232,7 +232,11 @@ class ClustersConfig:
             self._ensure_clusters_loaded()
             assert self._cluster_info is not None
             name = self._cluster_info.workers[a]
-            return re.sub("[^0-9]", "", name)
+            lab_match = re.search("lab(\d+)", name)
+            if lab_match:
+                return lab_match.group(1)
+            else:
+                return re.sub("[^0-9]", "", name)
 
         def worker_name(a: int) -> str:
             self._ensure_clusters_loaded()
