@@ -586,6 +586,7 @@ class ClusterDeployer:
         self._ai.download_iso_with_retry(infra_env)
 
         lh = host.LocalHost()
+        self.ensure_linked_to_bridge(lh)
         # TODO: clean this up. Currently just skipping this
         # since self.local_host_config() is not present if no local vms
         if self._cc.local_vms():
@@ -615,7 +616,6 @@ class ClusterDeployer:
 
         for p in futures:
             p.result()
-        self.ensure_linked_to_bridge(lh)
         for e in self._cc.masters:
             self._set_password(e.name)
         self.update_etc_hosts()
