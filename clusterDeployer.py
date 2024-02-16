@@ -83,6 +83,15 @@ def setup_vm(h: host.Host, cfg: NodeConfig, iso_or_image_path: str) -> host.Resu
     name = cfg.name
     mac = cfg.mac
     disk_size_gb = cfg.disk_size
+    cmd = "virsh list --all"
+    ret = h.run(cmd)
+    if f"{name}" in ret.out:
+        logger.info(f"Destroying/Undefining {name} as already existed")
+        cmd = f"virsh destroy {name}"
+        ret = h.run(cmd)
+        cmd = f"virsh undefine {name}"
+        ret = h.run(cmd)
+
     if iso_or_image_path.endswith(".iso"):
         options = "-o preallocation="
         if cfg.is_preallocated():
@@ -117,6 +126,7 @@ def setup_vm(h: host.Host, cfg: NodeConfig, iso_or_image_path: str) -> host.Resu
         --events on_reboot=restart
         {cdrom_line}
         --disk path={cfg.image_path}
+        --check path_in_use=off
         {append}
     """
 
