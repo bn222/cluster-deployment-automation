@@ -25,7 +25,6 @@ from nfs import NFS
 import coreosBuilder
 from typing import Tuple
 import common
-import os
 from python_hosts import Hosts, HostsEntry
 from logger import logger
 import microshift
@@ -315,6 +314,7 @@ class ClusterDeployer:
                 cmd = f"{pre} \"<host mac='{mac}' name='{name}' ip='{ip}'/>\" --live --config"
                 logger.info(lh.run(cmd))
                 removed_macs.append(mac)
+
         fn = "/var/lib/libvirt/dnsmasq/virbr0.status"
         with open(fn) as f:
             contents = f.read()
@@ -340,6 +340,13 @@ class ClusterDeployer:
                 f.write(json.dumps(filtered, indent=4))
             logger.info(lh.run("virsh net-start default"))
             logger.info(lh.run("systemctl restart libvirtd"))
+
+            # Running net-destroy/net-start/restart libvirtd removes the bridge master.
+            # Set it back. It will be removed later if needed (e.g. when tearing down full cluster).
+            host_config = self.local_host_config(lh.hostname())
+            api_network = host_config.network_api_port
+            rc = lh.run(f"ip link set {api_network} master virbr0")
+            logger.info(rc if rc.err else rc.out.strip())
 
     def reset_api_network(self, hosts: List[str]) -> None:
         lh = host.LocalHost()
@@ -388,12 +395,18 @@ class ClusterDeployer:
                 r = h.run(f"virsh undefine {m.name}")
                 logger.info(r.err if r.err else r.out.strip())
 
-    def teardown(self) -> None:
+    def teardown_masters(self) -> None:
         cluster_name = self._cc.name
+        if "masters" not in self.steps:
+            logger.info(f"Not tearing down {cluster_name}")
+            return
+
         logger.info(f"Tearing down {cluster_name}")
         self._ai.ensure_cluster_deleted(self._cc.name)
         lh = host.LocalHost()
-        self.remove_vms(self._cc.all_vms())
+
+        vms = self._cc.master_vms()
+        self.remove_vms(vms)
 
         self._ai.ensure_infraenv_deleted(f"{cluster_name}-x86")
         self._ai.ensure_infraenv_deleted(f"{cluster_name}-arm")
@@ -404,10 +417,37 @@ class ClusterDeployer:
         limit_dhcp_range(lh, "192.168.122.129", "192.168.122.2")
 
         if self.need_api_network():
-            self.reset_api_network(self._cc.hosts)
+            hosts = self._cc.master_vm_hosts
+            self.reset_api_network(hosts)
 
         if os.path.exists(self._cc.kubeconfig):
             os.remove(self._cc.kubeconfig)
+
+    def teardown_workers(self) -> None:
+        cluster_name = self._cc.name
+
+        # If "masters" is specified in steps and "workers" not, still tear down the workers as this is an invalid configuration.
+        if "workers" in self.steps or "masters" in self.steps:
+            logger.info(f"Tearing down (some) workers on {cluster_name}")
+        else:
+            logger.info(f"Not tearing down workers on {cluster_name}")
+            return
+
+        vms = self._cc.worker_vms()
+        self.remove_vms(vms)
+
+        # if masters in  steps, no need to stop worker one by one; the cluster deletion will take care of this.
+        if "workers" in self.steps and "masters" not in self.steps:
+            for w in self._cc.workers:
+                logger.info(f"Stopping worker {w.name}")
+                self.client().delete_node(w.name)
+                self._ai.delete_host(w.name)
+
+        self.remove_dhcp_entries(vms)
+
+        if self.need_api_network():
+            hosts = self._cc.worker_vm_only_hosts
+            self.reset_api_network(hosts)
 
     def _validate_api_port(self, lh: host.Host) -> Optional[str]:
         host_config = self.local_host_config(lh.hostname())
@@ -497,11 +537,11 @@ class ClusterDeployer:
                 logger.info("Skipping pre configuration.")
 
             if self._cc.kind != "microshift":
-                lh = host.LocalHost()
-                self.ensure_linked_to_bridge(lh)
+                if "masters" in self.steps or "workers" in self.steps:
+                    self.teardown_workers()
 
                 if "masters" in self.steps:
-                    self.teardown()
+                    self.teardown_masters()
                     self.create_cluster()
                     self.create_masters()
                 else:
@@ -683,6 +723,9 @@ class ClusterDeployer:
             assert self._verify_package_is_installed(w, "kernel-modules-extra"), err_str
 
     def create_workers(self) -> None:
+        lh = host.LocalHost()
+        self.ensure_linked_to_bridge(lh)
+
         for e in self._cc.workers:
             self._futures[e.name].result()
         is_bf = (x.kind == "bf" for x in self._cc.workers)

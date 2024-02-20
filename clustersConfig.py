@@ -120,6 +120,8 @@ class ClustersConfig:
     masters: List[NodeConfig] = []
     workers: List[NodeConfig] = []
     hosts: List[HostConfig] = []
+    master_vm_hosts: List[str] = []
+    worker_vm_only_hosts: List[str] = []
     proxy: Optional[str] = None
     noproxy: Optional[str] = None
     preconfig: List[ExtraConfigArgs] = []
@@ -152,6 +154,10 @@ class ClustersConfig:
             cc["proxy"] = None
         if "hosts" not in cc:
             cc["hosts"] = []
+        if "master_vm_hosts" not in cc:
+            cc["master_vm_hosts"] = []
+        if "worker_vm_only_hosts" not in cc:
+            cc["worker_vm_only_hosts"] = []
         if "proxy" in cc:
             self.proxy = cc["proxy"]
         if "noproxy" in cc:
@@ -186,6 +192,18 @@ class ClustersConfig:
             if node.kind != "physical" and node.node not in node_names:
                 cc["hosts"].append({"name": node.node})
                 node_names.add(node.node)
+
+        master_vm_node_names = set()
+        for node in self.masters:
+            if node.kind == "vm" and node.node not in master_vm_node_names:
+                master_vm_node_names.add(node.node)
+                self.master_vm_hosts.append(node.node)
+
+        worker_vm_only_node_names = set()
+        for node in self.workers:
+            if node.kind == "vm" and node.node not in worker_vm_only_node_names and node.node not in master_vm_node_names:
+                worker_vm_only_node_names.add(node.node)
+                self.worker_vm_only_hosts.append(node.node)
 
         if not self.is_sno():
             self.api_vip = {'ip': cc["api_vip"]}
