@@ -308,7 +308,11 @@ class ClusterDeployer:
             h = host.Host(m.node)
             if m.node != "localhost":
                 host_config = self.local_host_config(m.node)
-                h.ssh_connect(host_config.username, host_config.password)
+                try:
+                    h.ssh_connect(host_config.username, host_config.password)
+                except paramiko.ssh_exception.AuthenticationException as e:
+                    logger.error("Authentication failed, will not be able to remove image and destroy vm")
+                    continue
                 if not host_config.pre_installed:
                     h.need_sudo()
 
@@ -376,7 +380,11 @@ class ClusterDeployer:
                 h = host.Host(hc.name)
                 if hc.name != "localhost":
                     host_config = self.local_host_config(hc.name)
-                    h.ssh_connect(host_config.username, host_config.password)
+                    try:
+                        h.ssh_connect(host_config.username, host_config.password)
+                    except paramiko.ssh_exception.AuthenticationException as e:
+                        logger.error("Authentication failed, will not be able to reset api master")
+                        continue
                     if not host_config.is_preinstalled():
                         h.need_sudo()
 
