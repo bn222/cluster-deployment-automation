@@ -791,11 +791,19 @@ class ClusterDeployer:
             rh.run(f"chmod a+rw {image_path}")
             iso_src = os.path.join(os.getcwd(), f"{infra_env}.iso")
             iso_path = os.path.join(image_path, f"{infra_env}.iso")
-            logger.info(f"Copying {iso_src} to {rh.hostname()}:/{iso_path}")
-            rh.copy_to(iso_src, iso_path)
+
+            # sftp is very slow => use scp instead (x3 faster)
+            # Do not use mgmt interface for copying (big) file. Use virbr0 as much faster.
+            # We only need to access the remote host through that interface now, so do not consume a new ip address for this
+            # but use an IP configured to use later for a VM.
+            # Using those two tricks (scp and virbr0) copying two files is done in 3 sec instead of a minute.
+            vm = list(x for x in self._cc.workers if x.kind == "vm" and x.node == bm.node)
+            logger.debug(rh.run(f"ip addr add {vm[0].ip}/24 dev virbr0"))
+            logger.info(f"Copying {iso_src} to {vm[0].ip}:/{iso_path}")
+            os.system(f"scp -o StrictHostKeyChecking=no {iso_src} {vm[0].ip}:/{image_path} > /dev/null 2>&1")
+            logger.debug(rh.run(f"ip addr del {vm[0].ip}/24 dev virbr0"))
             logger.debug(f"iso_path is now {iso_path} for {rh.hostname()}")
 
-            vm = list(x for x in self._cc.workers if x.kind == "vm" and x.node == bm.node)
             for e in vm:
                 setup_dhcp_entry(lh, e)
 
