@@ -104,6 +104,7 @@ class ClustersConfig:
     api_vip: Dict[str, str]
     ingress_ip: str
     external_port: str = "auto"
+    kind: str = "openshift"
     version: str = "4.14.0-nightly"
     network_api_port: str = "auto"
     masters: List[NodeConfig] = []
@@ -149,6 +150,8 @@ class ClustersConfig:
             self.external_port = cc["external_port"]
         if "version" in cc:
             self.version = cc["version"]
+        if "kind" in cc:
+            self.kind = cc["kind"]
         if "network_api_port" in cc:
             self.network_api_port = cc["network_api_port"]
         self.name = cc["name"]

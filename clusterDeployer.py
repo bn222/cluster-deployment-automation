@@ -22,12 +22,16 @@ import host
 from clustersConfig import ClustersConfig, NodeConfig, HostConfig, ExtraConfigArgs
 from k8sClient import K8sClient
 from nfs import NFS
+from host import Host
 import coreosBuilder
 from typing import Tuple
 import common
+import os
 from python_hosts import Hosts, HostsEntry
 from logger import logger
 from dataclasses import dataclass
+import microshift
+import subprocess
 from extraConfigRunner import ExtraConfigRunner
 import argparse
 
@@ -67,6 +71,16 @@ def setup_dhcp_entry(h: host.Host, cfg: NodeConfig) -> None:
     logger.info(f"Creating static DHCP entry for VM {name}, ip {ip} mac {mac}")
     cmd = f"virsh net-update default add ip-dhcp-host \"{host_xml}\" --live --config"
     h.run_or_die(cmd)
+
+
+def match_to_proper_version_format(version_cluster_config: str) -> str:
+    regex_pattern = r'^\d+\.\d+'
+    match = re.match(regex_pattern, version_cluster_config)
+    logger.info(f"getting version to match with format XX.X using regex {regex_pattern}")
+    if not match:
+        logger.error(f"Invalid match {match}")
+        sys.exit(-1)
+    return match.group(0)
 
 
 def setup_vm(h: host.Host, cfg: NodeConfig, iso_or_image_path: str) -> host.Result:
@@ -468,21 +482,30 @@ class ClusterDeployer:
             else:
                 logger.info("Skipping pre configuration.")
 
-            lh = host.LocalHost()
-            self.ensure_linked_to_bridge(lh)
+            if self._cc.kind != "microshift":
+                lh = host.LocalHost()
+                self.ensure_linked_to_bridge(lh)
 
-            if "masters" in self.steps:
-                self.teardown()
-                self.create_cluster()
-                self.create_masters()
-            else:
-                logger.info("Skipping master creation.")
-
-            if "workers" in self.steps:
-                if len(self._cc.workers) != 0:
-                    self.create_workers()
+                if "masters" in self.steps:
+                    self.teardown()
+                    self.create_cluster()
+                    self.create_masters()
                 else:
-                    logger.info("Skipping worker creation.")
+                    logger.info("Skipping master creation.")
+
+                if "workers" in self.steps:
+                    if len(self._cc.workers) != 0:
+                        self.create_workers()
+                    else:
+                        logger.info("Skipping worker creation.")
+        if self._cc.kind == "microshift":
+            version = match_to_proper_version_format(self._cc.version)
+
+            if len(self._cc.masters) == 1:
+                microshift.deploy(self._cc.fullConfig["name"], self._cc.masters[0], self._cc.external_port, version)
+            else:
+                logger.error("Masters must be of length one for deploying microshift")
+                sys.exit(-1)
 
         if "post" in self.steps:
             self._postconfig()
@@ -509,12 +532,13 @@ class ClusterDeployer:
                 sys.exit(-1)
         else:
             logger.info("Don't need external network so will not set it up")
-        host_config = self.local_host_config(lh.hostname())
-        if self.need_api_network() and not self._validate_api_port(lh):
-            logger.info(f"Can't find a valid network API port, config is {host_config.network_api_port}")
-            sys.exit(-1)
-        else:
-            logger.info(f"Using {host_config.network_api_port} as network API port")
+        if self._cc.kind != "microshift":
+            host_config = self.local_host_config(lh.hostname())
+            if self.need_api_network() and not self._validate_api_port(lh):
+                logger.info(f"Can't find a valid network API port, config is {host_config.network_api_port}")
+                sys.exit(-1)
+            else:
+                logger.info(f"Using {host_config.network_api_port} as network API port")
 
     def client(self) -> K8sClient:
         if self._client is None:

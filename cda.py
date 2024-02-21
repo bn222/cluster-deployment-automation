@@ -12,7 +12,8 @@ from clusterSnapshotter import ClusterSnapshotter
 def main_deploy(args: argparse.Namespace) -> None:
     cc = ClustersConfig(args.config, args.worker_range)
 
-    if args.url == "192.168.122.1":
+    # microshift does not use assisted installer so we don't need this check
+    if args.url == "192.168.122.1" and not cc.kind == "microshift":
         ais = AssistedInstallerService(cc.version, args.url, cc.proxy, cc.noproxy)
         ais.start()
         # workaround, this will still install 4.14, but AI will think
