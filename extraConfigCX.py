@@ -42,7 +42,8 @@ def ExtraConfigCX(cc: ClustersConfig, _: ExtraConfigArgs, futures: Dict[str, Fut
     executor = ThreadPoolExecutor(max_workers=len(cc.workers))
     # Assuming all workers have CX that need to update their firmware
     for e in cc.workers:
-        h = host.HostWithCX(e.node)
+        bmc = host.bmc_from_host_name_or_ip(e.node, e.bmc_ip, e.bmc_user, e.bmc_password)
+        h = host.HostWithCX(e.node, bmc)
         futures[e.name].result()
         f = executor.submit(helper, h)
         futures[e.name] = f
