@@ -484,6 +484,21 @@ class Host:
         return self.run(f"stat {path}", logging.DEBUG).returncode == 0
 
 
+class HostWithCX(Host):
+    def cx_firmware_upgrade(self) -> Result:
+        logger.info("Upgrading CX firmware")
+        return self.run_in_container("/cx_fwup")
+
+    def run_in_container(self, cmd: str, interactive: bool = False) -> Result:
+        name = "cx"
+        setup = f"sudo podman run --pull always --replace --pid host --network host --user 0 --name {name} -dit --privileged -v /dev:/dev quay.io/bnemeth/bf"
+        r = self.run(setup, logging.DEBUG)
+        if r.returncode != 0:
+            return r
+        it = "-it" if interactive else ""
+        return self.run(f"sudo podman exec {it} {name} {cmd}")
+
+
 class HostWithBF2(Host):
     def connect_to_bf(self, bf_addr: str) -> None:
         self.ssh_connect("core")
@@ -541,7 +556,7 @@ class HostWithBF2(Host):
         return self.run_in_container(cmd, True)
 
     def bf_firmware_upgrade(self) -> Result:
-        logger.info("Upgrading firmware")
+        logger.info("Upgrading BF firmware")
         return self.run_in_container("/fwup")
 
     def bf_firmware_defaults(self) -> Result:
