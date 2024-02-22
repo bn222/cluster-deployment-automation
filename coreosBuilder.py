@@ -82,7 +82,7 @@ class CoreosBuilder:
         config_dir = self._clone_if_not_exists("https://github.com/coreos/fedora-coreos-config")
 
         contents = "packages:\n  - kernel-modules-extra\n"
-        contents = contents + "  - python3\n  - libvirt\n  - qemu-img\n  - qemu-kvm\n  - virt-install\n  - netcat\n  - bridge-utils\n  - tcpdump\n"
+        # contents = contents + "  - python3\n  - libvirt\n  - qemu-img\n  - qemu-kvm\n  - virt-install\n  - netcat\n  - bridge-utils\n  - tcpdump\n"
 
         custom_yaml = os.path.join(config_dir, 'manifests/custom.yaml')
         logger.info(f"writing {custom_yaml}")
@@ -142,8 +142,7 @@ class CoreosBuilder:
                -v {fcos_dir}:/srv/ --device /dev/kvm --device /dev/fuse       \
                --tmpfs /tmp -v /var/tmp:/var/tmp --name cosa                  \
                -v {config_dir}:/git:ro                                        \
-               quay.io/coreos-assembler/coreos-assembler:latest
-        """
+               quay.io/coreos-assembler/coreos-assembler:latest """
 
         def build_step(cmd: str, step: str) -> None:
             logger.info(f"Building CoreOS: {step}")
