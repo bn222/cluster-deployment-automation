@@ -22,18 +22,14 @@ import host
 from clustersConfig import ClustersConfig, NodeConfig, HostConfig, ExtraConfigArgs
 from k8sClient import K8sClient
 from nfs import NFS
-from host import Host
 import coreosBuilder
 from typing import Tuple
 import common
 import os
 from python_hosts import Hosts, HostsEntry
 from logger import logger
-from dataclasses import dataclass
 import microshift
-import subprocess
 from extraConfigRunner import ExtraConfigRunner
-import argparse
 
 
 def setup_dhcp_entry(h: host.Host, cfg: NodeConfig) -> None:
