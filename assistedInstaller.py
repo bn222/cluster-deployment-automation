@@ -52,16 +52,16 @@ class AssistedClientAutomation(AssistedClient):  # type: ignore
         path = os.path.dirname(path)
         super().download_kubeconfig(name, path, stdout)
 
-    def download_iso_with_retry(self, infra_env: str) -> None:
+    def download_iso_with_retry(self, infra_env: str, path: str = os.getcwd()) -> None:
         logger.info(self.info_iso(infra_env, {}))
-        logger.info("Downloading iso (will retry if not ready)...")
-        retries = 25
-        for attempt in range(retries):
+        retries, timeout = 25, 30
+        logger.info(f"Download iso from {infra_env} to {path}, retrying for {retries * timeout}s")
+        for _ in range(retries):
             try:
-                self.download_iso(infra_env, os.getcwd())
+                self.download_iso(infra_env, path)
                 break
             except Exception:
-                time.sleep(30)
+                time.sleep(timeout)
         else:
             logger.error(f"Failed to download the ISO after {retries} attempts")
 
