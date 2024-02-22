@@ -95,7 +95,7 @@ def setup_vm(h: host.Host, cfg: NodeConfig, iso_or_image_path: str) -> host.Resu
             options += "off"
 
         os.makedirs(os.path.dirname(cfg.image_path), exist_ok=True)
-        logger.info(f"creating image for VM {name}")
+        logger.info(f"creating {disk_size_gb}GB storage for VM {name} at {cfg.image_path}")
         h.run_or_die(f'qemu-img create -f qcow2 {options} {cfg.image_path} {disk_size_gb}G')
 
         cdrom_line = f"--cdrom {iso_or_image_path}"
@@ -138,7 +138,7 @@ def setup_all_vms(h: host.Host, vms: List[NodeConfig], iso_path: str) -> List[Fu
         return []
 
     hostname = h.hostname()
-    logger.debug(f"Setting up vms on {hostname}")
+    logger.debug(f"Setting up {len(vms)} vms on {hostname}")
 
     executor = ThreadPoolExecutor(max_workers=len(vms))
     futures = []
@@ -935,7 +935,7 @@ class ClusterDeployer:
 
         self._ai.ensure_infraenv_created(infra_env_name, cfg)
 
-        self._download_iso(infra_env_name, self._iso_path)
+        self._ai.download_iso_with_retry(infra_env_name, self._iso_path)
 
         ssh_priv_key_path = self._get_discovery_ign_ssh_priv_key(infra_env_name)
 
@@ -961,16 +961,6 @@ class ClusterDeployer:
         self._wait_known_state(e.name for e in self._cc.workers)
         self._ai.start_infraenv(infra_env_name)
         self.wait_for_workers()
-
-    def _download_iso(self, infra_env_name: str, iso_path: str) -> None:
-        logger.info(f"Download iso from {infra_env_name} to {iso_path}, will retry until success")
-        while True:
-            try:
-                self._ai.download_iso(infra_env_name, iso_path)
-                logger.info(f"iso for {infra_env_name} downloaded to {iso_path}")
-                break
-            except Exception:
-                time.sleep(5)
 
     def _get_discovery_ign_ssh_priv_key(self, infra_env_name: str) -> str:
         self._ai.download_discovery_ignition(infra_env_name, "/tmp")
