@@ -1,0 +1,4 @@
+kickstart.ks
+pull_secret.json
+*.tar
+*.iso
