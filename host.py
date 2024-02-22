@@ -313,9 +313,12 @@ class Host:
 
         logger.log(log_level, f"running command {cmd} on {self._hostname}")
         if self.is_localhost():
-            return self._run_local(cmd, env)
+            ret_val = self._run_local(cmd, env)
         else:
-            return self._run_remote(cmd, log_level)
+            ret_val = self._run_remote(cmd, log_level)
+
+        logger.log(log_level, ret_val)
+        return ret_val
 
     def _run_local(self, cmd: str, env: Dict[str, str]) -> Result:
         args = shlex.split(cmd)
