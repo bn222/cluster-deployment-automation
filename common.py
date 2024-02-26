@@ -59,7 +59,7 @@ class IPRouteAddressInfoEntry:
 
 
 @dataclass
-class IPRouteAdressEntry:
+class IPRouteAddressEntry:
     ifindex: int
     ifname: str
     flags: List[str]
@@ -71,9 +71,9 @@ def ipa(host: host.Host) -> str:
     return host.run("ip -json a").out
 
 
-def ipa_to_entries(input: str) -> List[IPRouteAdressEntry]:
+def ipa_to_entries(input: str) -> List[IPRouteAddressEntry]:
     j = json.loads(input)
-    ret: List[IPRouteAdressEntry] = []
+    ret: List[IPRouteAddressEntry] = []
     for e in j:
         addr_infos = []
         for addr in e["addr_info"]:
@@ -81,7 +81,7 @@ def ipa_to_entries(input: str) -> List[IPRouteAdressEntry]:
 
         master = e["master"] if "master" in e else None
 
-        ret.append(IPRouteAdressEntry(e["ifindex"], e["ifname"], e["flags"], master, addr_infos))
+        ret.append(IPRouteAddressEntry(e["ifindex"], e["ifname"], e["flags"], master, addr_infos))
     return ret
 
 
@@ -112,7 +112,7 @@ def extract_interfaces(input: str) -> List[str]:
     return [x.ifname for x in entries]
 
 
-def find_port(host: host.Host, port_name: str) -> Optional[IPRouteAdressEntry]:
+def find_port(host: host.Host, port_name: str) -> Optional[IPRouteAddressEntry]:
     entries = ipa_to_entries(ipa(host))
     for entry in entries:
         if entry.ifname == port_name:
@@ -138,8 +138,8 @@ def port_to_ip(host: host.Host, port_name: str) -> Optional[str]:
     return None
 
 
-def carrier_no_addr(host: host.Host) -> List[IPRouteAdressEntry]:
-    def carrier_no_addr(intf: IPRouteAdressEntry) -> bool:
+def carrier_no_addr(host: host.Host) -> List[IPRouteAddressEntry]:
+    def carrier_no_addr(intf: IPRouteAddressEntry) -> bool:
         return len(intf.addr_info) == 0 and "NO-CARRIER" not in intf.flags
 
     entries = ipa_to_entries(ipa(host))
