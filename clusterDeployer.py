@@ -349,7 +349,6 @@ class ClusterDeployer:
             logger.info(rc if rc.err else rc.out.strip())
 
     def reset_api_network(self, hosts: List[str]) -> None:
-        lh = host.LocalHost()
         for hc in hosts:
             h = host.Host(hc)
             if hc != "localhost":
@@ -368,7 +367,7 @@ class ClusterDeployer:
             else:
                 logger.info(h.run(f"ip link set {intif} nomaster"))
                 logger.info(f"Setting interface {intif} as managed in NetworkManager")
-                lh.run(f"nmcli device set {intif} managed yes")
+                h.run(f"nmcli device set {intif} managed yes")
 
     def remove_vms(self, vms: List[NodeConfig]) -> None:
         for m in vms:
