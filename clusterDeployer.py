@@ -341,6 +341,28 @@ class ClusterDeployer:
             logger.info(lh.run("virsh net-start default"))
             logger.info(lh.run("systemctl restart libvirtd"))
 
+    def reset_api_network(self, hosts: List[str]) -> None:
+        lh = host.LocalHost()
+        for hc in hosts:
+            h = host.Host(hc)
+            if hc != "localhost":
+                host_config = self.local_host_config(hc)
+                try:
+                    h.ssh_connect(host_config.username, host_config.password)
+                except paramiko.ssh_exception.AuthenticationException as e:
+                    logger.error(type(e))
+                    continue
+                if not host_config.is_preinstalled():
+                    h.need_sudo()
+
+            intif = self._validate_api_port(h)
+            if not intif:
+                logger.info("can't find network API port")
+            else:
+                logger.info(h.run(f"ip link set {intif} nomaster"))
+                logger.info(f"Setting interface {intif} as managed in NetworkManager")
+                lh.run(f"nmcli device set {intif} managed yes")
+
     def teardown(self) -> None:
         cluster_name = self._cc.name
         logger.info(f"Tearing down {cluster_name}")
@@ -379,25 +401,7 @@ class ClusterDeployer:
         limit_dhcp_range(lh, "192.168.122.129", "192.168.122.2")
 
         if self.need_api_network():
-            for hc in self._cc.hosts:
-                h = host.Host(hc.name)
-                if hc.name != "localhost":
-                    host_config = self.local_host_config(hc.name)
-                    try:
-                        h.ssh_connect(host_config.username, host_config.password)
-                    except paramiko.ssh_exception.AuthenticationException as e:
-                        logger.error("Authentication failed, will not be able to reset api master")
-                        continue
-                    if not host_config.is_preinstalled():
-                        h.need_sudo()
-
-                intif = self._validate_api_port(h)
-                if not intif:
-                    logger.info("can't find network API port")
-                else:
-                    logger.info(h.run(f"ip link set {intif} nomaster"))
-                    logger.info(f"Setting interface {intif} as managed in NetworkManager")
-                    lh.run(f"nmcli device set {intif} managed yes")
+            self.reset_api_network(self._cc.hosts)
 
         if os.path.exists(self._cc.kubeconfig):
             os.remove(self._cc.kubeconfig)
