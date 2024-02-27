@@ -363,19 +363,15 @@ class ClusterDeployer:
                 logger.info(f"Setting interface {intif} as managed in NetworkManager")
                 lh.run(f"nmcli device set {intif} managed yes")
 
-    def teardown(self) -> None:
-        cluster_name = self._cc.name
-        logger.info(f"Tearing down {cluster_name}")
-        self._ai.ensure_cluster_deleted(self._cc.name)
-        lh = host.LocalHost()
-        for m in self._cc.all_vms():
+    def remove_vms(self, vms: List[NodeConfig]) -> None:
+        for m in vms:
             h = host.Host(m.node)
             if m.node != "localhost":
                 host_config = self.local_host_config(m.node)
                 try:
                     h.ssh_connect(host_config.username, host_config.password)
-                except ssh_exception.AuthenticationException as e:
-                    logger.info(type(e))
+                except paramiko.ssh_exception.AuthenticationException as e:
+                    logger.error(type(e))
                     continue
                 if not host_config.pre_installed:
                     h.need_sudo()
@@ -391,6 +387,13 @@ class ClusterDeployer:
                 logger.info(r.err if r.err else r.out.strip())
                 r = h.run(f"virsh undefine {m.name}")
                 logger.info(r.err if r.err else r.out.strip())
+
+    def teardown(self) -> None:
+        cluster_name = self._cc.name
+        logger.info(f"Tearing down {cluster_name}")
+        self._ai.ensure_cluster_deleted(self._cc.name)
+        lh = host.LocalHost()
+        self.remove_vms(self._cc.all_vms())
 
         self._ai.ensure_infraenv_deleted(f"{cluster_name}-x86")
         self._ai.ensure_infraenv_deleted(f"{cluster_name}-arm")
