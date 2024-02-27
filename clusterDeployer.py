@@ -299,6 +299,48 @@ class ClusterDeployer:
     is hardcoded to be the network hosting the API network.
     """
 
+    def remove_dhcp_entries(self, vms: List[NodeConfig]) -> None:
+        lh = host.LocalHost()
+        xml_str = lh.run("virsh net-dumpxml default").out
+        q = et.fromstring(xml_str)
+        removed_macs = []
+        names = [x.name for x in vms]
+        ips = [x.ip for x in vms]
+        for e in q[-1][0][1:]:
+            if e.attrib["name"] in names or e.attrib["ip"] in ips:
+                mac = e.attrib["mac"]
+                name = e.attrib["name"]
+                ip = e.attrib["ip"]
+                pre = "virsh net-update default delete ip-dhcp-host"
+                cmd = f"{pre} \"<host mac='{mac}' name='{name}' ip='{ip}'/>\" --live --config"
+                logger.info(lh.run(cmd))
+                removed_macs.append(mac)
+        fn = "/var/lib/libvirt/dnsmasq/virbr0.status"
+        with open(fn) as f:
+            contents = f.read()
+
+        if contents:
+            j = json.loads(contents)
+            names = [x.name for x in vms]
+            logger.info(f'Cleaning up {fn}')
+            logger.info(f'removing hosts with mac in {removed_macs} or name in {names}')
+            filtered = []
+            for entry in j:
+                if entry["mac-address"] in removed_macs:
+                    logger.info(f'Removed host with mac {entry["mac-address"]}')
+                    continue
+                if "hostname" in entry and entry["hostname"] in names:
+                    logger.info(f'Removed host with name {entry["hostname"]}')
+                    continue
+                logger.info(f'Kept entry {entry}')
+                filtered.append(entry)
+
+            logger.info(lh.run("virsh net-destroy default"))
+            with open(fn, "w") as f:
+                f.write(json.dumps(filtered, indent=4))
+            logger.info(lh.run("virsh net-start default"))
+            logger.info(lh.run("systemctl restart libvirtd"))
+
     def teardown(self) -> None:
         cluster_name = self._cc.name
         logger.info(f"Tearing down {cluster_name}")
@@ -310,8 +352,8 @@ class ClusterDeployer:
                 host_config = self.local_host_config(m.node)
                 try:
                     h.ssh_connect(host_config.username, host_config.password)
-                except paramiko.ssh_exception.AuthenticationException as e:
-                    logger.error("Authentication failed, will not be able to remove image and destroy vm")
+                except ssh_exception.AuthenticationException as e:
+                    logger.info(type(e))
                     continue
                 if not host_config.pre_installed:
                     h.need_sudo()
@@ -331,49 +373,10 @@ class ClusterDeployer:
         self._ai.ensure_infraenv_deleted(f"{cluster_name}-x86")
         self._ai.ensure_infraenv_deleted(f"{cluster_name}-arm")
 
-        xml_str = lh.run("virsh net-dumpxml default").out
-        q = et.fromstring(xml_str)
-        removed_macs = []
-        names = [x.name for x in self._cc.all_vms()]
-        ips = [x.ip for x in self._cc.all_vms()]
-        for e in q[-1][0][1:]:
-            if e.attrib["name"] in names or e.attrib["ip"] in ips:
-                mac = e.attrib["mac"]
-                name = e.attrib["name"]
-                ip = e.attrib["ip"]
-                pre = "virsh net-update default delete ip-dhcp-host"
-                cmd = f"{pre} \"<host mac='{mac}' name='{name}' ip='{ip}'/>\" --live --config"
-                logger.info(lh.run(cmd))
-                removed_macs.append(mac)
+        self.remove_dhcp_entries(self._cc.all_vms())
 
         # bring back initial dynamic dhcp range.
         limit_dhcp_range(lh, "192.168.122.129", "192.168.122.2")
-
-        fn = "/var/lib/libvirt/dnsmasq/virbr0.status"
-        with open(fn) as f:
-            contents = f.read()
-
-        if contents:
-            j = json.loads(contents)
-            names = [x.name for x in self._cc.all_vms()]
-            logger.info(f'Cleaning up {fn}')
-            logger.info(f'removing hosts with mac in {removed_macs} or name in {names}')
-            filtered = []
-            for entry in j:
-                if entry["mac-address"] in removed_macs:
-                    logger.info(f'Removed host with mac {entry["mac-address"]}')
-                    continue
-                if "hostname" in entry and entry["hostname"] in names:
-                    logger.info(f'Removed host with name {entry["hostname"]}')
-                    continue
-                logger.info(f'Kept entry {entry}')
-                filtered.append(entry)
-
-            logger.info(lh.run("virsh net-destroy default"))
-            with open(fn, "w") as f:
-                f.write(json.dumps(filtered, indent=4))
-            logger.info(lh.run("virsh net-start default"))
-            logger.info(lh.run("systemctl restart libvirtd"))
 
         if self.need_api_network():
             for hc in self._cc.hosts:
