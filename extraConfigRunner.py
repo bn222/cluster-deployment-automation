@@ -3,6 +3,7 @@ from extraConfigSriov import ExtraConfigSriov, ExtraConfigSriovOvSHWOL, ExtraCon
 from extraConfigDpuTenant import ExtraConfigDpuTenantMC, ExtraConfigDpuTenant, ExtraConfigDpuTenant_NewAPI
 from extraConfigDpuInfra import ExtraConfigDpuInfra, ExtraConfigDpuInfra_NewAPI
 from extraConfigOvnK import ExtraConfigOvnK
+from extraConfigCustomOvn import ExtraConfigCustomOvn
 from extraConfigCNO import ExtraConfigCNO
 from extraConfigRT import ExtraConfigRT
 from extraConfigDualStack import ExtraConfigDualStack
@@ -30,6 +31,7 @@ class ExtraConfigRunner:
             "dpu_tenant": ExtraConfigDpuTenant,
             "dpu_tenant_new_api": ExtraConfigDpuTenant_NewAPI,
             "ovnk8s": ExtraConfigOvnK,
+            "ovn_custom": ExtraConfigCustomOvn,
             "cno": ExtraConfigCNO,
             "rt": ExtraConfigRT,
             "dualstack": ExtraConfigDualStack,
