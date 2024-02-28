@@ -311,7 +311,7 @@ class ClusterDeployer:
                 name = e.attrib["name"]
                 ip = e.attrib["ip"]
                 pre = "virsh net-update default delete ip-dhcp-host"
-                cmd = f"{pre} \"<host mac='{mac}' name='{name}' ip='{ip}'/>\" --live --config"
+                cmd = f"{pre} \"<host mac='{mac}' name='{name}' ip='{ip}'/>\" --config"
                 logger.info(lh.run(cmd))
                 removed_macs.append(mac)
 
