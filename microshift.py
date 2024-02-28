@@ -10,7 +10,7 @@ import shutil
 from typing import Optional
 from jinja2 import Template
 from clustersConfig import NodeConfig
-import glob
+import common
 
 
 # cleans microshift artifacts from previous installation
@@ -67,13 +67,12 @@ def generate_kickstart(rhel_number: str, uname_m: str) -> None:
     with open('pull_secret.json', 'r') as f_in:
         file_contents = f_in.read()
 
-    pub_files = glob.glob('/root/.ssh/*.pub')
-    if pub_files:
-        with open(pub_files[0], 'r') as ssh_in:
+    ssh_pub, _, _ = next(common.iterate_ssh_keys(), (None, None, None))
+    if ssh_pub is not None:
+        with open(ssh_pub, 'r') as ssh_in:
             ssh_contents = ssh_in.read()
     else:
-        ssh_contents = None
-        logger.error("No .pub files found in /root/.ssh/")
+        logger.error("No ssh keys found in generate_kickstart")
         sys.exit(-1)
 
     with open('kickstart.ks.j2', 'r') as f:
@@ -86,6 +85,7 @@ def generate_kickstart(rhel_number: str, uname_m: str) -> None:
 
 # generates non static toml files
 def generate_toml_file(content: str, file_name: str, h: host.Host) -> None:
+
     with open(file_name, 'w') as file:
         file.write(content)
 

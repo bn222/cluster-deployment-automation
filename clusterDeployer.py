@@ -14,7 +14,6 @@ from typing import List
 from typing import Callable
 import re
 import socket
-import glob
 import logging
 import paramiko
 from assistedInstaller import AssistedClientAutomation
@@ -966,13 +965,13 @@ class ClusterDeployer:
         ssh_pub_key = j["passwd"]["users"][0]["sshAuthorizedKeys"][0]
         # It seems that if you have both rsa and ed25519, AI will prefer to use ed25519.
         logger.info(f"The SSH key that the discovery ISO will use is: {ssh_pub_key}")
-        for file in glob.glob("/root/.ssh/*.pub"):
-            with open(file, 'r') as f:
-                key = " ".join(f.read().split(" ")[:-1])
-                if key.split()[0] == ssh_pub_key.split()[0]:
-                    logger.info(f"Found matching public key at {file}")
-                    ssh_priv_key = os.path.splitext(file)[0]
-                    logger.info(f"Found matching private key at {ssh_priv_key}")
+        for file, key, priv_key in common.iterate_ssh_keys():
+            if key.split()[0] == ssh_pub_key.split()[0]:
+                logger.info(f"Found matching public key at {file}")
+                ssh_priv_key = priv_key
+                logger.info(f"Found matching private key at {ssh_priv_key}")
+                break
+
         return ssh_priv_key
 
     def update_etc_hosts(self) -> None:
