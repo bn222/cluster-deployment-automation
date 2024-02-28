@@ -394,11 +394,7 @@ class ClusterDeployer:
     def _validate_api_port(self, lh: host.Host) -> Optional[str]:
         host_config = self.local_host_config(lh.hostname())
         if host_config.network_api_port == "auto":
-            interfaces = common.carrier_no_addr(lh)
-            if len(interfaces) == 0:
-                return None
-            else:
-                host_config.network_api_port = interfaces[0].ifname
+            host_config.network_api_port = common.get_auto_port(lh)
 
         port = host_config.network_api_port
         logger.info(f'Validating API network port {port}')
