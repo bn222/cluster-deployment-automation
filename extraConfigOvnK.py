@@ -33,9 +33,15 @@ def ExtraConfigOvnK(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: Dict[str,
 
     configCVO = ConfigCVO()
     configCVO.scaleDown(iclient)
-    iclient.oc(f'patch -p "{patch}" deploy network-operator -n openshift-network-operator')
+    iclient.oc_run_or_die(f'patch -p "{patch}" deploy network-operator -n openshift-network-operator')
 
-    # TODO: wait for all ovn-k pods to become ready again
+    # To avoid a race between CNO restarting and rollout status checks
+    # trigger a daemonset restart ourselves.
+    iclient.oc_run_or_die("project openshift-ovn-kubernetes")
+    iclient.oc_run_or_die("rollout restart daemonset/ovnkube-node")
+
+    # Wait for the new image to roll out.
+    iclient.oc_run_or_die(f"rollout status --timeout={cfg.ovnk_rollout_timeout} daemonset/ovnkube-node")
 
 
 def main() -> None:
