@@ -92,7 +92,44 @@ clusters:
 EOF
 ```
 
-## Generate a vm Single Node OpenShift (SNO) cluster configuration file (3)
+## Generate a cluster configuration file that uses OVN rebuilt from source (3)
+```yaml
+cat > cluster.yaml << EOF
+clusters:
+  - name : "vm"
+    api_vip: "192.168.122.99"
+    ingress_ip: "192.168.122.101"
+    kubeconfig: "/root/kubeconfig.vm"
+    masters:
+    - name: "vm-master-1"
+      kind: "vm"
+      node: "localhost"
+      ip: "192.168.122.141"
+    - name: "vm-master-2"
+      kind: "vm"
+      node: "localhost"
+      ip: "192.168.122.142"
+    - name: "vm-master-3"
+      kind: "vm"
+      node: "localhost"
+      ip: "192.168.122.143"
+    workers:
+    - name: "vm-worker-1"
+      kind: "vm"
+      node: "localhost"
+      ip: "192.168.122.144"
+    - name: "vm-worker-2"
+      kind: "vm"
+      node: "localhost"
+      ip: "192.168.122.145"
+    postconfig:
+    - name: "ovn_custom"   # Rebuilds OVN from upstream ovn-org/ovn code.
+    - name: "ovnk8s"       # Rolls out the ovn-k daemonset using the new image.
+      image: "localhost/ovnk-custom-image:dev"
+EOF
+```
+
+## Generate a vm Single Node OpenShift (SNO) cluster configuration file (4)
 ```yaml
 cat > cluster.yaml << EOF
 clusters:

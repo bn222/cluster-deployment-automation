@@ -24,9 +24,19 @@ def random_mac() -> str:
 @dataclass
 class ExtraConfigArgs:
     name: str
+
+    # OVN-K extra configs:
+    # New ovn-k image to use.
     image: Optional[str] = None
+    # Time to wait for new ovn-k to roll out.
+    ovnk_rollout_timeout: str = "20m"
+
     kubeconfig: Optional[str] = None
     mapping: Optional[List[Dict[str, str]]] = None
+
+    # Custom OVN build extra configs:
+    # Time to wait for the builders to roll out.
+    custom_ovn_build_timeout: str = "20m"
 
 
 @dataclass

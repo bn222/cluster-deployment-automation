@@ -1,0 +1,129 @@
+# WARNING: This is a hack because it mangles the host's containers and
+# images directly from within the pods.
+
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: ovn-from-source
+spec:
+  selector:
+      matchLabels:
+        name: ovn-from-source 
+  template:
+    metadata:
+      labels:
+        name: ovn-from-source 
+    spec:
+      containers:
+      - image: quay.io/fedora/fedora:latest
+        name: idle
+        command:
+            - sleep
+            - infinity
+      initContainers:
+      - image: quay.io/fedora/fedora:latest
+        name: builder
+        securityContext:
+          privileged: true 
+        volumeMounts:
+        - mountPath: /var/lib/containers
+          name: var-lib-containers
+        - mountPath: /var/run/crio
+          name: var-run-crio
+        command:
+            - /bin/bash
+            - -c
+            - |
+              OVN_REPO=${OVN_REPO:-"https://github.com/ovn-org/ovn.git"}
+              OVN_BRANCH=${OVN_BRANCH:-"main"}
+              CRITOOLS_VER=${CRITOOLS_VER:-"v1.29.0"}
+
+              # OVN build dependencies that can be removed to simplify build
+              # on UBI.
+              OVN_REMOVE_DEPS=${OVN_REMOVE_DEPS:-"graphviz groff sphinx-build unbound checkpolicy selinux-policy-devel"}
+
+              DEPS="containernetworking-plugins podman runc wget"
+              sudo dnf install -y $DEPS
+
+              wget https://github.com/kubernetes-sigs/cri-tools/releases/download/${CRITOOLS_VER}/crictl-${CRITOOLS_VER}-linux-amd64.tar.gz
+              sudo tar zxvf crictl-${CRITOOLS_VER}-linux-amd64.tar.gz -C /usr/local/bin
+              rm -f crictl-${CRITOOLS_VER}-linux-amd64.tar.gz
+
+              ovnk_img=$(crictl ps 2> /dev/null | grep ovn-controller | awk '{print $2}')
+              echo "Using ovn-kubernetes base image: ${ovnk_img}"
+
+              if podman images | grep -q 'ovnk-image.*original'; then
+                echo "Original image tag found: 'ovnk-image:original'"
+              else
+                podman tag ${ovnk_img} ovnk-image:original
+                echo "Original image tagged as 'ovnk-image:original'"
+              fi
+
+              cat << EOF > Dockerfile 
+                ARG OVNK_IMAGE
+                FROM \$OVNK_IMAGE
+
+                ARG OVN_REMOVE_DEPS
+                ARG OVN_REPO
+                ARG OVN_BRANCH
+
+                RUN dnf install -y git rpm-build
+
+                WORKDIR /root
+                RUN rm -rf /root/ovn && git clone \${OVN_REPO}
+                WORKDIR /root/ovn
+                RUN git checkout \${OVN_BRANCH}
+                RUN git submodule update --init
+
+                # Remove non-essential dependencies.
+                RUN for dep in \$OVN_REMOVE_DEPS; do \
+                        sed -i "/\$dep/d" rhel/ovn-fedora.spec.in; \
+                    done
+
+                # Install essential dependencies.
+                RUN sed -e 's/@VERSION@/0.0.1/' rhel/ovn-fedora.spec.in > /tmp/ovn.spec
+                RUN dnf builddep -y /tmp/ovn.spec
+
+                # Build RPMS.
+                WORKDIR /root/ovn/ovs
+                RUN ./boot.sh && ./configure && make dist
+
+                WORKDIR /root/ovn
+                RUN ./boot.sh && ./configure && make dist && make rpm-fedora
+
+                # Force upgrade to use custom OVN rpms.
+                RUN rpm -Uhv --nodeps --force /root/ovn/rpm/rpmbuild/RPMS/x86_64/ovn-*rpm
+              EOF
+
+              # To avoid issues with dbus:
+              # https://bugzilla.redhat.com/show_bug.cgi?id=1768954#c4
+              PODMAN_EXTRA_ARGS="--cgroup-manager=cgroupfs"
+              sudo podman ${PODMAN_EXTRA_ARGS} build --net host -t ovnk-custom-image:dev \
+                --build-arg OVNK_IMAGE=${ovnk_img} \
+                --build-arg OVN_REPO=${OVN_REPO} \
+                --build-arg OVN_BRANCH=${OVN_BRANCH} \
+                --build-arg OVN_REMOVE_DEPS="${OVN_REMOVE_DEPS}" \
+                 -f Dockerfile .
+              echo SUCCESS
+        resources: {}
+        terminationMessagePath: /dev/termination-log
+
+      # Mount:
+      # - /var/lib/containers for podman to be able to write images to
+      #   the host directly from inside the pod.
+      # - /var/run/crio for crictl to be able to query containers managed
+      #   by cri-o.
+      volumes:
+      - name: var-lib-containers
+        hostPath:
+          path: /var/lib/containers
+      - name: var-run-crio
+        hostPath:
+          path: /var/run/crio
+
+      terminationGracePeriodSeconds: 10
+      serviceAccountName: ovn-kubernetes-node
+      hostNetwork: true
+      dnsPolicy: Default
+      hostPID: true
+      priorityClassName: "system-node-critical"
