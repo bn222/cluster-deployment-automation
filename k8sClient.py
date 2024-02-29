@@ -58,9 +58,16 @@ class K8sClient:
                         return str(addr.address)
         return None
 
-    def oc(self, cmd: str) -> host.Result:
+    def oc(self, cmd: str, must_succeed: bool = False) -> host.Result:
         lh = host.LocalHost()
-        return lh.run(f"{self.oc_bin} {cmd} --kubeconfig {self._kc}")
+        cmd = f"{self.oc_bin} {cmd} --kubeconfig {self._kc}"
+        if must_succeed:
+            return lh.run_or_die(cmd)
+        else:
+            return lh.run(cmd)
+
+    def oc_run_or_die(self, cmd: str) -> host.Result:
+        return self.oc(cmd, must_succeed=True)
 
     def ensure_oc_binary(self) -> None:
         lh = host.LocalHost()
