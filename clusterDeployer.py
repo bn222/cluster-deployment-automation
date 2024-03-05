@@ -547,7 +547,7 @@ class ClusterDeployer:
 
         if not self._cc.is_sno():
             cfg["api_vips"] = [self._cc.api_vip]
-            cfg["ingress_ip"] = self._cc.ingress_ip
+            cfg["ingress_vips"] = [self._cc.ingress_vip]
 
         cfg["vip_dhcp_allocation"] = False
         cfg["additional_ntp_source"] = self._cc.ntp_source
@@ -583,6 +583,7 @@ class ClusterDeployer:
 
         lh = host.LocalHost()
         # TODO: clean this up. Currently just skipping this
+
         # since self.local_host_config() is not present if no local vms
         if self._cc.local_vms():
             for e in self._cc.masters:

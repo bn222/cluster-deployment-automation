@@ -112,7 +112,7 @@ class ClustersConfig:
     name: str
     kubeconfig: str
     api_vip: Dict[str, str]
-    ingress_ip: str
+    ingress_vip: Dict[str, str]
     external_port: str = "auto"
     kind: str = "openshift"
     version: str = "4.14.0-nightly"
@@ -129,7 +129,7 @@ class ClustersConfig:
 
     # All configurations that used to be supported but are not anymore.
     # Used to warn the user to change their config.
-    deprecated_configs: Dict[str, Optional[str]] = {"api_ip": "api_vip"}
+    deprecated_configs: Dict[str, Optional[str]] = {"api_ip": "api_vip", "ingress_ip": "ingress_vip"}
 
     def __init__(self, yaml_path: str, worker_range: common.RangeList):
         self._cluster_info: Optional[ClusterInfo] = None
@@ -189,7 +189,7 @@ class ClustersConfig:
 
         if not self.is_sno():
             self.api_vip = {'ip': cc["api_vip"]}
-            self.ingress_ip = cc["ingress_ip"]
+            self.ingress_vip = {'ip': cc["ingress_vip"]}
 
         for e in cc["hosts"]:
             self.hosts.append(HostConfig(self.network_api_port, **e))
