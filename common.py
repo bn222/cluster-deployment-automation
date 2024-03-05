@@ -129,6 +129,9 @@ def route_to_port(host: host.Host, route: str) -> Optional[str]:
 
 
 def port_to_ip(host: host.Host, port_name: str) -> Optional[str]:
+    if port_name == "auto":
+        port_name = get_auto_port(host)
+
     entries = ipa_to_entries(ipa(host))
     for entry in entries:
         if entry.ifname == port_name:
@@ -145,3 +148,11 @@ def carrier_no_addr(host: host.Host) -> List[IPRouteAddressEntry]:
     entries = ipa_to_entries(ipa(host))
 
     return [x for x in entries if carrier_no_addr(x)]
+
+
+def get_auto_port(host: host.Host) -> str:
+    interfaces = carrier_no_addr(host)
+    if len(interfaces) == 0:
+        raise ValueError("No interfaces found for auto port")
+    else:
+        return interfaces[0].ifname
