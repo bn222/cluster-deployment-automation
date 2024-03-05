@@ -557,7 +557,9 @@ class HostWithBF2(Host):
 
     def bf_firmware_upgrade(self) -> Result:
         logger.info("Upgrading BF firmware")
-        return self.run_in_container("/fwup")
+        # We need to temporarily pin the BF-2 firmware due to an issue with the latest release: https://issues.redhat.com/browse/OCPBUGS-29882
+        # Without this, the sriov-network-operator will fail to put the card into NIC mode
+        return self.run_in_container("/fwup -v 24.39.2048")
 
     def bf_firmware_defaults(self) -> Result:
         logger.info("Setting firmware config to defaults")

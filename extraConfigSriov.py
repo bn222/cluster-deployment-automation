@@ -47,6 +47,9 @@ def ExtraConfigSriov(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: Dict[str
 
     logger.info("running make deploy-setup")
     logger.info(lh.run("make deploy-setup", env=env))
+
+    # Future proof for when sriov moves to new switchdev implementation: https://github.com/k8snetworkplumbingwg/sriov-network-operator/blob/master/doc/design/switchdev-refactoring.md
+    client.oc("apply -f manifest/nicmode/sriov-operator-config.yaml")
     time.sleep(60)
     os.chdir(cur_dir)
 
