@@ -1,9 +1,11 @@
 from dataclasses import dataclass
 import ipaddress
 from threading import local
-from typing import List, Optional, Set, Tuple, TypeVar
+from typing import List, Optional, Set, Tuple, TypeVar, Iterator
 import host
 import json
+import os
+import glob
 
 
 T = TypeVar("T")
@@ -156,3 +158,11 @@ def get_auto_port(host: host.Host) -> str:
         raise ValueError("No interfaces found for auto port")
     else:
         return interfaces[0].ifname
+
+
+def iterate_ssh_keys() -> Iterator[Tuple[str, str, str]]:
+    for pub_file in glob.glob("/root/.ssh/*.pub"):
+        with open(pub_file, 'r') as f:
+            pub_key_content = f.read().strip()
+            priv_key_file = os.path.splitext(pub_file)[0]
+            yield pub_file, pub_key_content, priv_key_file
