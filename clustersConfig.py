@@ -38,6 +38,11 @@ class ExtraConfigArgs:
     # Time to wait for the builders to roll out.
     custom_ovn_build_timeout: str = "20m"
 
+    # Hostname/IP of IPU IMC to be provisioned in ExtraConfigIPU
+    ipu_imcs: Optional[List[str]] = None
+    # Path to iso file to provision IPUs with
+    ipu_iso: Optional[str] = None
+
 
 @dataclass
 class NodeConfig:
