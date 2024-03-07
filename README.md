@@ -56,6 +56,7 @@ clusters:
       node: "..."
       bmc_user: "root"
       bmc_password: "..."
+      bmc: "hostname or ip"
 EOF
 ```
 
@@ -85,10 +86,12 @@ clusters:
       kind: "vm"
       node: "localhost"
       ip: "192.168.122.144"
+      bmc: "hostname or ip"
     - name: "vm-worker-2"
       kind: "vm"
       node: "localhost"
       ip: "192.168.122.145"
+      bmc: "hostname or ip"
 EOF
 ```
 
@@ -118,10 +121,12 @@ clusters:
       kind: "vm"
       node: "localhost"
       ip: "192.168.122.144"
+      bmc: "hostname or ip"
     - name: "vm-worker-2"
       kind: "vm"
       node: "localhost"
       ip: "192.168.122.145"
+      bmc: "hostname or ip"
     postconfig:
     - name: "ovn_custom"   # Rebuilds OVN from upstream ovn-org/ovn code.
     - name: "ovnk8s"       # Rolls out the ovn-k daemonset using the new image.

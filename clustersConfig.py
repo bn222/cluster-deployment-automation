@@ -256,7 +256,7 @@ class ClustersConfig:
             assert self._cluster_info is not None
             return self._cluster_info.workers[a]
 
-        def bmc_ip(a: int) -> str:
+        def bmc(a: int) -> str:
             self._ensure_clusters_loaded()
             assert self._cluster_info is not None
             return self._cluster_info.bmcs[a]
@@ -272,7 +272,7 @@ class ClustersConfig:
         template.globals['worker_number'] = worker_number
         template.globals['worker_name'] = worker_name
         template.globals['api_network'] = api_network
-        template.globals['bmc_ip'] = bmc_ip
+        template.globals['bmc'] = bmc
 
         kwargs = {}
         kwargs["cluster_name"] = cluster_name

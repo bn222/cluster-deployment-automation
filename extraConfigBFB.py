@@ -52,7 +52,7 @@ def ExtraConfigBFB(cc: ClustersConfig, _: ExtraConfigArgs, futures: Dict[str, Fu
     # Assuming that all workers have BF that need to reset to bfb image in
     # dpu mode
     for e in cc.workers:
-        bmc = host.bmc_from_host_name_or_ip(e.node, e.bmc_ip, e.bmc_user, e.bmc_password)
+        bmc = host.bmc_from_host_name_or_ip(e.node, e.bmc, e.bmc_user, e.bmc_password)
         h = host.HostWithBF2(e.node, bmc)
         futures[e.name].result()
         f = executor.submit(helper, h)
