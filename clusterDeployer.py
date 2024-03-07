@@ -614,7 +614,6 @@ class ClusterDeployer:
         self.ensure_linked_to_bridge(lh)
         for e in self._cc.masters:
             self._set_password(e.name)
-        self.update_etc_hosts()
 
     def _print_logs(self, name: str) -> None:
         ip = self._ai.get_ai_ip(name)
@@ -981,6 +980,7 @@ class ClusterDeployer:
 
         hosts = Hosts()
         hosts.remove_all_matching(name=api_name)
+        hosts.remove_all_matching(address=api_vip)
         hosts.add([HostsEntry(entry_type='ipv4', address=api_vip, names=[api_name])])
         hosts.write()
 
