@@ -1,4 +1,5 @@
 from os import path, getcwd
+import functools
 import os
 import io
 import sys
@@ -6,6 +7,7 @@ import re
 from typing import Optional
 from typing import List
 from typing import Dict
+from typing import Tuple
 import jinja2
 from yaml import safe_load
 import host
@@ -119,6 +121,12 @@ class ClustersConfig:
     network_api_port: str = "auto"
     masters: List[NodeConfig] = []
     workers: List[NodeConfig] = []
+    configured_workers: List[NodeConfig] = []
+    bridge_ip: str = "192.168.122.1"
+    fake_bridge_ip: str = "192.168.123.250"
+    bridge_mask: str = "255.255.0.0"
+    cluster_ip_range: Tuple[str, str] = ('192.168.122.2', '192.168.122.129')
+    dynamic_ip_range: Tuple[str, str] = ('192.168.122.129', '192.168.122.1254')
     hosts: List[HostConfig] = []
     proxy: Optional[str] = None
     noproxy: Optional[str] = None
@@ -177,8 +185,17 @@ class ClustersConfig:
         for n in cc["masters"]:
             self.masters.append(NodeConfig(self.name, **n))
 
-        for w in worker_range.filter_list(cc["workers"]):
-            self.workers.append(NodeConfig(self.name, **w))
+        selected_workers = worker_range.filter_list(cc["workers"])
+        for w in cc["workers"]:
+            w = NodeConfig(self.name, **w)
+            self.configured_workers.append(w)
+            if w in selected_workers:
+                self.workers.append(w)
+
+        # Reserve IPs for AI, masters and workers.
+        n_nodes = len(cc["masters"]) + len(cc["workers"]) + 1
+        self.cluster_ip_range = common.ip_range("192.168.122.1", n_nodes)
+        self.dynamic_ip_range = common.ip_range(self.cluster_ip_range[1], 254 - n_nodes)
 
         # creates hosts entries for each referenced node name
         node_names = set(x["name"] for x in cc["hosts"])
@@ -236,6 +253,15 @@ class ClustersConfig:
     def prepare_external_port(self) -> None:
         if self.external_port == "auto":
             self.autodetect_external_port()
+
+    def validate_node_ips(self) -> bool:
+        def validate_node_ip(n: NodeConfig) -> bool:
+            if n.ip is not None and not common.ip_range_contains(self.cluster_ip_range, n.ip):
+                logger.error(f"IP {n.ip} not in cluster subnet range for node {n.name}.")
+                return False
+            return True
+
+        return functools.reduce(lambda v, n: validate_node_ip(n) and v, self.all_configured_nodes(), True)
 
     def validate_external_port(self) -> bool:
         return host.LocalHost().port_exists(self.external_port)
@@ -301,6 +327,9 @@ class ClustersConfig:
 
     def all_nodes(self) -> List[NodeConfig]:
         return self.masters + self.workers
+
+    def all_configured_nodes(self) -> List[NodeConfig]:
+        return self.masters + self.configured_workers
 
     def all_vms(self) -> List[NodeConfig]:
         return [x for x in self.all_nodes() if x.kind == "vm"]

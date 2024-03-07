@@ -172,29 +172,20 @@ def ensure_bridge_is_started(h: host.Host, api_network: str, bridge_xml: str) ->
     h.run(f"ip link set {api_network} up")
 
 
-def limit_dhcp_range(h: host.Host, old_range: str, new_range: str) -> None:
-    # restrict dynamic dhcp range: we use static dhcp ip addresses; however, those addresses might have been used
-    # through the dynamic dhcp by any systems such as systems ready to be installed.
-    cmd = "virsh net-dumpxml default"
-    ret = h.run(cmd)
-    if f"range start='{old_range}'" in ret.out:
-        host_xml = f"<range start='{old_range}' end='192.168.122.254'/>"
-        cmd = f"virsh net-update default delete ip-dhcp-range \"{host_xml}\" --live --config"
-        r = h.run(cmd)
-        logger.debug(r.err if r.err else r.out)
-
-        host_xml = f"<range start='{new_range}' end='192.168.122.254'/>"
-        cmd = f"virsh net-update default add ip-dhcp-range \"{host_xml}\" --live --config"
-        r = h.run(cmd)
-        logger.debug(r.err if r.err else r.out)
+def bridge_dhcp_range_str(dhcp_range: Tuple[str, str]) -> str:
+    return f"<range start='{dhcp_range[0]}' end='{dhcp_range[1]}'/>"
 
 
-def network_xml(ip: str, dhcp_range: Optional[Tuple[str, str]] = None) -> str:
+def bridge_ip_address_str(ip: str, mask: str) -> str:
+    return f"<ip address='{ip}' netmask='{mask}'>"
+
+
+def network_xml(ip: str, mask: str, dhcp_range: Optional[Tuple[str, str]] = None) -> str:
     if dhcp_range is None:
         dhcp_part = ""
     else:
         dhcp_part = f"""<dhcp>
-  <range start='{dhcp_range[0]}' end='{dhcp_range[1]}'/>
+  {bridge_dhcp_range_str(dhcp_range)}
   </dhcp>"""
 
     return f"""
@@ -202,7 +193,7 @@ def network_xml(ip: str, dhcp_range: Optional[Tuple[str, str]] = None) -> str:
   <name>default</name>
   <forward mode='nat'/>
   <bridge name='virbr0' stp='off' delay='0'/>
-  <ip address='{ip}' netmask='255.255.0.0'>
+  {bridge_ip_address_str(ip, mask)}
     {dhcp_part}
   </ip>
 </network>
@@ -302,9 +293,6 @@ class ClusterDeployer:
                 logger.info(lh.run(cmd))
                 removed_macs.append(mac)
 
-        # bring back initial dynamic dhcp range.
-        limit_dhcp_range(lh, "192.168.122.129", "192.168.122.2")
-
         fn = "/var/lib/libvirt/dnsmasq/virbr0.status"
         with open(fn) as f:
             contents = f.read()
@@ -395,13 +383,34 @@ class ClusterDeployer:
         cmd = "virsh net-dumpxml default"
         ret = h.run(cmd)
 
+        needs_reconfigure = False
+        if hostname == "localhost":
+            bridge_ip = self._cc.bridge_ip
+            dynamic_ip_range = self._cc.dynamic_ip_range
+            # Make sure the expected dhcp range is set on the deployer node.
+            expected_dhcp_range = bridge_dhcp_range_str(self._cc.dynamic_ip_range)
+            if expected_dhcp_range not in ret.out:
+                needs_reconfigure = True
+        else:
+            bridge_ip = self._cc.fake_bridge_ip
+            dynamic_ip_range = None
+            # All other nodes don't need dhcp.
+            expected_dhcp_range = None
+            if "dhcp" in ret.out:
+                needs_reconfigure = True
+
+        # Make sure STP is off on the virtual bridge.
         if "stp='off'" not in ret.out:
+            needs_reconfigure = True
+
+        # Make sure the correct bridge IP is configured.
+        if bridge_ip_address_str(bridge_ip, self._cc.bridge_mask) not in ret.out:
+            needs_reconfigure = True
+
+        if needs_reconfigure:
             logger.info("Destoying and recreating bridge")
             logger.info(f"creating default-net.xml on {hostname}")
-            if hostname == "localhost":
-                contents = network_xml('192.168.122.1', ('192.168.122.129', '192.168.122.254'))
-            else:
-                contents = network_xml('192.168.123.250')
+            contents = network_xml(bridge_ip, self._cc.bridge_mask, dynamic_ip_range)
 
             bridge_xml = os.path.join("/tmp", 'vir_bridge.xml')
             h.write(bridge_xml, contents)
@@ -410,8 +419,6 @@ class ClusterDeployer:
             # We need to investigate how to remove the sleep to speed up
             time.sleep(5)
             ensure_bridge_is_started(h, api_network, bridge_xml)
-
-            limit_dhcp_range(h, "192.168.122.2", "192.168.122.129")
 
             cmd = "systemctl restart libvirtd"
             h.run_or_die(cmd)
@@ -529,6 +536,9 @@ class ClusterDeployer:
                 sys.exit(-1)
             else:
                 logger.info(f"Using {host_config.network_api_port} as network API port")
+        if not self._cc.validate_node_ips():
+            logger.error("Invalid master/worker IPs.")
+            sys.exit(-1)
 
     def client(self) -> K8sClient:
         if self._client is None:
