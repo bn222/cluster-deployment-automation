@@ -209,45 +209,6 @@ def network_xml(ip: str, dhcp_range: Optional[Tuple[str, str]] = None) -> str:
   """
 
 
-def configure_bridge(h: host.Host, api_network: str) -> None:
-    hostname = h.hostname()
-    cmd = "systemctl enable libvirtd"
-    h.run_or_die(cmd)
-    cmd = "systemctl start libvirtd"
-    h.run_or_die(cmd)
-
-    # stp must be disabled or it might conflict with default configuration of some physical switches
-    # 'bridge' section of network 'default' can't be updated => destroy and recreate
-    # check that default exists and contains stp=off
-    cmd = "virsh net-dumpxml default"
-    ret = h.run(cmd)
-
-    if "stp='off'" not in ret.out:
-        logger.info("Destoying and recreating bridge")
-        logger.info(f"creating default-net.xml on {hostname}")
-        if hostname == "localhost":
-            contents = network_xml('192.168.122.1', ('192.168.122.129', '192.168.122.254'))
-        else:
-            contents = network_xml('192.168.123.250')
-
-        bridge_xml = os.path.join("/tmp", 'vir_bridge.xml')
-        h.write(bridge_xml, contents)
-        # Not sure why/whether this is needed. But we saw failures w/o it.
-        # Without this, net-undefine within ensure_bridge_is_started fails as libvirtd fails to restart
-        # We need to investigate how to remove the sleep to speed up
-        time.sleep(5)
-        ensure_bridge_is_started(h, api_network, bridge_xml)
-
-        limit_dhcp_range(h, "192.168.122.2", "192.168.122.129")
-
-        cmd = "systemctl restart libvirtd"
-        h.run_or_die(cmd)
-
-        # Not sure why/whether this is needed. But we saw failures w/o it.
-        # We need to investigate how to remove the sleep to speed up
-        time.sleep(5)
-
-
 class ClusterDeployer:
     def __init__(self, cc: ClustersConfig, ai: AssistedClientAutomation, steps: List[str], secrets_path: str):
         self._client: Optional[K8sClient] = None
@@ -421,6 +382,44 @@ class ClusterDeployer:
     def need_api_network(self) -> bool:
         return len(self._cc.local_vms()) != len(self._cc.all_nodes())
 
+    def configure_bridge(self, h: host.Host, api_network: str) -> None:
+        hostname = h.hostname()
+        cmd = "systemctl enable libvirtd"
+        h.run_or_die(cmd)
+        cmd = "systemctl start libvirtd"
+        h.run_or_die(cmd)
+
+        # stp must be disabled or it might conflict with default configuration of some physical switches
+        # 'bridge' section of network 'default' can't be updated => destroy and recreate
+        # check that default exists and contains stp=off
+        cmd = "virsh net-dumpxml default"
+        ret = h.run(cmd)
+
+        if "stp='off'" not in ret.out:
+            logger.info("Destoying and recreating bridge")
+            logger.info(f"creating default-net.xml on {hostname}")
+            if hostname == "localhost":
+                contents = network_xml('192.168.122.1', ('192.168.122.129', '192.168.122.254'))
+            else:
+                contents = network_xml('192.168.123.250')
+
+            bridge_xml = os.path.join("/tmp", 'vir_bridge.xml')
+            h.write(bridge_xml, contents)
+            # Not sure why/whether this is needed. But we saw failures w/o it.
+            # Without this, net-undefine within ensure_bridge_is_started fails as libvirtd fails to restart
+            # We need to investigate how to remove the sleep to speed up
+            time.sleep(5)
+            ensure_bridge_is_started(h, api_network, bridge_xml)
+
+            limit_dhcp_range(h, "192.168.122.2", "192.168.122.129")
+
+            cmd = "systemctl restart libvirtd"
+            h.run_or_die(cmd)
+
+            # Not sure why/whether this is needed. But we saw failures w/o it.
+            # We need to investigate how to remove the sleep to speed up
+            time.sleep(5)
+
     def ensure_linked_to_bridge(self, lh: host.Host) -> None:
         if not self.need_api_network():
             logger.info("Only running local VMs (virbr0 not connected to externally)")
@@ -442,7 +441,7 @@ class ClusterDeployer:
         # done in configure_bridge().
         cmd = "sed -e 's/#\\(user\\|group\\) = \".*\"$/\\1 = \"root\"/' -i /etc/libvirt/qemu.conf"
         lh.run(cmd)
-        configure_bridge(lh, api_network)
+        self.configure_bridge(lh, api_network)
 
         if interface.master is None:
             logger.info(f"No master set for interface {api_network}, setting it to {bridge}")
