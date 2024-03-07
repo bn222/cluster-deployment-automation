@@ -50,8 +50,8 @@ class ClusterDeployer:
 
         lh = host.LocalHost()
         lh_config = list(filter(lambda hc: hc.name == lh.hostname(), self._cc.hosts))[0]
-        self._local_host = ClusterHost(lh, lh_config, cc)
-        self._remote_hosts = {bm.name: ClusterHost(host.RemoteHost(bm.name), bm, cc) for bm in self._cc.hosts if bm.name != lh.hostname()}
+        self._local_host = ClusterHost(lh, lh_config, cc, cc.local_bridge_config)
+        self._remote_hosts = {bm.name: ClusterHost(host.RemoteHost(bm.name), bm, cc, cc.remote_bridge_config) for bm in self._cc.hosts if bm.name != lh.hostname()}
         self._all_hosts = [self._local_host] + list(self._remote_hosts.values())
         self._futures = {k8s_node.config.name: k8s_node.future for h in self._all_hosts for k8s_node in h._k8s_nodes()}
         self._all_nodes = {k8s_node.config.name: k8s_node for h in self._all_hosts for k8s_node in h._k8s_nodes()}
@@ -126,9 +126,6 @@ class ClusterDeployer:
                 cmd = f"{pre} \"<host mac='{mac}' name='{name}' ip='{ip}'/>\" --live --config"
                 logger.info(self._local_host.hostconn.run(cmd))
                 removed_macs.append(mac)
-
-        # bring back initial dynamic dhcp range.
-        self._local_host.bridge.limit_dhcp_range("192.168.122.129", "192.168.122.2")
 
         fn = "/var/lib/libvirt/dnsmasq/virbr0.status"
         with open(fn) as f:
@@ -242,6 +239,8 @@ class ClusterDeployer:
                 logger.error_and_exit(f"Can't find a valid network API port, config is {self._local_host.config.network_api_port}")
             else:
                 logger.info(f"Using {self._local_host.config.network_api_port} as network API port")
+        if not self._cc.validate_node_ips():
+            logger.error_and_exit("Invalid master/worker IPs.")
 
     def _get_status(self, name: str) -> Optional[str]:
         h = self._ai.get_ai_host(name)

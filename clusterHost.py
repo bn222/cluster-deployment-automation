@@ -7,7 +7,7 @@ from typing import List, Optional, Tuple
 import common
 import coreosBuilder
 import host
-from clustersConfig import ClustersConfig, HostConfig, NodeConfig
+from clustersConfig import BridgeConfig, ClustersConfig, HostConfig, NodeConfig
 from clusterNode import ClusterNode, X86ClusterNode, VmClusterNode, BFClusterNode
 from virtualBridge import VirBridge
 
@@ -27,8 +27,8 @@ class ClusterHost:
     k8s_worker_nodes: List[ClusterNode]
     hosts_vms: bool
 
-    def __init__(self, h: host.Host, c: HostConfig, cc: ClustersConfig):
-        self.bridge = VirBridge(h)
+    def __init__(self, h: host.Host, c: HostConfig, cc: ClustersConfig, bc: BridgeConfig):
+        self.bridge = VirBridge(h, bc)
         self.hostconn = h
         self.config = c
 
@@ -78,7 +78,7 @@ class ClusterHost:
         if not self.hosts_vms:
             return
 
-        self.bridge.configure(self.config.network_api_port)
+        self.bridge.configure()
 
     def ensure_linked_to_network(self) -> None:
         if not self.hosts_vms:
