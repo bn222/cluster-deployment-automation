@@ -9,6 +9,7 @@ from typing import Dict
 import sys
 from logger import logger
 from clustersConfig import ExtraConfigArgs
+from host import BMC
 
 """
 The "ExtraConfigBFB" is used to put the BF2 in a known good state. This is achieved by
@@ -52,7 +53,7 @@ def ExtraConfigBFB(cc: ClustersConfig, _: ExtraConfigArgs, futures: Dict[str, Fu
     # Assuming that all workers have BF that need to reset to bfb image in
     # dpu mode
     for e in cc.workers:
-        bmc = host.bmc_from_host_name_or_ip(e.node, e.bmc, e.bmc_user, e.bmc_password)
+        bmc = BMC.from_bmc(e.bmc, e.bmc_user, e.bmc_password)
         h = host.HostWithBF2(e.node, bmc)
         futures[e.name].result()
         f = executor.submit(helper, h)

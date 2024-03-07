@@ -29,6 +29,7 @@ from python_hosts import Hosts, HostsEntry
 from logger import logger
 import microshift
 from extraConfigRunner import ExtraConfigRunner
+from host import BMC
 
 
 def setup_dhcp_entry(h: host.Host, cfg: NodeConfig) -> None:
@@ -900,7 +901,7 @@ class ClusterDeployer:
         lh = host.LocalHost()
         nfs = NFS(lh, self._cc.external_port)
 
-        bmc = host.bmc_from_host_name_or_ip(worker.node, worker.bmc, worker.bmc_user, worker.bmc_password)
+        bmc = BMC.from_bmc(worker.bmc, worker.bmc_user, worker.bmc_password)
         h = host.HostWithBF2(host_name, bmc)
 
         iso = nfs.host_file(os.path.join(os.getcwd(), iso))
@@ -995,7 +996,7 @@ class ClusterDeployer:
 
         host_name = worker.node
         logger.info(f"Preparing BF on host {host_name}")
-        bmc = host.bmc_from_host_name_or_ip(worker.node, worker.bmc, worker.bmc_user, worker.bmc_password)
+        bmc = BMC.from_bmc(worker.bmc, worker.bmc_user, worker.bmc_password)
         h = host.HostWithBF2(host_name, bmc)
         skip_boot = False
         if h.ping():

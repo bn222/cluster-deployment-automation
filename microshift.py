@@ -11,6 +11,7 @@ from typing import Optional
 from jinja2 import Template
 from clustersConfig import NodeConfig
 import common
+from host import BMC
 
 
 # cleans microshift artifacts from previous installation
@@ -218,7 +219,7 @@ rhsm = true'''.strip()
 
 def deploy(cluster_name: str, node: NodeConfig, external_port: str, version: str) -> None:
     lh = host.LocalHost()
-    bmc = host.bmc_from_host_name_or_ip(node.node, node.bmc, node.bmc_user, node.bmc_password)
+    bmc = BMC.from_bmc(node.bmc, node.bmc_user, node.bmc_password)
     h = Host(node.node, bmc)
     name_of_final_iso = os.path.join(os.getcwd(), 'final.iso')
     login_uname = "redhat"
