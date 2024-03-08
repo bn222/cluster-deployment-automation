@@ -107,16 +107,11 @@ class BMC:
         return BMC(url, user, password)
 
     @staticmethod
-    def from_hostname(hostname: str, user: str = "root", password: str = "calvin") -> 'BMC':
-        ip = socket.gethostbyname(hostname)
-        octets = ip.split(".")
-        octets[-1] = str(int(octets[-1]) + 1)
-        res_bmc_ip = ".".join(octets)
-        return BMC.from_ip(res_bmc_ip, user, password)
-
-    @staticmethod
-    def from_ip(ip: str, user: str = "root", password: str = "calvin") -> 'BMC':
-        url = f"https://{ip}/redfish/v1/Systems/System.Embedded.1"
+    def from_bmc(ip_or_hostname: str, user: str = "root", password: str = "calvin") -> 'BMC':
+        if ip_or_hostname == "":
+            logger.error(f"BMC not defined")
+            sys.exit(-1)
+        url = f"https://{ip_or_hostname}/redfish/v1/Systems/System.Embedded.1"
         return BMC(url, user, password)
 
     """
@@ -200,13 +195,6 @@ class BMC:
         time.sleep(10)
         self.start()
         time.sleep(5)
-
-
-def bmc_from_host_name_or_ip(hostname: str, ip: Optional[str], user: str = "root", password: str = "calvin") -> BMC:
-    if ip is None:
-        return BMC.from_hostname(hostname, user, password)
-    else:
-        return BMC.from_ip(ip, user, password)
 
 
 class Host:

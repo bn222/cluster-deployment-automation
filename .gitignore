@@ -3,3 +3,9 @@ pull_secret.json
 *.tar
 *.iso
 ocp-venv
+.mypy_cache
+__pycache__
+ocp-venv
+credentials.json
+bin
+build

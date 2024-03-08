@@ -14,7 +14,7 @@ import secrets
 import common
 from clusterInfo import ClusterInfo
 from clusterInfo import load_all_cluster_info
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 def random_mac() -> str:
@@ -41,44 +41,44 @@ class ExtraConfigArgs:
 
 @dataclass
 class NodeConfig:
+    cluster_name: str
     name: str
-    kind: str
     node: str
-    image_path: str
-    mac: str
-    disk_size: str
-    ram: str
-    cpu: str
-    preallocated: str
-    os_variant: str
-    ip: Optional[str] = None
-    bmc_ip: Optional[str] = None
+    image_path: str = field(init=False)
+    mac: str = field(default_factory=random_mac)
+    bmc: str = ""
     bmc_user: str = "root"
     bmc_password: str = "calvin"
+    ip: Optional[str] = None
+    kind: Optional[str] = None  # optional to allow 'type'
+    type: Optional[str] = None
+    preallocated: str = "true"
+    os_variant: str = "rhel8.6"
+    disk_size: str = "48"
+    ram: str = "32768"
+    cpu: str = "8"
 
-    def __init__(self, cluster_name: str, **kwargs: str):
-        if 'image_path' not in kwargs:
-            base_path = f'/home/{cluster_name}_guests_images'
-            qemu_img_name = f'{kwargs["name"]}.qcow2'
-            kwargs['image_path'] = os.path.join(base_path, qemu_img_name)
-        if "type" in kwargs:
-            logger.warn("Deprecated 'type' in node config. Use 'kind' instead")
-            kwargs["kind"] = kwargs["type"]
-            del kwargs["type"]
-        if "mac" not in kwargs:
-            kwargs["mac"] = random_mac()
-        if "disk_size" not in kwargs:
-            kwargs["disk_size"] = "48"
-        if "preallocated" not in kwargs:
-            kwargs["preallocated"] = "true"
-        if "os_variant" not in kwargs:
-            kwargs["os_variant"] = "rhel8.6"
-        if "ram" not in kwargs:
-            kwargs["ram"] = "32768"
-        if "cpu" not in kwargs:
-            kwargs["cpu"] = "8"
-        for k, v in kwargs.items():
-            setattr(self, k, v)
+    def __post_init__(self) -> None:
+        if self.type:
+            self.kind = self.type
+
+        delattr(self, 'type')
+
+        if self.kind is None:
+            raise ValueError("NodeConfig: kind not provided")
+
+        # bmc ip is mandatory for physical, not for vm
+        if self.kind == "physical" or self.kind == "bf":
+            if self.bmc == "":
+                raise ValueError("NodeConfig: bmc not provided")
+        else:
+            delattr(self, "bmc")
+            delattr(self, "bmc_user")
+            delattr(self, "bmc_password")
+
+        base_path = f'/home/{self.cluster_name}_guests_images'
+        qemu_img_name = f'{self.name}.qcow2'
+        self.image_path = os.path.join(base_path, qemu_img_name)
 
     def is_preallocated(self) -> bool:
         return self.preallocated == "true"
@@ -256,7 +256,7 @@ class ClustersConfig:
             assert self._cluster_info is not None
             return self._cluster_info.workers[a]
 
-        def bmc_ip(a: int) -> str:
+        def bmc(a: int) -> str:
             self._ensure_clusters_loaded()
             assert self._cluster_info is not None
             return self._cluster_info.bmcs[a]
@@ -272,7 +272,7 @@ class ClustersConfig:
         template.globals['worker_number'] = worker_number
         template.globals['worker_name'] = worker_name
         template.globals['api_network'] = api_network
-        template.globals['bmc_ip'] = bmc_ip
+        template.globals['bmc'] = bmc
 
         kwargs = {}
         kwargs["cluster_name"] = cluster_name

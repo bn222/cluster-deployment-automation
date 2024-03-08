@@ -9,6 +9,7 @@ from typing import Dict
 import sys
 from logger import logger
 from clustersConfig import ExtraConfigArgs
+from host import BMC
 
 """
 The "ExtraConfigCX" is used to put the CX in a known good state. This is achieved by
@@ -42,7 +43,7 @@ def ExtraConfigCX(cc: ClustersConfig, _: ExtraConfigArgs, futures: Dict[str, Fut
     executor = ThreadPoolExecutor(max_workers=len(cc.workers))
     # Assuming all workers have CX that need to update their firmware
     for e in cc.workers:
-        bmc = host.bmc_from_host_name_or_ip(e.node, e.bmc_ip, e.bmc_user, e.bmc_password)
+        bmc = BMC.from_bmc(e.bmc, e.bmc_user, e.bmc_password)
         h = host.HostWithCX(e.node, bmc)
         futures[e.name].result()
         f = executor.submit(helper, h)

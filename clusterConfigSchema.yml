@@ -17,7 +17,7 @@ clusters:
       type: "<vm / physical / bf>"
       ip: ""
       node: ""
-      bmc_ip: "optional if bmc ip address is host ip + 1"
+      bmc: "required if physical or bf. Can be an ip or hostname"
       bmc_user: "required if physical or bf"
       bmc_password: "required if physical or bf"
       disk_size: "in GB - default = 48 GB"
