@@ -150,7 +150,7 @@ def ExtraConfigSriovOvSHWOL(cc: ClustersConfig, _: ExtraConfigArgs, futures: Dic
 
     # We error out if we can't find any PFs.
     if not workloadVFsAll:
-        logger.info(f"PF Name is not found on any nodes.")
+        logger.info("PF Name is not found on any nodes.")
         sys.exit(-1)
 
     workloadPolicyName = "sriov-workload-node-policy"
@@ -205,7 +205,7 @@ def ExtraConfigSriovOvSHWOL_NewAPI(cc: ClustersConfig, _: ExtraConfigArgs, futur
 
     # We error out if we can't find any PFs.
     if not workloadVFsAll:
-        logger.info(f"PF Name is not found on any nodes.")
+        logger.info("PF Name is not found on any nodes.")
         sys.exit(-1)
 
     workloadPolicyName = "sriov-workload-node-policy"

@@ -190,7 +190,7 @@ def ExtraConfigDpuTenant(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: Dict
     iclient = K8sClient("/root/kubeconfig.infracluster")
 
     # https://issues.redhat.com/browse/NHE-334
-    iclient.oc(f"project two-cluster-design")
+    iclient.oc("project two-cluster-design")
     logger.info(iclient.oc(f"create secret generic tenant-cluster-1-kubeconf --from-file=config={tclient._kc}"))
 
     tc_namespace = "two-cluster-design"
