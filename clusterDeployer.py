@@ -24,7 +24,6 @@ from nfs import NFS
 import coreosBuilder
 from typing import Tuple
 import common
-import os
 from python_hosts import Hosts, HostsEntry
 from logger import logger
 import microshift
