@@ -2,7 +2,6 @@ from clustersConfig import ClustersConfig
 import host
 import coreosBuilder
 from concurrent.futures import ThreadPoolExecutor
-from k8sClient import K8sClient
 from nfs import NFS
 from concurrent.futures import Future
 from typing import Dict

@@ -4,7 +4,6 @@ import sys
 from host import Host
 from nfs import NFS
 from logger import logger
-import paramiko
 import os
 import shutil
 from typing import Optional

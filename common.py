@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 import ipaddress
-from threading import local
 from typing import List, Optional, Set, Tuple, TypeVar, Iterator
 import host
 import json

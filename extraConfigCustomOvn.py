@@ -1,6 +1,5 @@
 from clustersConfig import ClustersConfig
 from k8sClient import K8sClient
-import sys
 from concurrent.futures import Future
 from typing import Dict
 from logger import logger

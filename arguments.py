@@ -3,7 +3,6 @@ import os
 import argparse
 import sys
 import logging
-from argcomplete.completers import EnvironCompleter, ChoicesCompleter
 import argcomplete
 import difflib
 from logger import logger, configure_logger
