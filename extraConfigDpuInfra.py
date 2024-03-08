@@ -186,7 +186,7 @@ def ExtraConfigDpuInfra(cc: ClustersConfig, _: ExtraConfigArgs, futures: Dict[st
     client.oc("create -f manifests/infra/dpuclusterconfig.yaml")
 
     logger.info("Patching mcp setting maxUnavailable to 2")
-    client.oc("patch mcp dpu --type=json -p=\[\{\"op\":\"replace\",\"path\":\"/spec/maxUnavailable\",\"value\":2\}\]")
+    client.oc("patch mcp dpu --type=json -p=\\[\\{\"op\":\"replace\",\"path\":\"/spec/maxUnavailable\",\"value\":2\\}\\]")
 
     logger.info("Labeling nodes")
     for b in bf_names:
@@ -263,7 +263,7 @@ def ExtraConfigDpuInfra_NewAPI(cc: ClustersConfig, _: ExtraConfigArgs, futures: 
     client.oc("create -f manifests/infra/dpuclusterconfig.yaml")
 
     logger.info("Patching mcp setting maxUnavailable to 2")
-    client.oc("patch mcp dpu --type=json -p=\[\{\"op\":\"replace\",\"path\":\"/spec/maxUnavailable\",\"value\":2\}\]")
+    client.oc("patch mcp dpu --type=json -p=\\[\\{\"op\":\"replace\",\"path\":\"/spec/maxUnavailable\",\"value\":2\\}\\]")
 
     logger.info("Labeling nodes")
     for b in bf_names:
