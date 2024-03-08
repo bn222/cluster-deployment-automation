@@ -31,25 +31,25 @@ class RangeList:
     def __init__(self, initial_values: Optional[List[int]] = None):
         self.initial_values = initial_values
 
-    def _append(self, l: List[int], expand: bool) -> None:
-        self._range.append((expand, l))
+    def _append(self, lst: List[int], expand: bool) -> None:
+        self._range.append((expand, lst))
 
-    def include(self, l: List[int]) -> None:
-        self._append(l, True)
+    def include(self, lst: List[int]) -> None:
+        self._append(lst, True)
 
-    def exclude(self, l: List[int]) -> None:
-        self._append(l, False)
+    def exclude(self, lst: List[int]) -> None:
+        self._append(lst, False)
 
     def filter_list(self, initial: List[T]) -> List[T]:
         applied = set(range(len(initial)))
         if self.initial_values is not None:
             applied &= set(self.initial_values)
 
-        for expand, l in self._range:
+        for expand, lst in self._range:
             if expand:
-                applied = applied | set(l)
+                applied = applied | set(lst)
             else:
-                applied = applied - set(l)
+                applied = applied - set(lst)
         return [initial[x] for x in sorted(applied) if x < len(initial)]
 
 
