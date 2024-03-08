@@ -1,9 +1,28 @@
 import logging
+import sys
+import typing
 from typing import Optional
 from typing import TextIO
 
 
-def configure_logger(lvl: int) -> logging.Logger:
+class ExtendedLogger(logging.Logger):
+    def __init__(self, logger: logging.Logger):
+        self._wrapped_logger = logger
+
+    def __getattribute__(self: 'ExtendedLogger', name: str) -> typing.Any:
+        # ExtendedLogger is-a logging.Logger, but it delegates most calls to
+        # the wrapped-logger (which is also a logging.Logger).
+        if name == 'error_and_exit':
+            return object.__getattribute__(self, name)
+        logger = object.__getattribute__(self, '_wrapped_logger')
+        return logger.__getattribute__(name)
+
+    def error_and_exit(self: 'ExtendedLogger', msg: str, *, exit_code: int = -1) -> typing.NoReturn:
+        self.error(msg)
+        sys.exit(exit_code)
+
+
+def configure_logger(lvl: int) -> ExtendedLogger:
     logger = logging.getLogger("CDA")
     logger.setLevel(lvl)
 
@@ -20,7 +39,8 @@ def configure_logger(lvl: int) -> logging.Logger:
         logger.removeHandler(prev_handler)
     prev_handler = handler
     logger.addHandler(handler)
-    return logger
+
+    return ExtendedLogger(logger)
 
 
 prev_handler: Optional['logging.StreamHandler[TextIO]'] = None
