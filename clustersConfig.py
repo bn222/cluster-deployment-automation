@@ -245,7 +245,7 @@ class ClustersConfig:
             self._ensure_clusters_loaded()
             assert self._cluster_info is not None
             name = self._cluster_info.workers[a]
-            lab_match = re.search("lab(\d+)", name)
+            lab_match = re.search(r"lab(\d+)", name)
             if lab_match:
                 return lab_match.group(1)
             else:

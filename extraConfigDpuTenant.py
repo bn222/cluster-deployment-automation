@@ -31,7 +31,7 @@ def ExtraConfigDpuTenantMC(cc: ClustersConfig, _: ExtraConfigArgs, futures: Dict
     tclient.wait_for_mcp("dpu-host", "dputenantmachineconfig.yaml")
 
     logger.info("Patching mcp setting maxUnavailable to 2")
-    tclient.oc("patch mcp dpu-host --type=json -p=\[\{\"op\":\"replace\",\"path\":\"/spec/maxUnavailable\",\"value\":2\}\]")
+    tclient.oc("patch mcp dpu-host --type=json -p=\\[\\{\"op\":\"replace\",\"path\":\"/spec/maxUnavailable\",\"value\":2\\}\\]")
 
     logger.info("Labeling nodes")
     for e in cc.workers:
@@ -152,7 +152,7 @@ def ExtraConfigDpuTenant(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: Dict
 
     for bfmap in cfg.mapping:
         a: Dict[str, str] = {}
-        mp = re.sub('np\d$', '', bf_port)
+        mp = re.sub(r'np\d$', '', bf_port)
         a["OVNKUBE_NODE_MGMT_PORT_NETDEV"] = f"{mp}v0"
         contents += f"  {bfmap['worker']}: |\n"
         for k, v in a.items():
