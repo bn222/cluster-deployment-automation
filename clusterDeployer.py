@@ -433,8 +433,7 @@ class ClusterDeployer:
 
         interface = common.find_port(lh, api_network)
         if not interface:
-            logger.info(f"Missing API network interface {api_network}")
-            sys.exit(-1)
+            logger.error_and_exit(f"Missing API network interface {api_network}")
 
         bridge = "virbr0"
 
@@ -448,8 +447,7 @@ class ClusterDeployer:
             logger.info(f"No master set for interface {api_network}, setting it to {bridge}")
             lh.run(f"ip link set {api_network} master {bridge}")
         elif interface.master != bridge:
-            logger.info(f"Incorrect master set for interface {api_network}")
-            sys.exit(-1)
+            logger.error_and_exit(f"Incorrect master set for interface {api_network}")
 
         logger.info(f"Setting interface {api_network} as unmanaged in NetworkManager")
         lh.run(f"nmcli device set {api_network} managed no")
@@ -526,8 +524,7 @@ class ClusterDeployer:
         if self._cc.kind != "microshift":
             host_config = self.local_host_config(lh.hostname())
             if self.need_api_network() and not self._validate_api_port(lh):
-                logger.info(f"Can't find a valid network API port, config is {host_config.network_api_port}")
-                sys.exit(-1)
+                logger.error_and_exit(f"Can't find a valid network API port, config is {host_config.network_api_port}")
             else:
                 logger.info(f"Using {host_config.network_api_port} as network API port")
 
@@ -640,8 +637,7 @@ class ClusterDeployer:
             if any(v == "error" for v in status.values()):
                 for e in names:
                     self._print_logs(e)
-                logger.info("Error encountered in one of the nodes, quitting...")
-                sys.exit(-1)
+                logger.error_and_exit("Error encountered in one of the nodes, quitting...")
             cb()
             time.sleep(5)
 
@@ -857,7 +853,7 @@ class ClusterDeployer:
         any_worker_bad = False
         for w, h in zip(self._cc.workers, hosts):
             if all(not addr_ok(a) for a in addresses(h)):
-                logger.info(f"Worker {w.name} doesn't have an IP in {subnet}.")
+                logger.error(f"Worker {w.name} doesn't have an IP in {subnet}.")
                 any_worker_bad = True
 
         if any_worker_bad:
@@ -946,8 +942,7 @@ class ClusterDeployer:
         for h, f in zip(self._cc.workers, futures):
             h.ip = f.result()
             if h.ip is None:
-                logger.info(f"Couldn't find ip of worker {h.name}")
-                sys.exit(-1)
+                logger.error_and_exit(f"Couldn't find ip of worker {h.name}")
 
         self._rename_workers(infra_env_name)
         self._wait_known_state(e.name for e in self._cc.workers)
@@ -1022,8 +1017,7 @@ class ClusterDeployer:
         output = h.bf_pxeboot(nfs_iso, nfs_key)
         logger.debug(output)
         if output.returncode:
-            logger.info(f"Failed to run pxeboot on bf {host_name}")
-            sys.exit(-1)
+            logger.error_and_exit(f"Failed to run pxeboot on bf {host_name}")
         else:
             logger.info(f"succesfully ran pxeboot on bf {host_name}")
 
