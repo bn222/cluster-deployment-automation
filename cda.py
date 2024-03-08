@@ -21,9 +21,9 @@ def main_deploy(args: argparse.Namespace) -> None:
         # workaround, this will still install 4.14, but AI will think
         # it is 4.13 (see also workaround when setting up versions)
         if cc.version[: len("4.14")] == "4.14":
-            logger.warn("Applying workaround for assisted installer issue")
-            logger.warn("Will pretend to install 4.13, but using 4.14 pullsec")
-            logger.warn("Ignore all output from Assisted that mentions 4.13")
+            logger.warning("Applying workaround for assisted installer issue")
+            logger.warning("Will pretend to install 4.13, but using 4.14 pullsec")
+            logger.warning("Ignore all output from Assisted that mentions 4.13")
             cc.version = "4.13.0-nightly"
     else:
         logger.info(f"Will use Assisted Installer running at {args.url}")
