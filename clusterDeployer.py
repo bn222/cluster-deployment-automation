@@ -33,8 +33,7 @@ from extraConfigRunner import ExtraConfigRunner
 
 def setup_dhcp_entry(h: host.Host, cfg: NodeConfig) -> None:
     if cfg.ip is None:
-        logger.error(f"Missing IP for node {cfg.name}")
-        sys.exit(-1)
+        logger.error_and_exit(f"Missing IP for node {cfg.name}")
     ip = cfg.ip
     mac = cfg.mac
     name = cfg.name
@@ -73,8 +72,7 @@ def match_to_proper_version_format(version_cluster_config: str) -> str:
     match = re.match(regex_pattern, version_cluster_config)
     logger.info(f"getting version to match with format XX.X using regex {regex_pattern}")
     if not match:
-        logger.error(f"Invalid match {match}")
-        sys.exit(-1)
+        logger.error_and_exit(f"Invalid match {match}")
     return match.group(0)
 
 
@@ -152,8 +150,7 @@ def ensure_bridge_is_started(h: host.Host, api_network: str, bridge_xml: str) ->
     cmd = "virsh net-undefine default"
     ret = h.run(cmd)
     if ret.returncode != 0 and "Network not found" not in ret.err:
-        logger.error(ret)
-        sys.exit(-1)
+        logger.error_and_exit(str(ret))
 
     # Fix cases where virsh net-start fails with error "... interface virbr0: File exists"
     cmd = "ip link delete virbr0"
@@ -493,8 +490,7 @@ class ClusterDeployer:
             if len(self._cc.masters) == 1:
                 microshift.deploy(self._cc.fullConfig["name"], self._cc.masters[0], self._cc.external_port, version)
             else:
-                logger.error("Masters must be of length one for deploying microshift")
-                sys.exit(-1)
+                logger.error_and_exit("Masters must be of length one for deploying microshift")
 
         if "post" in self.steps:
             self._postconfig()
@@ -505,20 +501,17 @@ class ClusterDeployer:
         if self._cc.is_sno():
             logger.info("Setting up a Single Node OpenShift (SNO) environment")
             if self._cc.masters[0].ip is None:
-                logger.error("Missing ip on master")
-                sys.exit(-1)
+                logger.error_and_exit("Missing ip on master")
 
         lh = host.LocalHost()
         min_cores = 28
         cc = int(lh.run("nproc").out)
         if cc < min_cores:
-            logger.error(f"Detected {cc} cores on localhost, but need at least {min_cores} cores")
-            sys.exit(-1)
+            logger.error_and_exit(f"Detected {cc} cores on localhost, but need at least {min_cores} cores")
         if self.need_external_network():
             self._cc.prepare_external_port()
             if not self._cc.validate_external_port():
-                logger.error(f"Invalid external port, config is {self._cc.external_port}")
-                sys.exit(-1)
+                logger.error_and_exit(f"Invalid external port, config is {self._cc.external_port}")
         else:
             logger.info("Don't need external network so will not set it up")
         if self._cc.kind != "microshift":
@@ -644,8 +637,7 @@ class ClusterDeployer:
     def _verify_package_is_installed(self, worker: NodeConfig, package: str) -> bool:
         ai_ip = self._ai.get_ai_ip(worker.name)
         if ai_ip is None:
-            logger.error(f"Failed to get ip for worker with name {worker.name}")
-            sys.exit(-1)
+            logger.error_and_exit(f"Failed to get ip for worker with name {worker.name}")
         rh = host.RemoteHost(ai_ip)
         rh.ssh_connect("core")
         ret = rh.run(f"rpm -qa | grep {package}")
@@ -830,8 +822,7 @@ class ClusterDeployer:
         hosts = []
         for w in self._cc.workers:
             if w.ip is None:
-                logger.error(f"Missing ip for worker {w.name}")
-                sys.exit(-1)
+                logger.error_and_exit(f"Missing ip for worker {w.name}")
             rh = host.RemoteHost(w.ip)
             rh.ssh_connect("core")
             hosts.append(rh)
@@ -1009,8 +1000,7 @@ class ClusterDeployer:
             h.ssh_connect("core")
 
         if not h.running_fcos():
-            logger.error("Expected FCOS after booting host {host_name} but booted something else")
-            sys.exit(-1)
+            logger.error_and_exit("Expected FCOS after booting host {host_name} but booted something else")
 
         nfs_iso = nfs.host_file(f"/root/iso/{iso}")
         nfs_key = nfs.host_file("/root/iso/ssh_priv_key")
