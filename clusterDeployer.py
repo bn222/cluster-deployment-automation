@@ -1014,11 +1014,12 @@ class ClusterDeployer:
         # ip is printed as the last thing when bf is pxeboot'ed
         bf_ip = output.out.strip().split("\n")[-1].strip()
         h.connect_to_bf(bf_ip)
-        tries = 3
+        max_tries = 3
         bf_interfaces = ["enp3s0f0", "enp3s0f0np0"]
-        logger.info(f'Will try {tries} times to get an IP on {" or ".join(bf_interfaces)}')
+        logger.info(f'Will try {max_tries} times to get an IP on {" or ".join(bf_interfaces)}')
         ip = None
-        for _ in range(tries):
+        tries = 0
+        while True:
             ipa = h.run_on_bf("ip -json a").out
             detected = common.ipa_to_entries(ipa)
             found = [e for e in detected if e.ifname in bf_interfaces]
@@ -1031,14 +1032,14 @@ class ClusterDeployer:
             for e in found[0].addr_info:
                 if e.family == "inet":
                     ip = e.local
-            if ip is None:
-                logger.info(f"IP missing on {found[0]}, output was {ipa}")
-            else:
+            if ip is not None:
                 break
+            logger.info(f"IP missing on {found[0]}, output was {ipa}")
+            tries += 1
+            if tries >= max_tries:
+                logger.error_and_exit(f"IP missing on {found[0]}")
             time.sleep(10)
 
-        if ip is None:
-            sys.exit(-1)
         logger.info(f"Detected ip {ip}")
         return ip
 
