@@ -514,7 +514,7 @@ class ClusterDeployer:
         min_cores = 28
         cc = int(lh.run("nproc").out)
         if cc < min_cores:
-            logger.info(f"Detected {cc} cores on localhost, but need at least {min_cores} cores")
+            logger.error(f"Detected {cc} cores on localhost, but need at least {min_cores} cores")
             sys.exit(-1)
         if self.need_external_network():
             self._cc.prepare_external_port()
