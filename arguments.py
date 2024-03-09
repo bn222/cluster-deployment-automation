@@ -3,7 +3,6 @@ import os
 import argparse
 import sys
 import logging
-from argcomplete.completers import EnvironCompleter, ChoicesCompleter
 import argcomplete
 import difflib
 from logger import logger, configure_logger
@@ -62,7 +61,7 @@ def parse_args() -> argparse.Namespace:
     deploy_parser.add_argument('-f', '--teardown-full', dest='teardown_full', action='store_true', help='Remove anything that would be created by setting up the cluster(s), included ai')
 
     deploy_parser.add_argument('-s', '--steps', dest='steps', type=str, default=join_valid_steps(), help=f'Comma-separated list of steps to run (by default: {join_valid_steps()})').completer = step_completer  # type: ignore
-    deploy_parser.add_argument('-d', '--skip-steps', dest='skip_steps', type=str, default="", help=f"Comma-separated list of steps to skip").completer = step_completer  # type: ignore
+    deploy_parser.add_argument('-d', '--skip-steps', dest='skip_steps', type=str, default="", help="Comma-separated list of steps to skip").completer = step_completer  # type: ignore
     deploy_parser.add_argument('-w', '--workers', dest='workers', type=common.str_to_list, nargs='?', help='Range and/or list of workers to include')
     deploy_parser.add_argument('-sw', '--skip-workers', dest='skip_workers', type=common.str_to_list, nargs='?', default=[], help='Range and/or list of workers to exclude')
 

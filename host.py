@@ -109,7 +109,7 @@ class BMC:
     @staticmethod
     def from_bmc(ip_or_hostname: str, user: str = "root", password: str = "calvin") -> 'BMC':
         if ip_or_hostname == "":
-            logger.error(f"BMC not defined")
+            logger.error("BMC not defined")
             sys.exit(-1)
         url = f"https://{ip_or_hostname}/redfish/v1/Systems/System.Embedded.1"
         return BMC(url, user, password)

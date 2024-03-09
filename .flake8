@@ -1,0 +1,7 @@
+[flake8]
+extend-ignore =
+    E501
+extend-exclude =
+    *-venv/
+filename =
+    *.py

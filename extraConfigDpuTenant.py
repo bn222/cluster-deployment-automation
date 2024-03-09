@@ -1,4 +1,3 @@
-from dataclasses import dataclass
 from clustersConfig import ClustersConfig
 from k8sClient import K8sClient
 import host
@@ -8,7 +7,6 @@ from extraConfigDpuInfra import run_dpu_network_operator_git
 import extraConfigSriov
 from typing import Dict
 from typing import List
-from typing import Union
 import sys
 import jinja2
 import json
@@ -190,7 +188,7 @@ def ExtraConfigDpuTenant(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: Dict
     iclient = K8sClient("/root/kubeconfig.infracluster")
 
     # https://issues.redhat.com/browse/NHE-334
-    iclient.oc(f"project two-cluster-design")
+    iclient.oc("project two-cluster-design")
     logger.info(iclient.oc(f"create secret generic tenant-cluster-1-kubeconf --from-file=config={tclient._kc}"))
 
     tc_namespace = "two-cluster-design"

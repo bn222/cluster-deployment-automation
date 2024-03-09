@@ -4,7 +4,6 @@ import sys
 from host import Host
 from nfs import NFS
 from logger import logger
-import paramiko
 import os
 import shutil
 from typing import Optional
@@ -22,7 +21,7 @@ def cleanup_microshift(h: host.Host, version: str) -> None:
         if os.path.exists(f"./{file}"):
             os.remove(f"./{file}")
 
-    cmd = f"podman rm -f minimal-microshift-server"
+    cmd = "podman rm -f minimal-microshift-server"
     output = h.run(cmd)
     logger.info(output.out)
 
@@ -130,7 +129,7 @@ def composer_cli_cmd(subcommand: str, h: host.Host, file_name: Optional[str] = N
 
 def wait_for_build_to_finish(h: host.Host, build_id_two: Optional[str] = None) -> None:
     while True:
-        status_output = composer_cli_cmd(f"compose status", h)
+        status_output = composer_cli_cmd("compose status", h)
 
         if build_id_two:
             build_status_line = next((line for line in status_output.split('\n') if build_id_two in line), None)
