@@ -35,4 +35,4 @@ jobs:
       run: |
         flake8
     - name: mypy
-      run: mypy --strict cda.py --config-file mypy.ini
+      run: mypy --strict --config-file mypy.ini .
