@@ -83,7 +83,7 @@ def install_custom_kernel(lh: host.Host, client: K8sClient, bf_names: List[str],
         for h in ips:
             futures.append(executor.submit(install_remotely, h, links))
 
-        results = list(f.result() for f in futures)
+        results = [f.result() for f in futures]
         if not all(results):
             logger.info(f"failed, retried {retry} times uptill now")
             logger.info(results)

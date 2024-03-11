@@ -23,6 +23,7 @@ jobs:
         python -m pip install --upgrade pip
         python -m pip install black==22.12.0
         python -m pip install flake8
+        python -m pip install flake8-comprehensions
         python -m pip install --upgrade pip
         python -m pip install mypy
         python -m pip install types-paramiko

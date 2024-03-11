@@ -181,7 +181,7 @@ class ClustersConfig:
             self.workers.append(NodeConfig(self.name, **w))
 
         # creates hosts entries for each referenced node name
-        node_names = set(x["name"] for x in cc["hosts"])
+        node_names = {x["name"] for x in cc["hosts"]}
         for node in self.all_nodes():
             if node.kind != "physical" and node.node not in node_names:
                 cc["hosts"].append({"name": node.node})
