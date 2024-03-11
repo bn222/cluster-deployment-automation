@@ -14,12 +14,13 @@ ssh-keygen -t ed25519 -a 64 -N '' -f ~/.ssh/id_ed25519
 ```
 
 ## Install required software and Python packages by starting a Python virtual environment
-NOTE: Requires Python3.11 or higher (run `dnf install -y python3.11`)
+NOTE: Requires Python3.11 or higher
 ```bash
+dnf install -y python3.11
 python3.11 -m venv ocp-venv
 source ocp-venv/bin/activate
 ./dependencies.sh
-systemctl enable libvirtd
+systemctl enable --now libvirtd
 usermod -a -G root qemu
 ```
 
