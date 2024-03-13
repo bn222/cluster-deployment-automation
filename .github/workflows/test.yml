@@ -31,9 +31,13 @@ jobs:
         python -m pip install types-requests
     - name: black
       run: |
+        black --version
         black --check --diff .
     - name: flake8
       run: |
+        flake8 --version
         flake8
     - name: mypy
-      run: mypy --strict --config-file mypy.ini .
+      run: |
+        mypy --version
+        mypy --strict --config-file mypy.ini .
