@@ -8,6 +8,7 @@ from clustersConfig import ClustersConfig
 from clustersConfig import ExtraConfigArgs
 import host
 import common
+import urllib.parse
 
 
 """
@@ -19,6 +20,14 @@ This works by making some assumptions about the current state of the IPU:
 - The specified ISO contains full installation kickstart / kargs required for automated boot
 - The specified ISO architecture is aarch64
 """
+
+
+def is_http_url(url: str) -> bool:
+    try:
+        result = urllib.parse.urlparse(url)
+        return all([result.scheme, result.netloc])
+    except ValueError:
+        return False
 
 
 def ExtraConfigIPUIsoBoot(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: Dict[str, Future[None]]) -> None:
@@ -33,32 +42,46 @@ def ExtraConfigIPUIsoBoot(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: Dic
         logger.error("No ISO file was provided to install on the IMCs, exiting")
         sys.exit(-1)
 
-    if not os.path.exists(cfg.ipu_iso):
-        logger.error(f"ISO file {cfg.ipu_iso} does not exist, exiting")
-        sys.exit(-1)
-
-    serve_path = os.path.dirname(cfg.ipu_iso)
-    iso_name = os.path.basename(cfg.ipu_iso)
-    lh = host.LocalHost()
-    cc.prepare_external_port()
-    lh_ip = common.port_to_ip(lh, cc.external_port)
-
-    def helper(imc: str, port: int) -> str:
-        logger.info(f"Booting {imc} with http://{lh_ip}:{port}/{iso_name}")
-        bmc = host.bmc_from_host_name_or_ip("", imc)
-        bmc.boot_iso_redfish(iso_path=f"http://{lh_ip}:{str(port)}/{iso_name}", retries=5, retry_delay=15)
+    def helper(imc: str) -> str:
+        logger.info(f"Booting {imc} with {iso_address}")
+        bmc = host.BMC.from_bmc(imc)
+        bmc.boot_iso_redfish(iso_path=iso_address, retries=5, retry_delay=15)
         # TODO: We need a way to monitor when the installation is complete
         # since the acc will not have connectivity on reboot
         return f"Finished booting imc {imc}"
 
-    with common.HttpServerManager(serve_path, 8000) as http_server:
+    # If an http address is provided, we will boot from here.
+    # Otherwise we will assume a local file has been provided and host it.
+    if is_http_url(cfg.ipu_iso):
+        logger.debug(f"Booting IPU from iso served at {cfg.ipu_iso}")
+        iso_address = cfg.ipu_iso
         executor = ThreadPoolExecutor(max_workers=len(cfg.ipu_imcs))
         f = []
         for imc in cfg.ipu_imcs:
-            f.append(executor.submit(helper, imc, http_server.port))
+            f.append(executor.submit(helper, imc))
 
         for thread in f:
             logger.info(thread.result())
+    else:
+        logger.debug(f"Booting IPU from local iso {cfg.ipu_iso}")
+        if not os.path.exists(cfg.ipu_iso):
+            logger.error(f"ISO file {cfg.ipu_iso} does not exist, exiting")
+            sys.exit(-1)
+        serve_path = os.path.dirname(cfg.ipu_iso)
+        iso_name = os.path.basename(cfg.ipu_iso)
+        lh = host.LocalHost()
+        cc.prepare_external_port()
+        lh_ip = common.port_to_ip(lh, cc.external_port)
+
+        with common.HttpServerManager(serve_path, 8000) as http_server:
+            iso_address = f"http://{lh_ip}:{str(http_server.port)}/{iso_name}"
+            executor = ThreadPoolExecutor(max_workers=len(cfg.ipu_imcs))
+            f = []
+            for imc in cfg.ipu_imcs:
+                f.append(executor.submit(helper, imc))
+
+            for thread in f:
+                logger.info(thread.result())
 
 
 def main() -> None:
