@@ -92,6 +92,7 @@ def setup_vm(h: host.Host, cfg: NodeConfig, iso_or_image_path: str) -> host.Resu
         os.makedirs(os.path.dirname(cfg.image_path), exist_ok=True)
         logger.info(f"creating {disk_size_gb}GB storage for VM {name} at {cfg.image_path}")
         h.run_or_die(f'qemu-img create -f qcow2 {options} {cfg.image_path} {disk_size_gb}G')
+        logger.info(f"Finished creating {disk_size_gb}GB storage for VM {name} at {cfg.image_path}")
 
         cdrom_line = f"--cdrom {iso_or_image_path}"
         append = "--wait=-1"
