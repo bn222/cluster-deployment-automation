@@ -57,6 +57,7 @@ class NodeConfig:
     disk_size: str = "48"
     ram: str = "32768"
     cpu: str = "8"
+    disk_kind: str = "qcow2"
 
     def __post_init__(self) -> None:
         if self.type:
