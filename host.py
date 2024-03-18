@@ -250,10 +250,9 @@ class Host:
                     self._host = e.login()
                     return
                 except ssh_exception.AuthenticationException as e:
-                    logger.info(type(e))
-                    raise e
+                    logger.debug(type(e))
                 except Exception as e:
-                    logger.info(type(e))
+                    logger.debug(type(e))
                     time.sleep(10)
 
     def _rsa_login(self) -> Optional[KeyLogin]:

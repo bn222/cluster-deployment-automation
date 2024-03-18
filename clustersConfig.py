@@ -42,6 +42,9 @@ class ExtraConfigArgs:
     ipu_imcs: Optional[List[str]] = None
     # Path to iso file to provision IPUs with
     ipu_iso: Optional[str] = None
+    # Credentials to access IPU IMC
+    imc_user: Optional[str] = "root"
+    imc_password: Optional[str] = "calvin"
 
 
 @dataclass
@@ -327,7 +330,7 @@ class ClustersConfig:
         return [x for x in self.worker_vms() if x.node == "localhost"]
 
     def is_sno(self) -> bool:
-        return len(self.masters) == 1 and len(self.workers) == 0
+        return len(self.masters) == 1 and len(self.workers) == 0 and self.kind == "openshift"
 
 
 def main() -> None:

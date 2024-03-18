@@ -20,7 +20,7 @@ gpgcheck=1
 gpgkey=https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
 EOF
 
-dnf install -y wget rust coreos-installer kubectl libvirt podman qemu-img qemu-kvm virt-install make git golang-bin virt-viewer osbuild-composer composer-cli cockpit-composer bash-completion firewalld lorax
+dnf install -y wget rust coreos-installer kubectl libvirt podman qemu-img qemu-kvm virt-install make git golang-bin virt-viewer osbuild-composer composer-cli cockpit-composer bash-completion firewalld lorax dhcp-server
 
 systemctl enable osbuild-composer.socket cockpit.socket --now
 

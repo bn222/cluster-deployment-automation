@@ -304,6 +304,9 @@ class ClusterDeployer:
     def teardown(self) -> None:
         cluster_name = self._cc.name
         logger.info(f"Tearing down {cluster_name}")
+        if self._cc.kind == "iso":
+            self._iso_teardown()
+            return  
         self._ai.ensure_cluster_deleted(self._cc.name)
         lh = host.LocalHost()
         for m in self._cc.all_vms():
@@ -1119,4 +1122,17 @@ class ClusterDeployer:
 
     def deploy_cluster_from_iso(self) -> None:
         master = self._cc.masters[0]
-        extraConfigIPU.IPUIsoBoot(self._cc, master.bmc, self._cc.install_iso)
+        if master.mac is None:
+            logger.error(f"No MAC address provided for cluster {self._cc.name}, exiting")
+            sys.exit(-1)
+        if master.ip is None:
+            logger.error(f"No IP address provided for cluster {self._cc.name}, exiting")
+            sys.exit(-1)
+        if master.name is None:
+            logger.error(f"No name provided for cluster {self._cc.name}, exiting")
+            sys.exit(-1)
+        extraConfigIPU.IPUIsoBoot(self._cc, master, self._cc.install_iso)
+    
+    def _iso_teardown(self) -> None:
+        logger.debug("Tearing down iso cluster")
+        # Restore previous dhcp config if it exists to maintain idempotency
