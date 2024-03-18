@@ -19,6 +19,8 @@ usermod -a -G root qemu
 [ -f ~/.ssh/id_ed25519 ] || ssh-keygen -t ed25519 -N '' -f ~/.ssh/id_ed25519
 ```
 
+Alternatively, perform all those steps by running `./setup.sh` script.
+
 ## Activate and deactivate Python virtual environment
 ```bash
 source ocp-venv/bin/activate

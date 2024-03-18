@@ -2,7 +2,9 @@
 
 set -e
 
-if [ "$(which python)" = "$(pwd)/ocp-venv/bin/python" ]; then
+if [ -n "$PYTHON_CMD" ] ; then
+    :
+elif [ "$(which python)" = "$(pwd)/ocp-venv/bin/python" ]; then
     PYTHON_CMD="python"
 else
     PYTHON_CMD="python3.11"
