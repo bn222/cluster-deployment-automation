@@ -27,6 +27,7 @@ import common
 from python_hosts import Hosts, HostsEntry
 from logger import logger
 import microshift
+import extraConfigIPU
 from extraConfigRunner import ExtraConfigRunner
 from host import BMC
 
@@ -475,7 +476,7 @@ class ClusterDeployer:
             else:
                 logger.info("Skipping pre configuration.")
 
-            if self._cc.kind != "microshift":
+            if self._cc.kind == "openshift":
                 lh = host.LocalHost()
                 self.ensure_linked_to_bridge(lh)
 
@@ -498,6 +499,13 @@ class ClusterDeployer:
                 microshift.deploy(self._cc.fullConfig["name"], self._cc.masters[0], self._cc.external_port, version)
             else:
                 logger.error("Masters must be of length one for deploying microshift")
+                sys.exit(-1)
+
+        if self._cc.kind == "iso":
+            if len(self._cc.masters) == 1:
+                self.deploy_cluster_from_iso()
+            else:
+                logger.error("Masters must be of length one for deploying from iso")
                 sys.exit(-1)
 
         if "post" in self.steps:
@@ -525,7 +533,7 @@ class ClusterDeployer:
                 sys.exit(-1)
         else:
             logger.info("Don't need external network so will not set it up")
-        if self._cc.kind != "microshift":
+        if self._cc.kind == "openshift":
             host_config = self.local_host_config(lh.hostname())
             if self.need_api_network() and not self._validate_api_port(lh):
                 logger.info(f"Can't find a valid network API port, config is {host_config.network_api_port}")
@@ -1108,3 +1116,7 @@ class ClusterDeployer:
                     logger.info(e)
 
             time.sleep(30)
+
+    def deploy_cluster_from_iso(self) -> None:
+        master = self._cc.masters[0]
+        extraConfigIPU.IPUIsoBoot(self._cc, master.bmc, self._cc.install_iso)

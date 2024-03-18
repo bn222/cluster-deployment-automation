@@ -3,6 +3,7 @@ import os
 from concurrent.futures import Future
 from concurrent.futures import ThreadPoolExecutor
 from typing import Dict
+from typing import List
 from logger import logger
 from clustersConfig import ClustersConfig
 from clustersConfig import ExtraConfigArgs
@@ -30,6 +31,49 @@ def is_http_url(url: str) -> bool:
         return False
 
 
+def _redfish_boot_ipu(cc: ClustersConfig, imcs: List[str], iso: str) -> None:
+    def helper(imc: str) -> str:
+        logger.info(f"Booting {imc} with {iso_address}")
+        bmc = host.BMC.from_bmc(imc)
+        bmc.boot_iso_redfish(iso_path=iso_address, retries=5, retry_delay=15)
+        # TODO: We need a way to monitor when the installation is complete
+        # since the acc will not have connectivity on reboot
+        return f"Finished booting imc {imc}"
+
+    # If an http address is provided, we will boot from here.
+    # Otherwise we will assume a local file has been provided and host it.
+    if is_http_url(iso):
+        logger.debug(f"Booting IPU from iso served at {iso}")
+        iso_address = iso
+        executor = ThreadPoolExecutor(max_workers=len(imcs))
+        f = []
+        for imc in imcs:
+            f.append(executor.submit(helper, imc))
+
+        for thread in f:
+            logger.info(thread.result())
+    else:
+        logger.debug(f"Booting IPU from local iso {iso}")
+        if not os.path.exists(iso):
+            logger.error(f"ISO file {iso} does not exist, exiting")
+            sys.exit(-1)
+        serve_path = os.path.dirname(iso)
+        iso_name = os.path.basename(iso)
+        lh = host.LocalHost()
+        cc.prepare_external_port()
+        lh_ip = common.port_to_ip(lh, cc.external_port)
+
+        with common.HttpServerManager(serve_path, 8000) as http_server:
+            iso_address = f"http://{lh_ip}:{str(http_server.port)}/{iso_name}"
+            executor = ThreadPoolExecutor(max_workers=len(imcs))
+            f = []
+            for imc in imcs:
+                f.append(executor.submit(helper, imc))
+
+            for thread in f:
+                logger.info(thread.result())
+
+
 def ExtraConfigIPUIsoBoot(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: Dict[str, Future[None]]) -> None:
     logger.info("Running post config step to provision IPUs")
 
@@ -42,46 +86,12 @@ def ExtraConfigIPUIsoBoot(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: Dic
         logger.error("No ISO file was provided to install on the IMCs, exiting")
         sys.exit(-1)
 
-    def helper(imc: str) -> str:
-        logger.info(f"Booting {imc} with {iso_address}")
-        bmc = host.BMC.from_bmc(imc)
-        bmc.boot_iso_redfish(iso_path=iso_address, retries=5, retry_delay=15)
-        # TODO: We need a way to monitor when the installation is complete
-        # since the acc will not have connectivity on reboot
-        return f"Finished booting imc {imc}"
+    _redfish_boot_ipu(cc, cfg.ipu_imcs, cfg.ipu_iso)
 
-    # If an http address is provided, we will boot from here.
-    # Otherwise we will assume a local file has been provided and host it.
-    if is_http_url(cfg.ipu_iso):
-        logger.debug(f"Booting IPU from iso served at {cfg.ipu_iso}")
-        iso_address = cfg.ipu_iso
-        executor = ThreadPoolExecutor(max_workers=len(cfg.ipu_imcs))
-        f = []
-        for imc in cfg.ipu_imcs:
-            f.append(executor.submit(helper, imc))
 
-        for thread in f:
-            logger.info(thread.result())
-    else:
-        logger.debug(f"Booting IPU from local iso {cfg.ipu_iso}")
-        if not os.path.exists(cfg.ipu_iso):
-            logger.error(f"ISO file {cfg.ipu_iso} does not exist, exiting")
-            sys.exit(-1)
-        serve_path = os.path.dirname(cfg.ipu_iso)
-        iso_name = os.path.basename(cfg.ipu_iso)
-        lh = host.LocalHost()
-        cc.prepare_external_port()
-        lh_ip = common.port_to_ip(lh, cc.external_port)
-
-        with common.HttpServerManager(serve_path, 8000) as http_server:
-            iso_address = f"http://{lh_ip}:{str(http_server.port)}/{iso_name}"
-            executor = ThreadPoolExecutor(max_workers=len(cfg.ipu_imcs))
-            f = []
-            for imc in cfg.ipu_imcs:
-                f.append(executor.submit(helper, imc))
-
-            for thread in f:
-                logger.info(thread.result())
+def IPUIsoBoot(cc: ClustersConfig, imc: str, iso: str) -> None:
+    logger.info(f"Running ISO boot of IPU {imc} with {iso}")
+    _redfish_boot_ipu(cc, [imc], iso)
 
 
 def main() -> None:
