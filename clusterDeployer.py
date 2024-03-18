@@ -706,7 +706,8 @@ class ClusterDeployer:
             self._cc.prepare_external_port()
 
         lh = host.LocalHost()
-        self._local_host = ClusterHost(lh, self.local_host_config(lh.hostname()), cc)
+        lh_config = list(filter(lambda hc: hc.name == lh.hostname(), self._cc.hosts))[0]
+        self._local_host = ClusterHost(lh, lh_config, cc)
         self._remote_hosts = {bm.name: ClusterHost(host.RemoteHost(bm.name), bm, cc) for bm in self._cc.hosts if bm.name != lh.hostname()}
         self._all_hosts = [self._local_host] + list(self._remote_hosts.values())
         self._futures = {k8s_node.config.name: k8s_node.future for h in self._all_hosts for k8s_node in h._k8s_nodes()}
@@ -721,9 +722,6 @@ class ClusterDeployer:
         else:
             self.workers_arch = "x86_64"
         self._validate()
-
-    def local_host_config(self, hostname: str = "localhost") -> HostConfig:
-        return next(e for e in self._cc.hosts if e.name == hostname)
 
     def _all_hosts_with_masters(self) -> Set[ClusterHost]:
         return {ch for ch in self._all_hosts if len(ch.k8s_master_nodes) > 0}
