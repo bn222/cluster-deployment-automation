@@ -1,7 +1,7 @@
 from assistedInstaller import AssistedClientAutomation as ACA
 from assistedInstallerService import AssistedInstallerService as AIS
 from clustersConfig import ClustersConfig, NodeConfig
-from clusterDeployer import ClusterDeployer, setup_vm
+from clusterDeployer import ClusterDeployer, VmClusterNode
 import host
 import os
 from logger import logger
@@ -138,7 +138,7 @@ class ClusterSnapshotter:
         dst = os.path.join(self._snapshot_dir(), os.path.basename(src))
         logger.info(f"Copying {dst} to {src}")
         lh.copy_to(dst, src)
-        setup_vm(lh, config, config.image_path)
+        VmClusterNode(lh, config).setup_vm(config.image_path)
         ClusterDeployer(self._cc, self._ai, [], "").update_etc_hosts()
 
     def _snapshot_dir(self) -> str:

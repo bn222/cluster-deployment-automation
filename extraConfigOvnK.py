@@ -3,12 +3,13 @@ from k8sClient import K8sClient
 from configOperators import ConfigCVO
 import sys
 from concurrent.futures import Future
-from typing import Dict
+from typing import Dict, Optional
 from logger import logger
 from clustersConfig import ExtraConfigArgs
+import host
 
 
-def ExtraConfigOvnK(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: Dict[str, Future[None]]) -> None:
+def ExtraConfigOvnK(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: Dict[str, Future[Optional[host.Result]]]) -> None:
     [f.result() for (_, f) in futures.items()]
     logger.info("Running post config step to load custom OVN-K")
     iclient = K8sClient(cc.kubeconfig)

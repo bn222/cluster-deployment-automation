@@ -1,12 +1,13 @@
 from concurrent.futures import Future
-from typing import Dict
+from typing import Dict, Optional
 from clustersConfig import ClustersConfig
 from logger import logger
 from k8sClient import K8sClient
 from clustersConfig import ExtraConfigArgs
+import host
 
 
-def ExtraConfigDualStack(cc: ClustersConfig, _: ExtraConfigArgs, futures: Dict[str, Future[None]]) -> None:
+def ExtraConfigDualStack(cc: ClustersConfig, _: ExtraConfigArgs, futures: Dict[str, Future[Optional[host.Result]]]) -> None:
     # https://docs.openshift.com/container-platform/4.13/networking/ovn_kubernetes_network_provider/converting-to-dual-stack.html
     # https://issues.redhat.com/browse/OCPBUGS-6040
     [f.result() for (_, f) in futures.items()]

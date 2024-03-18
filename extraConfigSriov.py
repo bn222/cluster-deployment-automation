@@ -10,11 +10,12 @@ import jinja2
 import sys
 from typing import Dict
 from typing import List
+from typing import Optional
 from logger import logger
 from clustersConfig import ExtraConfigArgs
 
 
-def ExtraConfigSriov(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: Dict[str, Future[None]]) -> None:
+def ExtraConfigSriov(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: Dict[str, Future[Optional[host.Result]]]) -> None:
     [f.result() for (_, f) in futures.items()]
     client = K8sClient(cc.kubeconfig)
     lh = host.LocalHost()
@@ -118,7 +119,7 @@ def try_get_ovs_pf(rh: host.Host, name: str) -> str:
     sys.exit(-1)
 
 
-def ExtraConfigSriovOvSHWOL(cc: ClustersConfig, _: ExtraConfigArgs, futures: Dict[str, Future[None]]) -> None:
+def ExtraConfigSriovOvSHWOL(cc: ClustersConfig, _: ExtraConfigArgs, futures: Dict[str, Future[Optional[host.Result]]]) -> None:
     [f.result() for (_, f) in futures.items()]
     client = K8sClient(cc.kubeconfig)
     client.oc("create -f manifests/nicmode/pool.yaml")
@@ -174,7 +175,7 @@ def ExtraConfigSriovOvSHWOL(cc: ClustersConfig, _: ExtraConfigArgs, futures: Dic
 
 
 # VF Management port requires a new API. We need a new extra config class to handle the API changes.
-def ExtraConfigSriovOvSHWOL_NewAPI(cc: ClustersConfig, _: ExtraConfigArgs, futures: Dict[str, Future[None]]) -> None:
+def ExtraConfigSriovOvSHWOL_NewAPI(cc: ClustersConfig, _: ExtraConfigArgs, futures: Dict[str, Future[Optional[host.Result]]]) -> None:
     [f.result() for (_, f) in futures.items()]
     client = K8sClient(cc.kubeconfig)
     client.oc("create -f manifests/nicmode/pool.yaml")
