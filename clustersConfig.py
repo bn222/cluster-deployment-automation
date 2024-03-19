@@ -61,6 +61,7 @@ class NodeConfig:
 
     def __post_init__(self) -> None:
         if self.type:
+            logger.warning("Deprecated 'type' in node config. Use 'kind' instead")
             self.kind = self.type
 
         delattr(self, 'type')
