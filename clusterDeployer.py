@@ -33,8 +33,7 @@ from host import BMC
 
 def setup_dhcp_entry(h: host.Host, cfg: NodeConfig) -> None:
     if cfg.ip is None:
-        logger.error(f"Missing IP for node {cfg.name}")
-        sys.exit(-1)
+        logger.error_and_exit(f"Missing IP for node {cfg.name}")
     ip = cfg.ip
     mac = cfg.mac
     name = cfg.name
@@ -73,8 +72,7 @@ def match_to_proper_version_format(version_cluster_config: str) -> str:
     match = re.match(regex_pattern, version_cluster_config)
     logger.info(f"getting version to match with format XX.X using regex {regex_pattern}")
     if not match:
-        logger.error(f"Invalid match {match}")
-        sys.exit(-1)
+        logger.error_and_exit(f"Invalid match {match}")
     return match.group(0)
 
 
@@ -154,8 +152,7 @@ def ensure_bridge_is_started(h: host.Host, api_network: str, bridge_xml: str) ->
     cmd = "virsh net-undefine default"
     ret = h.run(cmd)
     if ret.returncode != 0 and "Network not found" not in ret.err:
-        logger.error(ret)
-        sys.exit(-1)
+        logger.error_and_exit(str(ret))
 
     # Fix cases where virsh net-start fails with error "... interface virbr0: File exists"
     cmd = "ip link delete virbr0"
@@ -435,8 +432,7 @@ class ClusterDeployer:
 
         interface = common.find_port(lh, api_network)
         if not interface:
-            logger.info(f"Missing API network interface {api_network}")
-            sys.exit(-1)
+            logger.error_and_exit(f"Missing API network interface {api_network}")
 
         bridge = "virbr0"
 
@@ -450,8 +446,7 @@ class ClusterDeployer:
             logger.info(f"No master set for interface {api_network}, setting it to {bridge}")
             lh.run(f"ip link set {api_network} master {bridge}")
         elif interface.master != bridge:
-            logger.info(f"Incorrect master set for interface {api_network}")
-            sys.exit(-1)
+            logger.error_and_exit(f"Incorrect master set for interface {api_network}")
 
         logger.info(f"Setting interface {api_network} as unmanaged in NetworkManager")
         lh.run(f"nmcli device set {api_network} managed no")
@@ -497,8 +492,7 @@ class ClusterDeployer:
             if len(self._cc.masters) == 1:
                 microshift.deploy(self._cc.fullConfig["name"], self._cc.masters[0], self._cc.external_port, version)
             else:
-                logger.error("Masters must be of length one for deploying microshift")
-                sys.exit(-1)
+                logger.error_and_exit("Masters must be of length one for deploying microshift")
 
         if "post" in self.steps:
             self._postconfig()
@@ -509,27 +503,23 @@ class ClusterDeployer:
         if self._cc.is_sno():
             logger.info("Setting up a Single Node OpenShift (SNO) environment")
             if self._cc.masters[0].ip is None:
-                logger.error("Missing ip on master")
-                sys.exit(-1)
+                logger.error_and_exit("Missing ip on master")
 
         lh = host.LocalHost()
         min_cores = 28
         cc = int(lh.run("nproc").out)
         if cc < min_cores:
-            logger.error(f"Detected {cc} cores on localhost, but need at least {min_cores} cores")
-            sys.exit(-1)
+            logger.error_and_exit(f"Detected {cc} cores on localhost, but need at least {min_cores} cores")
         if self.need_external_network():
             self._cc.prepare_external_port()
             if not self._cc.validate_external_port():
-                logger.error(f"Invalid external port, config is {self._cc.external_port}")
-                sys.exit(-1)
+                logger.error_and_exit(f"Invalid external port, config is {self._cc.external_port}")
         else:
             logger.info("Don't need external network so will not set it up")
         if self._cc.kind != "microshift":
             host_config = self.local_host_config(lh.hostname())
             if self.need_api_network() and not self._validate_api_port(lh):
-                logger.info(f"Can't find a valid network API port, config is {host_config.network_api_port}")
-                sys.exit(-1)
+                logger.error_and_exit(f"Can't find a valid network API port, config is {host_config.network_api_port}")
             else:
                 logger.info(f"Using {host_config.network_api_port} as network API port")
 
@@ -641,16 +631,14 @@ class ClusterDeployer:
             if any(v == "error" for v in status.values()):
                 for e in names:
                     self._print_logs(e)
-                logger.info("Error encountered in one of the nodes, quitting...")
-                sys.exit(-1)
+                logger.error_and_exit("Error encountered in one of the nodes, quitting...")
             cb()
             time.sleep(5)
 
     def _verify_package_is_installed(self, worker: NodeConfig, package: str) -> bool:
         ai_ip = self._ai.get_ai_ip(worker.name)
         if ai_ip is None:
-            logger.error(f"Failed to get ip for worker with name {worker.name}")
-            sys.exit(-1)
+            logger.error_and_exit(f"Failed to get ip for worker with name {worker.name}")
         rh = host.RemoteHost(ai_ip)
         rh.ssh_connect("core")
         ret = rh.run(f"rpm -qa | grep {package}")
@@ -835,8 +823,7 @@ class ClusterDeployer:
         hosts = []
         for w in self._cc.workers:
             if w.ip is None:
-                logger.error(f"Missing ip for worker {w.name}")
-                sys.exit(-1)
+                logger.error_and_exit(f"Missing ip for worker {w.name}")
             rh = host.RemoteHost(w.ip)
             rh.ssh_connect("core")
             hosts.append(rh)
@@ -858,7 +845,7 @@ class ClusterDeployer:
         any_worker_bad = False
         for w, h in zip(self._cc.workers, hosts):
             if all(not addr_ok(a) for a in addresses(h)):
-                logger.info(f"Worker {w.name} doesn't have an IP in {subnet}.")
+                logger.error(f"Worker {w.name} doesn't have an IP in {subnet}.")
                 any_worker_bad = True
 
         if any_worker_bad:
@@ -947,8 +934,7 @@ class ClusterDeployer:
         for h, f in zip(self._cc.workers, futures):
             h.ip = f.result()
             if h.ip is None:
-                logger.info(f"Couldn't find ip of worker {h.name}")
-                sys.exit(-1)
+                logger.error_and_exit(f"Couldn't find ip of worker {h.name}")
 
         self._rename_workers(infra_env_name)
         self._wait_known_state(e.name for e in self._cc.workers)
@@ -1016,27 +1002,26 @@ class ClusterDeployer:
             h.ssh_connect("core")
 
         if not h.running_fcos():
-            logger.error("Expected FCOS after booting host {host_name} but booted something else")
-            sys.exit(-1)
+            logger.error_and_exit("Expected FCOS after booting host {host_name} but booted something else")
 
         nfs_iso = nfs.host_file(f"/root/iso/{iso}")
         nfs_key = nfs.host_file("/root/iso/ssh_priv_key")
         output = h.bf_pxeboot(nfs_iso, nfs_key)
         logger.debug(output)
         if output.returncode:
-            logger.info(f"Failed to run pxeboot on bf {host_name}")
-            sys.exit(-1)
+            logger.error_and_exit(f"Failed to run pxeboot on bf {host_name}")
         else:
             logger.info(f"succesfully ran pxeboot on bf {host_name}")
 
         # ip is printed as the last thing when bf is pxeboot'ed
         bf_ip = output.out.strip().split("\n")[-1].strip()
         h.connect_to_bf(bf_ip)
-        tries = 3
+        max_tries = 3
         bf_interfaces = ["enp3s0f0", "enp3s0f0np0"]
-        logger.info(f'Will try {tries} times to get an IP on {" or ".join(bf_interfaces)}')
+        logger.info(f'Will try {max_tries} times to get an IP on {" or ".join(bf_interfaces)}')
         ip = None
-        for _ in range(tries):
+        tries = 0
+        while True:
             ipa = h.run_on_bf("ip -json a").out
             detected = common.ipa_to_entries(ipa)
             found = [e for e in detected if e.ifname in bf_interfaces]
@@ -1049,14 +1034,14 @@ class ClusterDeployer:
             for e in found[0].addr_info:
                 if e.family == "inet":
                     ip = e.local
-            if ip is None:
-                logger.info(f"IP missing on {found[0]}, output was {ipa}")
-            else:
+            if ip is not None:
                 break
+            logger.info(f"IP missing on {found[0]}, output was {ipa}")
+            tries += 1
+            if tries >= max_tries:
+                logger.error_and_exit(f"IP missing on {found[0]}")
             time.sleep(10)
 
-        if ip is None:
-            sys.exit(-1)
         logger.info(f"Detected ip {ip}")
         return ip
 
