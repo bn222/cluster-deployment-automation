@@ -83,7 +83,7 @@ def install_custom_kernel(lh: host.Host, client: K8sClient, bf_names: List[str],
         for h in ips:
             futures.append(executor.submit(install_remotely, h, links))
 
-        results = list(f.result() for f in futures)
+        results = [f.result() for f in futures]
         if not all(results):
             logger.info(f"failed, retried {retry} times uptill now")
             logger.info(results)
@@ -186,7 +186,7 @@ def ExtraConfigDpuInfra(cc: ClustersConfig, _: ExtraConfigArgs, futures: Dict[st
     client.oc("create -f manifests/infra/dpuclusterconfig.yaml")
 
     logger.info("Patching mcp setting maxUnavailable to 2")
-    client.oc("patch mcp dpu --type=json -p=\[\{\"op\":\"replace\",\"path\":\"/spec/maxUnavailable\",\"value\":2\}\]")
+    client.oc("patch mcp dpu --type=json -p=\\[\\{\"op\":\"replace\",\"path\":\"/spec/maxUnavailable\",\"value\":2\\}\\]")
 
     logger.info("Labeling nodes")
     for b in bf_names:
@@ -263,7 +263,7 @@ def ExtraConfigDpuInfra_NewAPI(cc: ClustersConfig, _: ExtraConfigArgs, futures: 
     client.oc("create -f manifests/infra/dpuclusterconfig.yaml")
 
     logger.info("Patching mcp setting maxUnavailable to 2")
-    client.oc("patch mcp dpu --type=json -p=\[\{\"op\":\"replace\",\"path\":\"/spec/maxUnavailable\",\"value\":2\}\]")
+    client.oc("patch mcp dpu --type=json -p=\\[\\{\"op\":\"replace\",\"path\":\"/spec/maxUnavailable\",\"value\":2\\}\\]")
 
     logger.info("Labeling nodes")
     for b in bf_names:

@@ -457,7 +457,7 @@ class ClusterDeployer:
         lh.run(f"nmcli device set {api_network} managed no")
 
     def need_external_network(self) -> bool:
-        vm_bm = list(x for x in self._cc.workers if x.kind == "vm" and x.node != "localhost")
+        vm_bm = [x for x in self._cc.workers if x.kind == "vm" and x.node != "localhost"]
         remote_workers = len(self._cc.workers) - len(self._cc.worker_vms())
         remote_masters = len(self._cc.masters) - len(self._cc.master_vms())
         if "workers" not in self.steps:
@@ -694,7 +694,7 @@ class ClusterDeployer:
         executor = ThreadPoolExecutor(max_workers=len(nodes))
         futures = []
 
-        nodes = list(x for x in nodes if x.kind == "physical")
+        nodes = [x for x in nodes if x.kind == "physical"]
         cluster_name = self._cc.name
         infra_env_name = f"{cluster_name}-x86"
         for h in nodes:
@@ -782,7 +782,7 @@ class ClusterDeployer:
             rh.copy_to(iso_src, iso_path)
             logger.debug(f"iso_path is now {iso_path} for {rh.hostname()}")
 
-            vm = list(x for x in self._cc.workers if x.kind == "vm" and x.node == bm.node)
+            vm = [x for x in self._cc.workers if x.kind == "vm" and x.node == bm.node]
             for e in vm:
                 setup_dhcp_entry(lh, e)
 
@@ -886,7 +886,7 @@ class ClusterDeployer:
                     continue
                 nics = json.loads(h["inventory"]).get("interfaces")
                 addresses: List[str] = sum((nic["ipv4_addresses"] for nic in nics), [])
-                stripped_addresses = list(a.split("/")[0] for a in addresses)
+                stripped_addresses = [a.split("/")[0] for a in addresses]
 
                 if w.ip in stripped_addresses:
                     self._ai.update_host(h["id"], {"name": w.name})
@@ -1063,7 +1063,7 @@ class ClusterDeployer:
     def wait_for_workers(self) -> None:
         logger.info(f'waiting for {len(self._cc.workers)} workers')
         lh = host.LocalHost()
-        bf_workers = list(x for x in self._cc.workers if x.kind == "bf")
+        bf_workers = [x for x in self._cc.workers if x.kind == "bf"]
         connections: Dict[str, host.Host] = {}
         while True:
             workers = [w.name for w in self._cc.workers]
