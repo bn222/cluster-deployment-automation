@@ -1113,7 +1113,7 @@ class ClusterDeployer:
         for p in futures:
             p.result()
 
-    def _rename_workers(self, infra_env_name: str) -> None:
+    def _rename_workers(self, infra_env: str) -> None:
         logger.info("Waiting for connectivity to all workers")
         hosts = []
         workers = []
@@ -1150,7 +1150,7 @@ class ClusterDeployer:
         logger.info("Connectivity established to all workers, renaming them in Assited installer")
         logger.info(f"looking for workers with ip {[w.ip() for w in workers]}")
         while True:
-            renamed = self._try_rename_workers(infra_env_name)
+            renamed = self._try_rename_workers(infra_env)
             expected = len(workers)
             if renamed == expected:
                 logger.info(f"Found and renamed {renamed} workers")
@@ -1159,8 +1159,8 @@ class ClusterDeployer:
                 logger.info(f"Found and renamed {renamed} workers, but waiting for {expected}, retrying")
                 time.sleep(5)
 
-    def _try_rename_workers(self, infra_env_name: str) -> int:
-        infra_env_id = self._ai.get_infra_env_id(infra_env_name)
+    def _try_rename_workers(self, infra_env: str) -> int:
+        infra_env_id = self._ai.get_infra_env_id(infra_env)
         renamed = 0
 
         for bm in self._all_hosts:
@@ -1178,13 +1178,13 @@ class ClusterDeployer:
                         renamed += 1
         return renamed
 
-    def _get_discovery_ign_ssh_priv_key(self, infra_env_name: str) -> str:
-        self._ai.download_discovery_ignition(infra_env_name, "/tmp")
+    def _get_discovery_ign_ssh_priv_key(self, infra_env: str) -> str:
+        self._ai.download_discovery_ignition(infra_env, "/tmp")
 
         # In a provisioning system where there could be multiple keys, it is not guaranteed that
         # AI will use id_rsa. Thus we need to properly extract the key from the discovery ignition.
         ssh_priv_key = "/root/.ssh/id_rsa"
-        with open(os.path.join("/tmp", f"discovery.ign.{infra_env_name}")) as f:
+        with open(os.path.join("/tmp", f"discovery.ign.{infra_env}")) as f:
             j = json.load(f)
         ssh_pub_key = j["passwd"]["users"][0]["sshAuthorizedKeys"][0]
         # It seems that if you have both rsa and ed25519, AI will prefer to use ed25519.
