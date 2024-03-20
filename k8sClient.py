@@ -2,8 +2,6 @@ import kubernetes
 import yaml
 import time
 import host
-import os
-import requests
 import sys
 from typing import List
 from typing import Optional
@@ -20,7 +18,6 @@ class K8sClient:
             c = yaml.safe_load(f)
         self._api_client = kubernetes.config.new_client_from_config_dict(c)
         self._client = kubernetes.client.CoreV1Api(self._api_client)
-        self.ensure_oc_binary()
 
     def is_ready(self, name: str) -> bool:
         for e in self._client.list_node().items:
@@ -60,7 +57,7 @@ class K8sClient:
 
     def oc(self, cmd: str, must_succeed: bool = False) -> host.Result:
         lh = host.LocalHost()
-        cmd = f"{self.oc_bin} {cmd} --kubeconfig {self._kc}"
+        cmd = f"oc {cmd} --kubeconfig {self._kc}"
         if must_succeed:
             return lh.run_or_die(cmd)
         else:
@@ -68,19 +65,6 @@ class K8sClient:
 
     def oc_run_or_die(self, cmd: str) -> host.Result:
         return self.oc(cmd, must_succeed=True)
-
-    def ensure_oc_binary(self) -> None:
-        lh = host.LocalHost()
-        logger.info(f"Current working directory is {os.getcwd()}")
-        assert os.path.exists("build")
-        if not os.path.isfile(os.path.join(os.getcwd(), "build/oc")):
-            url = oc_url + "openshift-client-linux.tar.gz"
-            logger.info(f"downloading oc command from {url} since it's missing from {os.getcwd() + '/build'}")
-            response = requests.get(url)
-            open("build/oc.tar.gz", "wb").write(response.content)
-            lh.run("tar xf build/oc.tar.gz -C build")
-            lh.run("rm build/oc.tar.gz")
-        self.oc_bin = os.path.join(os.getcwd(), "build/oc")
 
     def wait_for_mcp(self, mcp_name: str, resource: str = "resource") -> None:
         time.sleep(60)
