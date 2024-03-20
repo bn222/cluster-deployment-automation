@@ -2,6 +2,7 @@ from concurrent.futures import ThreadPoolExecutor
 from clustersConfig import ClustersConfig
 import host
 import time
+import json
 from git.repo import Repo
 from k8sClient import K8sClient
 from concurrent.futures import Future
@@ -187,7 +188,14 @@ def ExtraConfigDpuInfra(cc: ClustersConfig, _: ExtraConfigArgs, futures: Dict[st
     client.oc("create -f manifests/infra/dpuclusterconfig.yaml")
 
     logger.info("Patching mcp setting maxUnavailable to 2")
-    client.oc("patch mcp dpu --type=json -p=\\[\\{\"op\":\"replace\",\"path\":\"/spec/maxUnavailable\",\"value\":2\\}\\]")
+    arg = [
+        {
+            "op": "replace",
+            "path": "/spec/maxUnavailable",
+            "value": 2,
+        }
+    ]
+    client.oc(f"patch mcp dpu --type=json -p={json.dumps(arg)}")
 
     logger.info("Labeling nodes")
     for b in bf_names:
@@ -264,7 +272,14 @@ def ExtraConfigDpuInfra_NewAPI(cc: ClustersConfig, _: ExtraConfigArgs, futures: 
     client.oc("create -f manifests/infra/dpuclusterconfig.yaml")
 
     logger.info("Patching mcp setting maxUnavailable to 2")
-    client.oc("patch mcp dpu --type=json -p=\\[\\{\"op\":\"replace\",\"path\":\"/spec/maxUnavailable\",\"value\":2\\}\\]")
+    arg = [
+        {
+            "op": "replace",
+            "path": "/spec/maxUnavailable",
+            "value": 2,
+        }
+    ]
+    client.oc(f"patch mcp dpu --type=json -p={json.dumps(arg)}")
 
     logger.info("Labeling nodes")
     for b in bf_names:
