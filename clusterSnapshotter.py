@@ -1,7 +1,8 @@
 from assistedInstaller import AssistedClientAutomation as ACA
 from assistedInstallerService import AssistedInstallerService as AIS
 from clustersConfig import ClustersConfig, NodeConfig
-from clusterDeployer import ClusterDeployer, VmClusterNode
+from clusterDeployer import ClusterDeployer
+from clusterNode import VmClusterNode
 import host
 import os
 from logger import logger
