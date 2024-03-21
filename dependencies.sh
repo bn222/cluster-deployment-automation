@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e
+
 if [ "$(which python)" = "$(pwd)/ocp-venv/bin/python" ]; then
     PYTHON_CMD="python"
 else
