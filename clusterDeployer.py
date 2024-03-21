@@ -330,7 +330,7 @@ class ClusterDeployer:
 
         # Wait for masters to have booted.
         for h in hosts_with_masters:
-            h.wait_for_masters_boot(("192.168.122.1", "192.168.255.254"))
+            h.wait_for_masters_boot(self._cc.full_ip_range)
 
         def cb() -> None:
             finished = [p for p in futures if p.done()]
@@ -424,7 +424,7 @@ class ClusterDeployer:
 
         # Wait for workers to have booted.
         for h in hosts_with_workers:
-            h.wait_for_workers_boot(("192.168.122.1", "192.168.255.254"))
+            h.wait_for_workers_boot(self._cc.full_ip_range)
 
         # Rename workers in AI.
         logger.info("renaming workers")
@@ -463,8 +463,9 @@ class ClusterDeployer:
                 rh.ssh_connect("core")
                 hosts.append(rh)
                 workers.append(k8s_node)
-        subnet = "192.168.122.0/24"
-        logger.info(f"Connectivity established to all workers; checking that they have an IP in {subnet}")
+
+        ip_range = self._cc.full_ip_range
+        logger.info(f"Connectivity established to all workers; checking that they have an IP in range: {ip_range}")
 
         def addresses(h: host.Host) -> List[str]:
             ret = []
@@ -472,16 +473,17 @@ class ClusterDeployer:
                 if "addr_info" not in e:
                     continue
                 for k in e["addr_info"]:
-                    ret.append(k["local"])
+                    if k["family"] == "inet":
+                        ret.append(k["local"])
             return ret
 
         def addr_ok(a: str) -> bool:
-            return common.ip_in_subnet(a, subnet)
+            return common.ip_range_contains(ip_range, a)
 
         any_worker_bad = False
         for w, h in zip(workers, hosts):
             if all(not addr_ok(a) for a in addresses(h)):
-                logger.error(f"Worker {w.config.name} doesn't have an IP in {subnet}.")
+                logger.error(f"Worker {w.config.name} doesn't have an IP in range {ip_range}.")
                 any_worker_bad = True
 
         if any_worker_bad:
@@ -568,7 +570,7 @@ class ClusterDeployer:
 
             if len(connections) != len(bf_workers):
                 for e in filter(lambda x: x.name not in connections, bf_workers):
-                    ai_ip = self._ai.get_ai_ip(e.name)
+                    ai_ip = self._ai.get_ai_ip(e.name, self._cc.full_ip_range)
                     if ai_ip is None:
                         continue
                     h = host.Host(ai_ip)

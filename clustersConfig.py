@@ -134,6 +134,7 @@ class ClustersConfig:
     configured_workers: List[NodeConfig] = []
     local_bridge_config: BridgeConfig
     remote_bridge_config: BridgeConfig
+    full_ip_range: Tuple[str, str]
     cluster_ip_range: Tuple[str, str]
     hosts: List[HostConfig] = []
     proxy: Optional[str] = None
@@ -185,6 +186,10 @@ class ClustersConfig:
             self.ntp_source = cc["ntp_source"]
         if "base_dns_domain" in cc:
             self.base_dns_domain = cc["base_dns_domain"]
+        if "cluster_ip_range" not in cc:
+            cc["cluster_ip_range"] = "192.168.122.1-192.168.255.254"
+        if "cluster_ip_mask" not in cc:
+            cc["cluster_ip_mask"] = "255.255.0.0"
 
         self.kubeconfig = path.join(getcwd(), f'kubeconfig.{cc["name"]}')
         if "kubeconfig" in cc:
@@ -197,11 +202,20 @@ class ClustersConfig:
         self.workers = [NodeConfig(self.name, **w) for w in worker_range.filter_list(cc["workers"])]
 
         # Reserve IPs for AI, masters and workers.
+        cluster_ip_mask = cc["cluster_ip_mask"]
+        ip_range = cc["cluster_ip_range"].split("-")
+        if len(ip_range) != 2:
+            logger.error_and_exit(f"Invalid cluster_ip_range config {cc['cluster_ip_range']};  it must be of the form '<startIP>-<endIP>.")
+
+        self.full_ip_range = (ip_range[0], ip_range[1])
         n_nodes = len(cc["masters"]) + len(cc["workers"]) + 1
-        self.cluster_ip_range = common.ip_range("192.168.122.1", n_nodes)
-        dynamic_ip_range = common.ip_range(self.cluster_ip_range[1], 254 - n_nodes)
-        self.local_bridge_config = BridgeConfig(api_network=self.network_api_port, ip="192.168.122.1", mask="255.255.0.0", dynamic_ip_range=dynamic_ip_range)
-        self.remote_bridge_config = BridgeConfig(api_network=self.network_api_port, ip="192.168.123.250", mask="255.255.0.0")
+        self.cluster_ip_range = common.ip_range(ip_range[0], n_nodes)
+        if common.ip_range_size(ip_range) < common.ip_range_size(self.cluster_ip_range):
+            logger.error_and_exit("The supplied cluster_ip_range config is too small for the number of nodes")
+
+        dynamic_ip_range = common.ip_range(self.cluster_ip_range[1], common.ip_range_size(ip_range) - n_nodes)
+        self.local_bridge_config = BridgeConfig(api_network=self.network_api_port, ip=self.cluster_ip_range[0], mask=cluster_ip_mask, dynamic_ip_range=dynamic_ip_range)
+        self.remote_bridge_config = BridgeConfig(api_network=self.network_api_port, ip=ip_range[1], mask=cluster_ip_mask)
 
         # creates hosts entries for each referenced node name
         node_names = {x["name"] for x in cc["hosts"]}
