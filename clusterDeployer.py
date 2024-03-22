@@ -489,7 +489,7 @@ class ClusterDeployer:
         if any_worker_bad:
             sys.exit(-1)
 
-        logger.info("Connectivity established to all workers, renaming them in Assited installer")
+        logger.info("Connectivity established to all workers, renaming them in Assisted installer")
         logger.info(f"looking for workers with ip {[w.ip() for w in workers]}")
         while True:
             renamed = self._try_rename_workers(infra_env)
