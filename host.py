@@ -333,8 +333,7 @@ class Host:
                     env.pop(k, None)
                 else:
                     env[k] = v
-        args = shlex.split(cmd)
-        res = subprocess.run(args, capture_output=True, env=env)
+        res = subprocess.run(cmd, shell=True, capture_output=True, env=env)
         return Result(
             res.stdout.decode("utf-8"),
             res.stderr.decode("utf-8"),
