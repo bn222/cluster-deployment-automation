@@ -94,9 +94,7 @@ class HostConfig:
     password: Optional[str] = None
     pre_installed: str = "true"
 
-    def __init__(self, network_api_port: str, **kwargs: str):
-        if "network_api_port" not in kwargs:
-            kwargs["network_api_port"] = network_api_port
+    def __init__(self, **kwargs: str):
         for k, v in kwargs.items():
             setattr(self, k, v)
 
@@ -194,7 +192,9 @@ class ClustersConfig:
             self.ingress_vip = {'ip': cc["ingress_vip"]}
 
         for e in cc["hosts"]:
-            self.hosts.append(HostConfig(self.network_api_port, **e))
+            if "network_api_port" not in e:
+                e["network_api_port"] = self.network_api_port
+            self.hosts.append(HostConfig(**e))
 
         for c in cc["preconfig"]:
             self.preconfig.append(ExtraConfigArgs(**c))
