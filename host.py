@@ -17,6 +17,7 @@ from typing import Type
 from typing import Any
 from typing import Dict
 from typing import Tuple
+from collections.abc import Iterable
 from functools import lru_cache
 from ailib import Redfish
 import paramiko
@@ -296,15 +297,26 @@ class Host:
     def need_sudo(self) -> None:
         self.sudo_needed = True
 
+    def _cmd_to_script(self, cmd: Union[str, Iterable[str]]) -> str:
+        # "run()" can only execute commands as a shell script. However, for
+        # convenience we all the user to specify a list of argv arguments.  In
+        # that case, they are quoted with shlex.join() so we have a shell
+        # script.
+        if isinstance(cmd, str):
+            return cmd
+        return shlex.join(cmd)
+
     def run(
         self,
-        cmd: str,
+        cmd: Union[str, Iterable[str]],
         log_level: int = logging.DEBUG,
         env: Optional[Dict[str, str]] = None,
         *,
         env_extra: Optional[Dict[str, str]] = None,
         cwd: Optional[str] = None,
     ) -> Result:
+        cmd = self._cmd_to_script(cmd)
+
         logger.log(log_level, f"running command {cmd} on {self._hostname}")
         if self.is_localhost():
             ret_val = self._run_local(cmd, env, env_extra=env_extra, cwd=cwd)
@@ -403,14 +415,14 @@ class Host:
 
     def run_or_die(
         self,
-        cmd: str,
+        cmd: Union[str, Iterable[str]],
         *,
         env_extra: Optional[Dict[str, str]] = None,
         cwd: Optional[str] = None,
     ) -> Result:
         ret = self.run(cmd, env_extra=env_extra, cwd=cwd)
         if ret.returncode:
-            logger.error(f"{cmd} failed: {ret.err}")
+            logger.error(f"{self._cmd_to_script(cmd)} failed: {ret.err}")
             sys.exit(-1)
         else:
             logger.debug(ret.out.strip())
