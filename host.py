@@ -305,9 +305,6 @@ class Host:
         env_extra: Optional[Dict[str, str]] = None,
         cwd: Optional[str] = None,
     ) -> Result:
-        if self.sudo_needed:
-            cmd = "sudo " + cmd
-
         logger.log(log_level, f"running command {cmd} on {self._hostname}")
         if self.is_localhost():
             ret_val = self._run_local(cmd, env, env_extra=env_extra, cwd=cwd)
@@ -327,6 +324,12 @@ class Host:
         env_extra: Optional[Dict[str, str]] = None,
         cwd: Optional[str] = None,
     ) -> Result:
+        is_shell = True
+        if self.sudo_needed:
+            is_shell = False
+            argv = ["sudo", "sh", "-c", cmd]
+        else:
+            argv = None
         if env_extra:
             if env is None:
                 env = os.environ.copy()
@@ -335,7 +338,7 @@ class Host:
                     env.pop(k, None)
                 else:
                     env[k] = v
-        res = subprocess.run(cmd, shell=True, capture_output=True, env=env, cwd=cwd)
+        res = subprocess.run(argv or cmd, shell=is_shell, capture_output=True, env=env, cwd=cwd)
         return Result(
             res.stdout.decode("utf-8"),
             res.stderr.decode("utf-8"),
@@ -370,16 +373,25 @@ class Host:
         if cwd:
             cmd = f"cd {shlex.quote(cwd)} || exit 10\n{cmd}"
 
-        if env_extra:
-            # Assume we have a POSIX shell, and we can define variables via `export VAR=...`.
-            cmd2 = ""
-            for k, v in env_extra.items():
-                assert k == shlex.quote(k)
-                if v is None:
-                    cmd2 += f"unset  -v {k}\n"
-                else:
-                    cmd2 += f"export {k}={shlex.quote(v)}\n"
-            cmd = cmd2 + cmd
+        if self.sudo_needed:
+            cmd2 = "sudo"
+            if env_extra:
+                for k, v in env_extra.items():
+                    assert k == shlex.quote(k)
+                    if v is not None:
+                        cmd2 += f" {k}={shlex.quote(v)}"
+            cmd = cmd2 + " sh -c " + shlex.quote(cmd)
+        else:
+            if env_extra:
+                # Assume we have a POSIX shell, and we can define variables via `export VAR=...`.
+                cmd2 = ""
+                for k, v in env_extra.items():
+                    assert k == shlex.quote(k)
+                    if v is None:
+                        cmd2 += f"unset  -v {k}\n"
+                    else:
+                        cmd2 += f"export {k}={shlex.quote(v)}\n"
+                cmd = cmd2 + cmd
 
         while True:
             try:
