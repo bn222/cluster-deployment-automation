@@ -28,8 +28,9 @@ def ExtraConfigSriov(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str
 
     cur_dir = os.getcwd()
     os.chdir(repo_dir)
-    env = os.environ.copy()
-    env["KUBECONFIG"] = client._kc
+    env = {
+        "KUBECONFIG": client._kc,
+    }
 
     if cfg.image is not None:
         image = cfg.image
@@ -59,8 +60,9 @@ def ExtraConfigSriovSubscription(cc: ClustersConfig, cfg: ExtraConfigArgs, futur
     client = K8sClient(cc.kubeconfig)
     lh = host.LocalHost()
 
-    env = os.environ.copy()
-    env["KUBECONFIG"] = client._kc
+    env = {
+        "KUBECONFIG": client._kc,
+    }
 
     # cleanup first, to make this script idempotent
     logger.info("running make undeploy")
