@@ -343,8 +343,6 @@ class Host:
 
             return Result("".join(out), "".join(err), exit_code)
 
-        # Make sure multiline command is not seen as multiple commands
-        cmd = cmd.replace("\n", "\\\n")
         while True:
             try:
                 return read_output(cmd, log_level)
