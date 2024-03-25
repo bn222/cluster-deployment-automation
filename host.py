@@ -13,6 +13,7 @@ import tempfile
 from typing import Optional
 from typing import Union
 from typing import Any
+from collections.abc import Iterable
 from collections.abc import Mapping
 from functools import lru_cache
 from ailib import Redfish
@@ -296,14 +297,33 @@ class Host:
     def need_sudo(self) -> None:
         self.sudo_needed = True
 
+    def _cmd_to_script(self, cmd: str | Iterable[str]) -> str:
+        # "run()" currently only supports that "cmd" is a shell script (passed
+        # via "-c" argument).
+        #
+        # However, often the command is just a program name and arguments.
+        # In that case, the user would have to take care to quote the string
+        # like rsh.run(f"ls {shlex.quote(dir)}").
+        #
+        # For convenience, allow an alternative form rsh.run(["ls", dir])
+        # which does the quoting internally.
+        #
+        # The command in that case is still run via shell and this is only
+        # a convenience to build up the shell script with correct quoting.
+        if isinstance(cmd, str):
+            return cmd
+        return shlex.join(cmd)
+
     def run(
         self,
-        cmd: str,
+        cmd: str | Iterable[str],
         log_level: int = logging.DEBUG,
         *,
         env: Optional[Mapping[str, Optional[str]]] = None,
         cwd: Optional[str] = None,
     ) -> Result:
+        cmd = self._cmd_to_script(cmd)
+
         if self.sudo_needed:
             cmd = "sudo " + cmd
 
@@ -387,14 +407,14 @@ class Host:
 
     def run_or_die(
         self,
-        cmd: str,
+        cmd: str | Iterable[str],
         *,
         env: Optional[Mapping[str, Optional[str]]] = None,
         cwd: Optional[str] = None,
     ) -> Result:
         ret = self.run(cmd, env=env, cwd=cwd)
         if ret.returncode:
-            logger.error(f"{cmd} failed: {ret.err}")
+            logger.error(f"{self._cmd_to_script(cmd)} failed: {ret.err}")
             sys.exit(-1)
         else:
             logger.debug(ret.out.strip())
