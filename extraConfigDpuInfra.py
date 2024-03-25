@@ -118,9 +118,10 @@ def run_dpu_network_operator_git(lh: host.Host, kc: str) -> None:
     cur_dir = os.getcwd()
     os.chdir(repo_dir)
     lh.run("rm -rf bin")
-    env = os.environ.copy()
-    env["KUBECONFIG"] = kc
-    env["IMG"] = "quay.io/wizhao/dpu-network-operator:Nov1_WZ_DPU_DS_Test_1"
+    env = {
+        "KUBECONFIG": kc,
+        "IMG": "quay.io/wizhao/dpu-network-operator:Nov1_WZ_DPU_DS_Test_1",
+    }
     # cleanup first, to make this script idempotent
     logger.info("running make undeploy")
     logger.info(lh.run("make undeploy", env=env))
