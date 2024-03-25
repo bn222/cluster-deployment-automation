@@ -13,18 +13,26 @@ from logger import logger
 from clustersConfig import ExtraConfigArgs
 
 
+def _sno_repo_setup(repo_dir: str, *, repo_wipe: bool = True) -> None:
+    exists = os.path.exists(repo_dir)
+    if exists and not repo_wipe:
+        return
+
+    if exists:
+        shutil.rmtree(repo_dir)
+
+    url = "https://github.com/openshift/sriov-network-operator.git"
+    logger.info(f"Cloning repo {url} to {repo_dir}")
+    Repo.clone_from(url, repo_dir, branch='master')
+
+
 def ExtraConfigSriov(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, Future[Optional[host.Result]]]) -> None:
     [f.result() for (_, f) in futures.items()]
     client = K8sClient(cc.kubeconfig)
     lh = host.LocalHost()
     repo_dir = "/root/sriov-network-operator"
-    url = "https://github.com/openshift/sriov-network-operator.git"
 
-    if os.path.exists(repo_dir):
-        shutil.rmtree(repo_dir)
-
-    logger.info(f"Cloning repo to {repo_dir}")
-    Repo.clone_from(url, repo_dir, branch='master')
+    _sno_repo_setup(repo_dir)
 
     cur_dir = os.getcwd()
     os.chdir(repo_dir)
