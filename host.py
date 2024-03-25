@@ -324,9 +324,6 @@ class Host:
     ) -> Result:
         cmd = self._cmd_to_script(cmd)
 
-        if self.sudo_needed:
-            cmd = "sudo " + cmd
-
         logger.log(log_level, f"running command {cmd} on {self._hostname}")
         if self.is_localhost():
             ret_val = self._run_local(cmd, env=env, cwd=cwd)
@@ -343,15 +340,30 @@ class Host:
         env: Optional[Mapping[str, Optional[str]]] = None,
         cwd: Optional[str] = None,
     ) -> Result:
+        is_shell = True
+        if self.sudo_needed:
+            is_shell = False
+            argv = ["sudo", "sh", "-c", cmd]
+        else:
+            argv = None
         full_env: Optional[dict[str, str]] = None
         if env:
-            full_env = os.environ.copy()
-            for k, v in env.items():
-                if v is None:
-                    full_env.pop(k, None)
-                else:
-                    full_env[k] = v
-        res = subprocess.run(cmd, shell=True, capture_output=True, env=full_env, cwd=cwd)
+            if self.sudo_needed:
+                extra = []
+                for k, v in env.items():
+                    assert k == shlex.quote(k)
+                    if v is not None:
+                        extra.append(f"{k}={shlex.quote(v)}")
+                assert argv
+                argv = [argv[0], *extra, *(argv[1:])]
+            else:
+                full_env = os.environ.copy()
+                for k, v in env.items():
+                    if v is None:
+                        full_env.pop(k, None)
+                    else:
+                        full_env[k] = v
+        res = subprocess.run(argv or cmd, shell=is_shell, capture_output=True, env=full_env, cwd=cwd)
         return Result(
             res.stdout.decode("utf-8"),
             res.stderr.decode("utf-8"),
@@ -386,16 +398,25 @@ class Host:
         if cwd:
             cmd = f"cd {shlex.quote(cwd)} || exit 10\n{cmd}"
 
-        if env:
-            # Assume we have a POSIX shell, and we can define variables via `export VAR=...`.
-            cmd2 = ""
-            for k, v in env.items():
-                assert k == shlex.quote(k)
-                if v is None:
-                    cmd2 += f"unset  -v {k}\n"
-                else:
-                    cmd2 += f"export {k}={shlex.quote(v)}\n"
-            cmd = cmd2 + cmd
+        if self.sudo_needed:
+            cmd2 = "sudo"
+            if env:
+                for k, v in env.items():
+                    assert k == shlex.quote(k)
+                    if v is not None:
+                        cmd2 += f" {k}={shlex.quote(v)}"
+            cmd = cmd2 + " sh -c " + shlex.quote(cmd)
+        else:
+            if env:
+                # Assume we have a POSIX shell, and we can define variables via `export VAR=...`.
+                cmd2 = ""
+                for k, v in env.items():
+                    assert k == shlex.quote(k)
+                    if v is None:
+                        cmd2 += f"unset  -v {k}\n"
+                    else:
+                        cmd2 += f"export {k}={shlex.quote(v)}\n"
+                cmd = cmd2 + cmd
 
         while True:
             try:
