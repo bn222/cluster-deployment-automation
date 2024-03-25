@@ -81,7 +81,7 @@ class KeyLogin(Login):
 
 
 class PasswordLogin(Login):
-    def __init__(self, hostname: str, username: str, password: str) -> None:
+    def __init__(self, hostname: str, username: str, password: Optional[str]) -> None:
         self._username = username
         self._password = password
         self._hostname = hostname
@@ -236,9 +236,10 @@ class Host:
             except Exception:
                 pass
 
-        if password is not None:
-            pw = PasswordLogin(self._hostname, username, password)
-            self._logins.append(pw)
+        # Always append PasswordLogin. The caller may omit @password, but maybe
+        # ssh-agent will work.
+        pw = PasswordLogin(self._hostname, username, password)
+        self._logins.append(pw)
 
         self.ssh_connect_looped(self._logins)
 
