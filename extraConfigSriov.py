@@ -7,6 +7,7 @@ import time
 from concurrent.futures import Future
 import shutil
 import jinja2
+import shlex
 import sys
 from typing import Optional
 from logger import logger
@@ -26,40 +27,48 @@ def _sno_repo_setup(repo_dir: str, *, repo_wipe: bool = True) -> None:
     Repo.clone_from(url, repo_dir, branch='master')
 
 
-def ExtraConfigSriov(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, Future[Optional[host.Result]]]) -> None:
-    [f.result() for (_, f) in futures.items()]
-    client = K8sClient(cc.kubeconfig)
-    lh = host.LocalHost()
-    repo_dir = "/root/sriov-network-operator"
+def _sno_make_deploy(
+    repo_dir: str,
+    kubeconfig: str,
+    *,
+    image: Optional[str] = None,
+) -> None:
+    rsh = host.LocalHost()
 
-    _sno_repo_setup(repo_dir)
-
-    cur_dir = os.getcwd()
-    os.chdir(repo_dir)
     env = os.environ.copy()
-    env["KUBECONFIG"] = client._kc
-
-    if cfg.image is not None:
-        image = cfg.image
-        logger.info(f"Image {image} provided to load custom sriov-network-operator")
-        env["SRIOV_NETWORK_OPERATOR_IMAGE"] = image
+    env["KUBECONFIG"] = kubeconfig
 
     # cleanup first, to make this script idempotent
     logger.info("running make undeploy")
-    logger.info(lh.run("make undeploy", env=env))
-    client.oc("delete namespace openshift-sriov-network-operator --ignore-not-found")
+    logger.info(rsh.run(shlex.join(["make", "-C", repo_dir, "undeploy"]), env=env))
+
+    if image is not None:
+        logger.info(f"Image {image} provided to load custom sriov-network-operator")
+        env["SRIOV_NETWORK_OPERATOR_IMAGE"] = image
+
+    client = K8sClient(kubeconfig)
 
     # Workaround PSA issues. https://issues.redhat.com/browse/OCPBUGS-1005
     client.oc("create namespace openshift-sriov-network-operator")
     client.oc("label ns --overwrite openshift-sriov-network-operator " "pod-security.kubernetes.io/enforce=privileged " "pod-security.kubernetes.io/enforce-version=v1.24 " "security.openshift.io/scc.podSecurityLabelSync=false")
 
     logger.info("running make deploy-setup")
-    logger.info(lh.run("make deploy-setup", env=env))
+    logger.info(rsh.run(shlex.join(["make", "-C", repo_dir, "deploy-setup"]), env=env))
 
     # Future proof for when sriov moves to new switchdev implementation: https://github.com/k8snetworkplumbingwg/sriov-network-operator/blob/master/doc/design/switchdev-refactoring.md
-    time.sleep(60)
-    os.chdir(cur_dir)
     client.oc("apply -f manifests/nicmode/sriov-operator-config.yaml")
+
+
+def ExtraConfigSriov(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, Future[Optional[host.Result]]]) -> None:
+    [f.result() for (_, f) in futures.items()]
+    repo_dir = "/root/sriov-network-operator"
+    _sno_repo_setup(repo_dir)
+    _sno_make_deploy(
+        repo_dir,
+        kubeconfig=cc.kubeconfig,
+        image=cfg.image,
+    )
+    time.sleep(60)
 
 
 def ExtraConfigSriovSubscription(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, Future[Optional[host.Result]]]) -> None:
