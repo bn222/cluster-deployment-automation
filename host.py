@@ -303,17 +303,18 @@ class Host:
         env: Optional[Dict[str, str]] = None,
         *,
         env_extra: Optional[Dict[str, str]] = None,
+        cwd: Optional[str] = None,
     ) -> Result:
         if self.sudo_needed:
             cmd = "sudo " + cmd
 
         logger.log(log_level, f"running command {cmd} on {self._hostname}")
         if self.is_localhost():
-            ret_val = self._run_local(cmd, env, env_extra=env_extra)
+            ret_val = self._run_local(cmd, env, env_extra=env_extra, cwd=cwd)
         else:
             if env is not None:
                 raise ValueError("remote host does not support full environment. Use env_extra instead")
-            ret_val = self._run_remote(cmd, log_level, env_extra=env_extra)
+            ret_val = self._run_remote(cmd, log_level, env_extra=env_extra, cwd=cwd)
 
         logger.log(log_level, ret_val)
         return ret_val
@@ -324,6 +325,7 @@ class Host:
         env: Optional[Dict[str, str]],
         *,
         env_extra: Optional[Dict[str, str]] = None,
+        cwd: Optional[str] = None,
     ) -> Result:
         if env_extra:
             if env is None:
@@ -333,7 +335,7 @@ class Host:
                     env.pop(k, None)
                 else:
                     env[k] = v
-        res = subprocess.run(cmd, shell=True, capture_output=True, env=env)
+        res = subprocess.run(cmd, shell=True, capture_output=True, env=env, cwd=cwd)
         return Result(
             res.stdout.decode("utf-8"),
             res.stderr.decode("utf-8"),
@@ -346,6 +348,7 @@ class Host:
         log_level: int,
         *,
         env_extra: Optional[Dict[str, str]] = None,
+        cwd: Optional[str] = None,
     ) -> Result:
         def read_output(cmd: str, log_level: int) -> Result:
             assert self._host is not None
@@ -363,6 +366,9 @@ class Host:
             exit_code = stdout.channel.recv_exit_status()
 
             return Result("".join(out), "".join(err), exit_code)
+
+        if cwd:
+            cmd = f"cd {shlex.quote(cwd)} || exit 10\n{cmd}"
 
         if env_extra:
             # Assume we have a POSIX shell, and we can define variables via `export VAR=...`.
@@ -388,8 +394,9 @@ class Host:
         cmd: str,
         *,
         env_extra: Optional[Dict[str, str]] = None,
+        cwd: Optional[str] = None,
     ) -> Result:
-        ret = self.run(cmd, env_extra=env_extra)
+        ret = self.run(cmd, env_extra=env_extra, cwd=cwd)
         if ret.returncode:
             logger.error(f"{cmd} failed: {ret.err}")
             sys.exit(-1)
