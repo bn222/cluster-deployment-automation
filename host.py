@@ -302,15 +302,16 @@ class Host:
         log_level: int = logging.DEBUG,
         *,
         env: Optional[Mapping[str, Optional[str]]] = None,
+        cwd: Optional[str] = None,
     ) -> Result:
         if self.sudo_needed:
             cmd = "sudo " + cmd
 
         logger.log(log_level, f"running command {cmd} on {self._hostname}")
         if self.is_localhost():
-            ret_val = self._run_local(cmd, env=env)
+            ret_val = self._run_local(cmd, env=env, cwd=cwd)
         else:
-            ret_val = self._run_remote(cmd, log_level, env=env)
+            ret_val = self._run_remote(cmd, log_level, env=env, cwd=cwd)
 
         logger.log(log_level, ret_val)
         return ret_val
@@ -320,6 +321,7 @@ class Host:
         cmd: str,
         *,
         env: Optional[Mapping[str, Optional[str]]] = None,
+        cwd: Optional[str] = None,
     ) -> Result:
         full_env: Optional[dict[str, str]] = None
         if env:
@@ -329,7 +331,7 @@ class Host:
                     full_env.pop(k, None)
                 else:
                     full_env[k] = v
-        res = subprocess.run(cmd, shell=True, capture_output=True, env=full_env)
+        res = subprocess.run(cmd, shell=True, capture_output=True, env=full_env, cwd=cwd)
         return Result(
             res.stdout.decode("utf-8"),
             res.stderr.decode("utf-8"),
@@ -342,6 +344,7 @@ class Host:
         log_level: int,
         *,
         env: Optional[Mapping[str, Optional[str]]] = None,
+        cwd: Optional[str] = None,
     ) -> Result:
         def read_output(cmd: str, log_level: int) -> Result:
             assert self._host is not None
@@ -359,6 +362,9 @@ class Host:
             exit_code = stdout.channel.recv_exit_status()
 
             return Result("".join(out), "".join(err), exit_code)
+
+        if cwd:
+            cmd = f"cd {shlex.quote(cwd)} || exit 10\n{cmd}"
 
         if env:
             # Assume we have a POSIX shell, and we can define variables via `export VAR=...`.
@@ -384,8 +390,9 @@ class Host:
         cmd: str,
         *,
         env: Optional[Mapping[str, Optional[str]]] = None,
+        cwd: Optional[str] = None,
     ) -> Result:
-        ret = self.run(cmd, env=env)
+        ret = self.run(cmd, env=env, cwd=cwd)
         if ret.returncode:
             logger.error(f"{cmd} failed: {ret.err}")
             sys.exit(-1)
