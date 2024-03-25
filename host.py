@@ -296,20 +296,43 @@ class Host:
     def need_sudo(self) -> None:
         self.sudo_needed = True
 
-    def run(self, cmd: str, log_level: int = logging.DEBUG, env: Dict[str, str] = os.environ.copy()) -> Result:
+    def run(
+        self,
+        cmd: str,
+        log_level: int = logging.DEBUG,
+        env: Optional[Dict[str, str]] = None,
+        *,
+        env_extra: Optional[Dict[str, str]] = None,
+    ) -> Result:
         if self.sudo_needed:
             cmd = "sudo " + cmd
 
         logger.log(log_level, f"running command {cmd} on {self._hostname}")
         if self.is_localhost():
-            ret_val = self._run_local(cmd, env)
+            ret_val = self._run_local(cmd, env, env_extra=env_extra)
         else:
-            ret_val = self._run_remote(cmd, log_level)
+            if env is not None:
+                raise ValueError("remote host does not support full environment. Use env_extra instead")
+            ret_val = self._run_remote(cmd, log_level, env_extra=env_extra)
 
         logger.log(log_level, ret_val)
         return ret_val
 
-    def _run_local(self, cmd: str, env: Dict[str, str]) -> Result:
+    def _run_local(
+        self,
+        cmd: str,
+        env: Optional[Dict[str, str]],
+        *,
+        env_extra: Optional[Dict[str, str]] = None,
+    ) -> Result:
+        if env_extra:
+            if env is None:
+                env = os.environ.copy()
+            for k, v in env_extra.items():
+                if v is None:
+                    env.pop(k, None)
+                else:
+                    env[k] = v
         args = shlex.split(cmd)
         pipe = subprocess.PIPE
         with subprocess.Popen(args, stdout=pipe, stderr=pipe, env=env) as proc:
@@ -325,7 +348,13 @@ class Host:
             ret = proc.returncode
         return Result(out, err, ret)
 
-    def _run_remote(self, cmd: str, log_level: int) -> Result:
+    def _run_remote(
+        self,
+        cmd: str,
+        log_level: int,
+        *,
+        env_extra: Optional[Dict[str, str]] = None,
+    ) -> Result:
         def read_output(cmd: str, log_level: int) -> Result:
             assert self._host is not None
             _, stdout, stderr = self._host.exec_command(cmd)
@@ -343,6 +372,17 @@ class Host:
 
             return Result("".join(out), "".join(err), exit_code)
 
+        if env_extra:
+            # Assume we have a POSIX shell, and we can define variables via `export VAR=...`.
+            cmd2 = ""
+            for k, v in env_extra.items():
+                assert k == shlex.quote(k)
+                if v is None:
+                    cmd2 += f"unset  -v {k}\n"
+                else:
+                    cmd2 += f"export {k}={shlex.quote(v)}\n"
+            cmd = cmd2 + cmd
+
         while True:
             try:
                 return read_output(cmd, log_level)
@@ -351,8 +391,13 @@ class Host:
                 logger.log(log_level, f"Connection lost while running command {cmd}, reconnecting...")
                 self.ssh_connect_looped(self._logins)
 
-    def run_or_die(self, cmd: str) -> Result:
-        ret = self.run(cmd)
+    def run_or_die(
+        self,
+        cmd: str,
+        *,
+        env_extra: Optional[Dict[str, str]] = None,
+    ) -> Result:
+        ret = self.run(cmd, env_extra=env_extra)
         if ret.returncode:
             logger.error(f"{cmd} failed: {ret.err}")
             sys.exit(-1)
