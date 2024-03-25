@@ -36,6 +36,15 @@ class ExtraConfigArgs:
     # Time to wait for the builders to roll out.
     custom_ovn_build_timeout: str = "20m"
 
+    # With "sriov_network_operator", if true build the container images locally
+    # and push them to the internal container registry of openshift.
+    #
+    # You will need authentication for fetching build containers.
+    # Get the login token from [1]. Then `podman login registry.ci.openshift.org`
+    # or create "$XDG_RUNTIME_DIR/containers/auth.json".
+    # [1] https://oauth-openshift.apps.ci.l2s4.p1.openshiftapps.com/oauth/token/request
+    sriov_network_operator_local: bool = False
+
 
 @dataclass
 class NodeConfig:
