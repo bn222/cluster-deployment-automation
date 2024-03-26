@@ -2,8 +2,12 @@ import os
 import re
 import sys
 import time
-from logger import logger
+import json
+
 from typing import Optional
+import xml.etree.ElementTree as et
+from pathlib import Path
+from logger import logger
 
 import common
 import host
@@ -69,6 +73,56 @@ class VirBridge:
         logger.info(f"Creating static DHCP entry for VM {name}, ip {ip} mac {mac}")
         cmd = f"virsh net-update default add ip-dhcp-host \"{host_xml}\" --live --config"
         self.hostconn.run_or_die(cmd)
+
+    def remove_dhcp_entries(self, vms: list[NodeConfig]) -> None:
+        def filter_dhcp_leases(j: list[dict[str, str]], removed_macs: list[str], names: list[str]) -> list[dict[str, str]]:
+            filtered = []
+            for entry in j:
+                if entry["mac-address"] in removed_macs:
+                    logger.info(f'Removed host with mac {entry["mac-address"]}')
+                    continue
+                if "hostname" in entry and entry["hostname"] in names:
+                    logger.info(f'Removed host with name {entry["hostname"]}')
+                    continue
+                logger.info(f'Kept entry {entry}')
+                filtered.append(entry)
+            return filtered
+
+        xml_str = self.hostconn.run("virsh net-dumpxml default").out
+        q = et.fromstring(xml_str)
+        removed_macs = []  # type: list[str]
+        names = [vm.name for vm in vms]
+        ips = [vm.ip for vm in vms]
+        ip_tree = next((it for it in q.iter("ip")), et.Element(''))
+        dhcp = next((it for it in ip_tree.iter("dhcp")), et.Element(''))
+        for e in dhcp:
+            if e.get('name') in names or e.get('ip') in ips:
+                # For all dhcp entries, check whether the name or the ip has been assigned to one of our "vms", and remove it if it's the case.
+                mac = e.attrib["mac"]
+                name = e.attrib["name"]
+                ip = e.attrib["ip"]
+                pre = "virsh net-update default delete ip-dhcp-host"
+                cmd = f"{pre} \"<host mac='{mac}' name='{name}' ip='{ip}'/>\" --live --config"
+                logger.info(self.hostconn.run(cmd))
+                removed_macs.append(mac)
+
+        fn = "/var/lib/libvirt/dnsmasq/virbr0.status"
+        p = Path(fn)
+        with p.open() as f:
+            contents = f.read()
+
+        if contents:
+            j = json.loads(contents)
+            names = [vm.name for vm in vms]
+            logger.info(f'Cleaning up {fn}')
+            logger.info(f'removing hosts with mac in {removed_macs} or name in {names}')
+            filtered = filter_dhcp_leases(j, removed_macs, names)
+            logger.info(self.hostconn.run("virsh net-destroy default"))
+
+            with p.open("w") as f:
+                f.write(json.dumps(filtered, indent=4))
+            logger.info(self.hostconn.run("virsh net-start default"))
+            self._restart()
 
     def _ensure_started(self, bridge_xml: str, api_port: Optional[str]) -> None:
         cmd = "virsh net-destroy default"

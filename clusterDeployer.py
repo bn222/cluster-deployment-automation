@@ -3,7 +3,6 @@ import os
 import sys
 import time
 import json
-import xml.etree.ElementTree as et
 import shutil
 from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
@@ -12,7 +11,6 @@ from typing import Union
 from typing import Callable
 import re
 import logging
-from pathlib import Path
 from assistedInstaller import AssistedClientAutomation
 import host
 from clustersConfig import ClustersConfig, ExtraConfigArgs
@@ -116,59 +114,15 @@ class ClusterDeployer:
         self._ai.ensure_infraenv_deleted(f"{cluster_name}-x86_64")
         self._ai.ensure_infraenv_deleted(f"{cluster_name}-arm64")
 
-        xml_str = self._local_host.hostconn.run("virsh net-dumpxml default").out
-        q = et.fromstring(xml_str)
-        removed_macs = []
-        names = [vm.name for vm in self._cc.all_vms()]
-        ips = [vm.ip for vm in self._cc.all_vms()]
-        dhcp = None
-        ip_tree = q.find('ip')
-        if ip_tree:
-            dhcp = ip_tree.find('dhcp')
-        for e in dhcp or []:
-            if e.get('name') in names or e.get('ip') in ips:
-                mac = e.attrib["mac"]
-                name = e.attrib["name"]
-                ip = e.attrib["ip"]
-                pre = "virsh net-update default delete ip-dhcp-host"
-                cmd = f"{pre} \"<host mac='{mac}' name='{name}' ip='{ip}'/>\" --live --config"
-                logger.info(self._local_host.hostconn.run(cmd))
-                removed_macs.append(mac)
+        self._local_host.bridge.remove_dhcp_entries(self._cc.all_nodes())
 
-        fn = "/var/lib/libvirt/dnsmasq/virbr0.status"
-        p = Path(fn)
-        with p.open() as f:
-            contents = f.read()
-
-        if contents:
-            j = json.loads(contents)
-            names = [x.name for x in self._cc.all_vms()]
-            logger.info(f'Cleaning up {fn}')
-            logger.info(f'removing hosts with mac in {removed_macs} or name in {names}')
-            filtered = []
-            for entry in j:
-                if entry["mac-address"] in removed_macs:
-                    logger.info(f'Removed host with mac {entry["mac-address"]}')
-                    continue
-                if "hostname" in entry and entry["hostname"] in names:
-                    logger.info(f'Removed host with name {entry["hostname"]}')
-                    continue
-                logger.info(f'Kept entry {entry}')
-                filtered.append(entry)
-
-            logger.info(self._local_host.hostconn.run("virsh net-destroy default"))
-            with p.open("w") as f:
-                f.write(json.dumps(filtered, indent=4))
-            logger.info(self._local_host.hostconn.run("virsh net-start default"))
-            logger.info(self._local_host.hostconn.run("systemctl restart libvirtd"))
-
-            image_paths = {os.path.dirname(n.image_path) for n in self._cc.local_vms()}
-            for image_path in image_paths:
-                vp = VirshPool(
-                    name=os.path.basename(image_path),
-                    rsh=self._local_host.hostconn,
-                )
-                vp.ensure_removed()
+        image_paths = {os.path.dirname(n.image_path) for n in self._cc.local_vms()}
+        for image_path in image_paths:
+            vp = VirshPool(
+                name=os.path.basename(image_path),
+                rsh=self._local_host.hostconn,
+            )
+            vp.ensure_removed()
 
         for h in self._all_hosts:
             h.ensure_not_linked_to_network()
