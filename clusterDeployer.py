@@ -138,10 +138,22 @@ class VirBridge:
                 </ip>
                 </network>"""
 
+    def _restart(self) -> None:
+        self.hostconn.run_or_die("systemctl restart libvirtd")
+
+    def _ensure_run_as_root(self) -> None:
+        qemu_conf = self.hostconn.read_file("/etc/libvirt/qemu.conf")
+        if re.search('\nuser = "root"', qemu_conf) and re.search('\nuser = "root"', qemu_conf):
+            return
+        self.hostconn.run("sed -e 's/#\\(user\\|group\\) = \".*\"$/\\1 = \"root\"/' -i /etc/libvirt/qemu.conf")
+        self._restart()
+
     def configure(self, api_network: str) -> None:
         hostname = self.hostconn.hostname()
         cmd = "systemctl enable libvirtd --now"
         self.hostconn.run_or_die(cmd)
+
+        self._ensure_run_as_root()
 
         # stp must be disabled or it might conflict with default configuration of some physical switches
         # 'bridge' section of network 'default' can't be updated => destroy and recreate
@@ -167,8 +179,7 @@ class VirBridge:
 
             self.limit_dhcp_range("192.168.122.2", "192.168.122.129")
 
-            cmd = "systemctl restart libvirtd"
-            self.hostconn.run_or_die(cmd)
+            self._restart()
 
             # Not sure why/whether this is needed. But we saw failures w/o it.
             # We need to investigate how to remove the sleep to speed up
@@ -533,25 +544,23 @@ class ClusterHost:
             self.hostconn.copy_to(local_iso_path, iso_path)
             logger.debug(f"iso_path is now {iso_path} for {self.hostconn.hostname()}")
 
+    def configure_bridge(self) -> None:
+        if not self.hosts_vms:
+            return
+
+        self.bridge.configure(self.config.network_api_port)
+
     def ensure_linked_to_network(self) -> None:
         if not self.hosts_vms:
             return
 
         api_network = self.config.network_api_port
-
         logger.info(f"link {api_network} to virbr0")
-
         interface = common.find_port(self.hostconn, api_network)
         if not interface:
-            logger.error_and_exit(f"Missing API network interface {api_network}")
+            logger.error_and_exit(f"Host {self.config.name} misses API network interface {api_network}")
 
         br_name = "virbr0"
-
-        # Need to restart libvirtd after modify the config file, which will be
-        # done in bridge.configure().
-        cmd = "sed -e 's/#\\(user\\|group\\) = \".*\"$/\\1 = \"root\"/' -i /etc/libvirt/qemu.conf"
-        self.hostconn.run(cmd)
-        self.bridge.configure(api_network)
 
         if interface.master is None:
             logger.info(f"No master set for interface {api_network}, setting it to {br_name}")
@@ -847,9 +856,6 @@ class ClusterDeployer:
                 logger.info("Skipping pre configuration.")
 
             if self._cc.kind != "microshift":
-                if self.need_api_network():
-                    self._local_host.ensure_linked_to_network()
-
                 if "masters" in self.steps:
                     self.teardown()
                     self.create_cluster()
@@ -966,10 +972,10 @@ class ClusterDeployer:
 
         hosts_with_masters = self._all_hosts_with_masters()
 
-        # Configure DHCP entries for all masters on the local virbr.
+        # Ensure the virtual bridge is properly configured and
+        # configure DHCP entries for all masters on the local virbr.
         for h in hosts_with_masters:
-            if self.need_api_network():
-                h.ensure_linked_to_network()
+            h.configure_bridge()
             h.configure_master_dhcp_entries(self._local_host.bridge)
 
         # Start all masters on all hosts.
@@ -1009,6 +1015,12 @@ class ClusterDeployer:
         for p in futures:
             p.result()
 
+        # Connect the masters to the physical network.
+        # NOTE: this must happen after the masters are installed by AI
+        # to ensure AI doesn't detect other nodes on the network.
+        for h in hosts_with_masters:
+            h.ensure_linked_to_network()
+
         logger.info("Setting password to for root to redhat")
         for h in hosts_with_masters:
             for master in h.k8s_master_nodes:
@@ -1034,9 +1046,17 @@ class ClusterDeployer:
         self._ai.ensure_infraenv_created(infra_env, cfg)
         hosts_with_workers = self._all_hosts_with_workers()
 
-        # Configure DHCP entries for all workers on the local virbr.
+        # Ensure the virtual bridge is properly configured and
+        # configure DHCP entries for all workers on the local virbr and
+        # connect the workers to the physical network.
+        #
+        # NOTE: linking the network must happen before starting workers because
+        # they need to be able to access the DHCP server running on the
+        # provisioning node.
         for h in hosts_with_workers:
+            h.configure_bridge()
             h.configure_worker_dhcp_entries(self._local_host.bridge)
+            h.ensure_linked_to_network()
 
         executor = ThreadPoolExecutor(max_workers=len(self._cc.workers))
 
