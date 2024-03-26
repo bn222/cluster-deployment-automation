@@ -161,12 +161,12 @@ def ExtraConfigDpuTenant(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: Dict
     logger.info("Running create")
     logger.info(tclient.oc("create -f /tmp/1.yaml"))
 
-    for nc in cc.workers:
-        cmd = f"label node {nc.name} network.operator.openshift.io/dpu-host="
+    for e in cc.workers:
+        cmd = f"label node {e.name} network.operator.openshift.io/dpu-host="
         logger.info(tclient.oc(cmd))
-        ip = tclient.get_ip(nc.name)
+        ip = tclient.get_ip(e.name)
         if ip is None:
-            logger.error(f"Failed to get ip for node {nc.name}")
+            logger.error(f"Failed to get ip for node {e.name}")
             sys.exit(-1)
         rh = host.RemoteHost(ip)
         rh.ssh_connect("core")
