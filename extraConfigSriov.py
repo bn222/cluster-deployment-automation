@@ -211,14 +211,15 @@ def ExtraConfigSriovOvSHWOL_NewAPI(cc: ClustersConfig, _: ExtraConfigArgs, futur
     workloadResourceName = "mlxnics"
     managementResourceName = "mgmtvf"
     for e in cc.workers:
-        logger.info(client.oc(f'label node {e.name} --overwrite=true feature.node.kubernetes.io/network-sriov.capable=true'))
-        logger.info(client.oc(f'label node {e.name} --overwrite=true network.operator.openshift.io/smart-nic='))
+        name = e.name
+        logger.info(client.oc(f'label node {name} --overwrite=true feature.node.kubernetes.io/network-sriov.capable=true'))
+        logger.info(client.oc(f'label node {name} --overwrite=true network.operator.openshift.io/smart-nic='))
         # Find out what the PF attached to br-ex is (uplink port). We only do HWOL on uplink ports.
-        ip = client.get_ip(e.name)
+        ip = client.get_ip(name)
         if ip is None:
             sys.exit(-1)
         rh = host.RemoteHost(ip)
-        result = try_get_ovs_pf(rh, e.name)
+        result = try_get_ovs_pf(rh, name)
 
         # Reserve VF(s) for management port(s).
         workloadVFs = f"{result}#{numMgmtVfs}-{numVfs - 1}"
