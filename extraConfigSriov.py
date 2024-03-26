@@ -40,6 +40,7 @@ def ExtraConfigSriov(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: Dict[str
     # cleanup first, to make this script idempotent
     logger.info("running make undeploy")
     logger.info(lh.run("make undeploy", env=env))
+    client.oc("delete namespace openshift-sriov-network-operator --ignore-not-found")
 
     # Workaround PSA issues. https://issues.redhat.com/browse/OCPBUGS-1005
     client.oc("create namespace openshift-sriov-network-operator")
@@ -52,6 +53,29 @@ def ExtraConfigSriov(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: Dict[str
     client.oc("apply -f manifest/nicmode/sriov-operator-config.yaml")
     time.sleep(60)
     os.chdir(cur_dir)
+
+
+def ExtraConfigSriovSubscription(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: Dict[str, Future[None]]) -> None:
+    [f.result() for (_, f) in futures.items()]
+    client = K8sClient(cc.kubeconfig)
+    lh = host.LocalHost()
+
+    env = os.environ.copy()
+    env["KUBECONFIG"] = client._kc
+
+    # cleanup first, to make this script idempotent
+    logger.info("running make undeploy")
+    logger.info(lh.run("make undeploy", env=env))
+    client.oc("delete namespace openshift-sriov-network-operator --ignore-not-found")
+
+    # Following https://docs.openshift.com/container-platform/4.15/networking/hardware_networks/installing-sriov-operator.html
+    client.oc("create -f manifests/nicmode/sriov-namespace-config.yaml")
+    client.oc("create -f manifests/nicmode/sriov-operator-group.yaml")
+    client.oc("create -f manifests/nicmode/sriov-subscription.yaml")
+
+    client.oc("apply -f manifests/nicmode/sriov-operator-config.yaml")
+
+    _check_sriov_installed(client)
 
 
 def need_pci_realloc(cc: ClustersConfig, client: K8sClient) -> bool:
@@ -238,6 +262,21 @@ def ExtraConfigSriovOvSHWOL_NewAPI(cc: ClustersConfig, _: ExtraConfigArgs, futur
     logger.info(client.oc("create -f /tmp/hardware-offload-config.yaml"))
 
     ensure_pci_realloc(cc, client, "sriov")
+
+
+def _check_sriov_installed(client: K8sClient) -> None:
+    for _ in range(10):
+        result = client.oc("get csv -n openshift-sriov-network-operator -o custom-columns=PHASE:.status.phase")
+        if "Succeeded" in result.out:
+            logger.info("SR-IOV Network Operator installed successfully.")
+            break
+        else:
+            time.sleep(30)
+    else:
+        logger.error("SR-IOV Network Operator installation failed or timed out.")
+        sys.exit(1)
+
+    logger.info("SR-IOV Network Operator installed successfully.")
 
 
 def main() -> None:
