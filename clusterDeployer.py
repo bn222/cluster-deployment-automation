@@ -221,7 +221,7 @@ def configure_bridge(h: host.Host, api_network: str) -> None:
     cmd = "virsh net-dumpxml default"
     ret = h.run(cmd)
 
-    if "stp='off'" not in ret.out or "range start='192.168.122.2'" in ret.out:
+    if "stp='off'" not in ret.out:
         logger.info("Destoying and recreating bridge")
         logger.info(f"creating default-net.xml on {hostname}")
         if hostname == "localhost":
@@ -573,7 +573,6 @@ class ClusterDeployer:
         self._ai.download_iso_with_retry(infra_env)
 
         lh = host.LocalHost()
-        self.ensure_linked_to_bridge(lh)
         # TODO: clean this up. Currently just skipping this
 
         # since self.local_host_config() is not present if no local vms
@@ -604,6 +603,7 @@ class ClusterDeployer:
 
         for p in futures:
             p.result()
+        self.ensure_linked_to_bridge(lh)
         for e in self._cc.masters:
             self._set_password(e.name)
 
