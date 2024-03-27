@@ -135,10 +135,8 @@ class CoreosBuilder:
         cur_dir = os.getcwd()
         os.chdir(fcos_dir)
 
-        # -e COSA_NO_KVM=1 \
         cmd = f"""
-        podman run --rm -ti --security-opt label=disable --privileged         \
-               --uidmap=1000:0:1 --uidmap=0:1:1000 --uidmap 1001:1001:64536   \
+        podman run --rm -ti --userns=host -u root --privileged                \
                -v {fcos_dir}:/srv/ --device /dev/kvm --device /dev/fuse       \
                --tmpfs /tmp -v /var/tmp:/var/tmp --name cosa                  \
                -v {config_dir}:/git:ro                                        \
