@@ -27,6 +27,7 @@ import common
 from python_hosts import Hosts, HostsEntry
 from logger import logger
 import microshift
+import extraConfigIPU
 from extraConfigRunner import ExtraConfigRunner
 from host import BMC
 
@@ -300,6 +301,9 @@ class ClusterDeployer:
     def teardown(self) -> None:
         cluster_name = self._cc.name
         logger.info(f"Tearing down {cluster_name}")
+        if self._cc.kind == "iso":
+            self._iso_teardown()
+            return  
         self._ai.ensure_cluster_deleted(self._cc.name)
         lh = host.LocalHost()
         for m in self._cc.all_vms():
@@ -470,7 +474,7 @@ class ClusterDeployer:
             else:
                 logger.info("Skipping pre configuration.")
 
-            if self._cc.kind != "microshift":
+            if self._cc.kind == "openshift":
                 lh = host.LocalHost()
                 self.ensure_linked_to_bridge(lh)
 
@@ -494,6 +498,13 @@ class ClusterDeployer:
             else:
                 logger.error_and_exit("Masters must be of length one for deploying microshift")
 
+        if self._cc.kind == "iso":
+            if len(self._cc.masters) == 1:
+                self.deploy_cluster_from_iso()
+            else:
+                logger.error("Masters must be of length one for deploying from iso")
+                sys.exit(-1)
+
         if "post" in self.steps:
             self._postconfig()
         else:
@@ -516,7 +527,7 @@ class ClusterDeployer:
                 logger.error_and_exit(f"Invalid external port, config is {self._cc.external_port}")
         else:
             logger.info("Don't need external network so will not set it up")
-        if self._cc.kind != "microshift":
+        if self._cc.kind == "openshift":
             host_config = self.local_host_config(lh.hostname())
             if self.need_api_network() and not self._validate_api_port(lh):
                 logger.error_and_exit(f"Can't find a valid network API port, config is {host_config.network_api_port}")
@@ -1093,3 +1104,20 @@ class ClusterDeployer:
                     logger.info(e)
 
             time.sleep(30)
+
+    def deploy_cluster_from_iso(self) -> None:
+        master = self._cc.masters[0]
+        if master.mac is None:
+            logger.error(f"No MAC address provided for cluster {self._cc.name}, exiting")
+            sys.exit(-1)
+        if master.ip is None:
+            logger.error(f"No IP address provided for cluster {self._cc.name}, exiting")
+            sys.exit(-1)
+        if master.name is None:
+            logger.error(f"No name provided for cluster {self._cc.name}, exiting")
+            sys.exit(-1)
+        extraConfigIPU.IPUIsoBoot(self._cc, master, self._cc.install_iso)
+    
+    def _iso_teardown(self) -> None:
+        logger.debug("Tearing down iso cluster")
+        # Restore previous dhcp config if it exists to maintain idempotency

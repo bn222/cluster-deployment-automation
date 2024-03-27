@@ -8,6 +8,7 @@ from extraConfigCNO import ExtraConfigCNO
 from extraConfigRT import ExtraConfigRT
 from extraConfigDualStack import ExtraConfigDualStack
 from extraConfigCX import ExtraConfigCX
+from extraConfigIPU import ExtraConfigIPUIsoBoot
 from clustersConfig import ClustersConfig
 from clustersConfig import ExtraConfigArgs
 from concurrent.futures import Future
@@ -36,6 +37,7 @@ class ExtraConfigRunner:
             "rt": ExtraConfigRT,
             "dualstack": ExtraConfigDualStack,
             "cx_firmware": ExtraConfigCX,
+            "provision_ipu": ExtraConfigIPUIsoBoot,
         }
 
     def run(self, to_run: ExtraConfigArgs, futures: Dict[str, Future[None]]) -> None:
