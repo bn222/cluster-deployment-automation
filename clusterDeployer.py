@@ -593,8 +593,7 @@ class ClusterDeployer:
         self._wait_known_state(names, cb)
         self._ai.start_until_success(cluster_name)
 
-        logger.info(f'downloading kubeconfig to {self._cc.kubeconfig}')
-        self._ai.download_kubeconfig(self._cc.name, self._cc.kubeconfig)
+        self._ai.download_kubeconfig_and_secrets(self._cc.name, self._cc.kubeconfig)
 
         self._ai.wait_cluster(cluster_name)
 

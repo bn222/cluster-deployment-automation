@@ -122,7 +122,7 @@ class ClusterSnapshotter:
         for x in futures:
             x.result()
 
-        self._ai.download_kubeconfig(self._cc.name, self._cc.kubeconfig)
+        self._ai.download_kubeconfig_and_secrets(self._cc.name, self._cc.kubeconfig)
 
     def _export_vm(self, config: NodeConfig) -> None:
         lh = host.LocalHost()
