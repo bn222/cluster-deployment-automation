@@ -72,6 +72,9 @@ class ClusterDeployer:
     def _all_hosts_with_workers(self) -> set[ClusterHost]:
         return {ch for ch in self._all_hosts if len(ch.k8s_worker_nodes) > 0}
 
+    def _all_hosts_with_only_workers(self) -> set[ClusterHost]:
+        return {ch for ch in self._all_hosts if len(ch.k8s_worker_nodes) > 0 and not ch.k8s_master_nodes}
+
     """
     Using Aicli, we will find all the clusters installed on our host included in our configuration file.
       E.g: aicli -U 0.0.0.0:8090 list cluster
@@ -101,20 +104,24 @@ class ClusterDeployer:
     is hardcoded to be the network hosting the API network.
     """
 
-    def teardown(self) -> None:
+    def teardown_masters(self) -> None:
         cluster_name = self._cc.name
+        if MASTERS_STEP not in self.steps:
+            logger.info(f"Not tearing down {cluster_name}")
+            return
+
         logger.info(f"Tearing down {cluster_name}")
         self._ai.ensure_cluster_deleted(self._cc.name)
 
         self.update_dnsmasq(setup=False)
 
-        for h in self._all_hosts:
-            h.teardown()
+        for h in self._all_hosts_with_masters():
+            h.teardown_nodes(h.k8s_master_nodes)
 
         self._ai.ensure_infraenv_deleted(f"{cluster_name}-x86_64")
         self._ai.ensure_infraenv_deleted(f"{cluster_name}-arm64")
 
-        self._local_host.bridge.remove_dhcp_entries(self._cc.all_nodes())
+        self._local_host.bridge.remove_dhcp_entries(self._cc.master_vms())
 
         image_paths = {os.path.dirname(n.image_path) for n in self._cc.local_vms()}
         for image_path in image_paths:
@@ -124,10 +131,45 @@ class ClusterDeployer:
             )
             vp.ensure_removed()
 
-        for h in self._all_hosts:
+        for h in self._all_hosts_with_masters():
             h.ensure_not_linked_to_network()
 
         AssistedClientAutomation.delete_kubeconfig_and_secrets(self._cc.name, self._cc.kubeconfig)
+
+    def teardown_workers(self) -> None:
+        cluster_name = self._cc.name
+
+        # If workers not in steps (and masters set), teardown the workers to avoid dangling vms.
+        if WORKERS_STEP in self.steps and MASTERS_STEP not in self.steps:
+            logger.info(f"Tearing down (some) workers on {cluster_name}")
+        elif MASTERS_STEP in self.steps:
+            logger.info(f"Tearing down (some) workers on {cluster_name} before tearing down masters")
+        else:
+            return
+
+        for h in self._all_hosts_with_workers():
+            h.teardown_nodes(h.k8s_worker_nodes)
+
+        self._local_host.remove_dhcp_entries(self._cc.worker_vms())
+
+        # Find whether the host will still hosts some vms after tearing down what's configured.
+        for h in self._all_hosts_with_only_workers():
+            installed_vms = []
+            if h.hosts_vms:
+                installed_vms = h.hostconn.run("virsh list --all --name").out.strip().split()
+            if not installed_vms:
+                h.ensure_not_linked_to_network()
+            else:
+                logger.debug(f"bridge not unlinked as {installed_vms} remaining on {h.config.name}")
+
+        # if masters in steps, following steps are not needed as tearing down masters take care of this.
+        if MASTERS_STEP in self.steps:
+            return
+
+        for w in self._cc.workers:
+            logger.info(f"Deleting worker {w.name}")
+            self.client().delete_node(w.name)
+            self._ai.delete_host(w.name)
 
     def _preconfig(self) -> None:
         for e in self._cc.preconfig:
@@ -160,8 +202,10 @@ class ClusterDeployer:
                 logger.info("Skipping pre configuration.")
 
             if self._cc.kind != "microshift":
+                if WORKERS_STEP in self.steps or MASTERS_STEP in self.steps:
+                    self.teardown_workers()
                 if MASTERS_STEP in self.steps:
-                    self.teardown()
+                    self.teardown_masters()
                     self.create_cluster()
                     self.create_masters()
                 else:
@@ -278,7 +322,7 @@ class ClusterDeployer:
         # configure DHCP entries for all masters on the local virbr.
         for h in hosts_with_masters:
             h.configure_bridge()
-            h.configure_master_dhcp_entries(self._local_host.bridge)
+        self._local_host.bridge.setup_dhcp_entries(self._cc.master_vms())
 
         # Start all masters on all hosts.
         executor = ThreadPoolExecutor(max_workers=len(self._cc.masters))
@@ -358,7 +402,9 @@ class ClusterDeployer:
         # provisioning node.
         for h in hosts_with_workers:
             h.configure_bridge()
-            h.configure_worker_dhcp_entries(self._local_host.bridge)
+
+        self._local_host.setup_dhcp_entries(self._cc.worker_vms())
+        for h in hosts_with_workers:
             h.ensure_linked_to_network(self._local_host.bridge)
 
         executor = ThreadPoolExecutor(max_workers=len(self._cc.workers))

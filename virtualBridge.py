@@ -1,6 +1,5 @@
 import os
 import re
-import sys
 import time
 import json
 
@@ -39,40 +38,21 @@ class VirBridge:
         self.hostconn = h
         self.config = config
 
-    def setup_dhcp_entry(self, cfg: NodeConfig) -> None:
-        if cfg.ip is None:
-            logger.error_and_exit(f"Missing IP for node {cfg.name}")
-        ip = cfg.ip
-        mac = cfg.mac
-        name = cfg.name
-        # If adding a worker node fails, one might want to retry w/o tearing down
-        # the whole cluster. In that case, the DHCP entry might already be present,
-        # with wrong mac -> remove it
+    def setup_dhcp_entries(self, vms: list[NodeConfig]) -> None:
+        # DHCP entries should have been removed during teardown.
+        # However, leases sometimes came back.
+        self.remove_dhcp_entries(vms)
+        for cfg in vms:
+            if cfg.ip is None:
+                logger.error_and_exit(f"Missing IP for node {cfg.name}")
+            ip = cfg.ip
+            mac = cfg.mac
+            name = cfg.name
 
-        cmd = "virsh net-dumpxml default"
-        ret = self.hostconn.run_or_die(cmd)
-        if f"'{name}'" in ret.out:
-            logger.info(f"{name} already configured as static DHCP entry - removing before adding back with proper configuration")
-            host_xml = f"<host name='{name}'/>"
-            cmd = f"virsh net-update default delete ip-dhcp-host \"{host_xml}\" --live --config"
+            host_xml = f"<host mac='{mac}' name='{name}' ip='{ip}'/>"
+            logger.info(f"Creating static DHCP entry for VM {name}, ip {ip} mac {mac}")
+            cmd = f"virsh net-update default add ip-dhcp-host \"{host_xml}\" --live --config"
             self.hostconn.run_or_die(cmd)
-
-        cmd = "virsh net-dhcp-leases default"
-        ret = self.hostconn.run(cmd)
-        # Look for "{name} " in the output. The space is intended to differentiate between "bm-worker-2 " and e.g. "bm-worker-20"
-        if f"{name} " in ret.out:
-            logger.error(f"Error: {name} found in dhcp leases")
-            logger.error("To fix this, run")
-            logger.error("\tvirsh net-destroy default")
-            logger.error("\tRemove wrong entries from /var/lib/libvirt/dnsmasq/virbr0.status")
-            logger.error("\tvirsh net-start default")
-            logger.error("\tsystemctl restart libvirt")
-            sys.exit(-1)
-
-        host_xml = f"<host mac='{mac}' name='{name}' ip='{ip}'/>"
-        logger.info(f"Creating static DHCP entry for VM {name}, ip {ip} mac {mac}")
-        cmd = f"virsh net-update default add ip-dhcp-host \"{host_xml}\" --live --config"
-        self.hostconn.run_or_die(cmd)
 
     def remove_dhcp_entries(self, vms: list[NodeConfig]) -> None:
         def filter_dhcp_leases(j: list[dict[str, str]], removed_macs: list[str], names: list[str]) -> list[dict[str, str]]:

@@ -107,6 +107,22 @@ class ClusterHost:
 
         self.bridge.configure(self.api_port)
 
+    def setup_dhcp_entries(self, vms: list[NodeConfig]) -> None:
+        if not self.hosts_vms:
+            return
+
+        self.bridge.setup_dhcp_entries(vms)
+        # bridge.remove_dhcp_entries might remove the master of the bridge (through virsh net-destroy/net-start). Add it back.
+        self.ensure_linked_to_network(self.bridge)
+
+    def remove_dhcp_entries(self, vms: list[NodeConfig]) -> None:
+        if not self.hosts_vms:
+            return
+
+        self.bridge.remove_dhcp_entries(vms)
+        # bridge.remove_dhcp_entries might remove the master of the bridge (through virsh net-destroy/net-start). Add it back.
+        self.ensure_linked_to_network(self.bridge)
+
     def ensure_linked_to_network(self, dhcp_bridge: VirBridge) -> None:
         if not self.needs_api_network:
             return
@@ -153,19 +169,6 @@ class ClusterHost:
 
         logger.info(f"Removing DHCP reply drop rules on {self.api_port}")
         self.hostconn.run("ebtables -t filter -F FORWARD")
-
-    def _configure_dhcp_entries(self, dhcp_bridge: VirBridge, nodes: list[ClusterNode]) -> None:
-        if not self.hosts_vms:
-            return
-
-        for node in nodes:
-            dhcp_bridge.setup_dhcp_entry(node.config)
-
-    def configure_master_dhcp_entries(self, dhcp_bridge: VirBridge) -> None:
-        return self._configure_dhcp_entries(dhcp_bridge, self.k8s_master_nodes)
-
-    def configure_worker_dhcp_entries(self, dhcp_bridge: VirBridge) -> None:
-        return self._configure_dhcp_entries(dhcp_bridge, self.k8s_worker_nodes)
 
     def preinstall(self, external_port: str, executor: ThreadPoolExecutor) -> Future[None]:
         def _preinstall() -> None:
@@ -231,6 +234,6 @@ class ClusterHost:
     def wait_for_workers_boot(self, desired_ip_range: tuple[str, str]) -> None:
         return self._wait_for_boot(self.k8s_worker_nodes, desired_ip_range)
 
-    def teardown(self) -> None:
-        for node in self._k8s_nodes():
+    def teardown_nodes(self, nodes: list[ClusterNode]) -> None:
+        for node in nodes:
             node.teardown()

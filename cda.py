@@ -38,7 +38,8 @@ def main_deploy(args: argparse.Namespace) -> None:
     cd = ClusterDeployer(cc, ai, args.steps, args.secrets_path)
 
     if args.teardown or args.teardown_full:
-        cd.teardown()
+        cd.teardown_workers()
+        cd.teardown_masters()
     else:
         cd.deploy()
 
