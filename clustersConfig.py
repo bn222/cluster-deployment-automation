@@ -3,7 +3,9 @@ import os
 import io
 import sys
 import re
+import ipaddress
 from typing import Optional
+import xml.etree.ElementTree as et
 import jinja2
 from yaml import safe_load
 import host
@@ -204,11 +206,24 @@ class ClustersConfig:
 
         self.full_ip_range = (ip_range[0], ip_range[1])
         n_nodes = len(cc["masters"]) + len(cc["workers"]) + 1
-        self.ip_range = common.ip_range(ip_range[0], n_nodes)
+
+        # Get the last IP used in the running cluster.
+        last_ip = self.get_last_ip()
+
+        # Update the last IP based on the config.
+        for node in self.all_nodes():
+            if node.ip and ipaddress.IPv4Address(node.ip) > ipaddress.IPv4Address(last_ip):
+                last_ip = node.ip
+
+        if last_ip and ipaddress.IPv4Address(last_ip) > ipaddress.IPv4Address(ip_range[0]) + n_nodes:
+            self.ip_range = ip_range[0], str(ipaddress.ip_address(last_ip) + 1)
+        else:
+            self.ip_range = common.ip_range(ip_range[0], n_nodes)
+        logger.info(f"range = {self.ip_range}")
         if common.ip_range_size(ip_range) < common.ip_range_size(self.ip_range):
             logger.error_and_exit("The supplied ip_range config is too small for the number of nodes")
 
-        dynamic_ip_range = common.ip_range(self.ip_range[1], common.ip_range_size(ip_range) - n_nodes)
+        dynamic_ip_range = common.ip_range(self.ip_range[1], common.ip_range_size(ip_range) - common.ip_range_size(self.ip_range))
         self.local_bridge_config = BridgeConfig(ip=self.ip_range[0], mask=ip_mask, dynamic_ip_range=dynamic_ip_range)
         self.remote_bridge_config = BridgeConfig(ip=ip_range[1], mask=ip_mask)
 
@@ -230,6 +245,18 @@ class ClustersConfig:
             self.preconfig.append(ExtraConfigArgs(**c))
         for c in cc["postconfig"]:
             self.postconfig.append(ExtraConfigArgs(**c))
+
+    def get_last_ip(self) -> str:
+        hostconn = host.LocalHost()
+        last_ip = "0.0.0.0"
+        xml_str = hostconn.run("virsh net-dumpxml default").out
+        tree = et.fromstring(xml_str)
+        ip_tree = next((it for it in tree.iter("ip")), et.Element(''))
+        dhcp = next((it for it in ip_tree.iter("dhcp")), et.Element(''))
+        for e in dhcp:
+            if ipaddress.IPv4Address(e.get('ip', "0.0.0.0")) > ipaddress.IPv4Address(last_ip):
+                last_ip = e.get('ip', "0.0.0.0")
+        return last_ip
 
     def _load_full_config(self, yaml_path: str) -> None:
         if not path.exists(yaml_path):
