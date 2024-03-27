@@ -154,8 +154,7 @@ class ClusterDeployer:
         for h in self._all_hosts:
             h.ensure_not_linked_to_network()
 
-        if os.path.exists(self._cc.kubeconfig):
-            os.remove(self._cc.kubeconfig)
+        AssistedClientAutomation.delete_kubeconfig_and_secrets(self._cc.name, self._cc.kubeconfig)
 
     def _preconfig(self) -> None:
         for e in self._cc.preconfig:
@@ -331,8 +330,7 @@ class ClusterDeployer:
         self._wait_known_state(names, cb)
         self._ai.start_until_success(cluster_name)
 
-        logger.info(f'downloading kubeconfig to {self._cc.kubeconfig}')
-        self._ai.download_kubeconfig(self._cc.name, self._cc.kubeconfig)
+        self._ai.download_kubeconfig_and_secrets(self._cc.name, self._cc.kubeconfig)
 
         self._ai.wait_cluster(cluster_name)
 

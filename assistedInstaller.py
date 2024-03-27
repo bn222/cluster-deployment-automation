@@ -48,9 +48,44 @@ class AssistedClientAutomation(AssistedClient):  # type: ignore
         if name in (x["name"] for x in self.list_infra_envs()):
             self.delete_infra_env(name)
 
-    def download_kubeconfig(self, name: str, path: str, stdout: bool = False) -> None:
-        path = os.path.dirname(path)
-        super().download_kubeconfig(name, path, stdout)
+    @staticmethod
+    def delete_kubeconfig_and_secrets(name: str, kubeconfig_path: Optional[str]) -> None:
+
+        path, kubeconfig_path, downloaded_kubeconfig_path, downloaded_kubeadminpassword_path = common.kubeconfig_get_paths(name, kubeconfig_path)
+
+        try:
+            os.remove(kubeconfig_path)
+        except OSError:
+            pass
+
+        try:
+            os.remove(downloaded_kubeadminpassword_path)
+        except OSError:
+            pass
+
+    def download_kubeconfig_and_secrets(
+        self,
+        name: str,
+        kubeconfig_path: Optional[str],
+        *,
+        log: bool = True,
+    ) -> tuple[str, str]:
+
+        path, kubeconfig_path, downloaded_kubeconfig_path, downloaded_kubeadminpassword_path = common.kubeconfig_get_paths(name, kubeconfig_path)
+
+        self.download_kubeconfig(name, path)
+        self.download_kubeadminpassword(name, path)
+
+        if downloaded_kubeconfig_path != kubeconfig_path:
+            # download_kubeconfig() does not support specifying the full path.
+            # The caller requested another name. Rename.
+            os.rename(downloaded_kubeconfig_path, kubeconfig_path)
+
+        if log:
+            logger.info(f"KUBECONFIG={kubeconfig_path}")
+            logger.info(f"KUBEADMIN_PASSWD={downloaded_kubeadminpassword_path}")
+
+        return kubeconfig_path, downloaded_kubeadminpassword_path
 
     def download_iso_with_retry(self, infra_env: str, path: str = os.getcwd()) -> None:
         logger.info(self.info_iso(infra_env, {}))
