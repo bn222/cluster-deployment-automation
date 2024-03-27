@@ -378,9 +378,6 @@ class Host:
                     cmd2 += f"export {k}={shlex.quote(v)}\n"
             cmd = cmd2 + cmd
 
-        # Make sure multiline command is not seen as multiple commands
-        cmd = cmd.replace("\n", "\\\n")
-
         while True:
             try:
                 return read_output(cmd, log_level)
