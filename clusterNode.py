@@ -1,6 +1,7 @@
 import abc
 import os
 import paramiko
+import shlex
 import sys
 import time
 from concurrent.futures import Future, ThreadPoolExecutor
@@ -144,6 +145,7 @@ class VmClusterNode(ClusterNode):
             --disk path={self.config.image_path}
             {append}
         """
+        cmd = shlex.join(shlex.split(cmd))
 
         logger.info(f"Starting VM {self.config.name}")
         ret = self.hostconn.run(cmd)
