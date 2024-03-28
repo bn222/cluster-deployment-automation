@@ -7,7 +7,7 @@ import requests
 from ailib import AssistedClient
 import common
 from logger import logger
-from typing import Dict
+from typing import Dict, Tuple
 import sys
 
 
@@ -123,7 +123,7 @@ class AssistedClientAutomation(AssistedClient):  # type: ignore
                 return AssistedClientHostInfo(h["status"], h["inventory"])
         return None
 
-    def get_ai_ip(self, name: str) -> Optional[str]:
+    def get_ai_ip(self, name: str, ip_range: Tuple[str, str]) -> Optional[str]:
         ai_host = self.get_ai_host(name)
         if ai_host:
             inventory = json.loads(ai_host.inventory)
@@ -133,7 +133,7 @@ class AssistedClientAutomation(AssistedClient):  # type: ignore
             for default_nic in default_nics:
                 nic_info = next(nic for nic in inventory.get('interfaces') if nic["name"] == default_nic)
                 addr = str(nic_info['ipv4_addresses'][0].split('/')[0])
-                if common.ip_in_subnet(addr, "192.168.122.0/24"):
+                if common.ip_range_contains(ip_range, addr):
                     return addr
         return None
 

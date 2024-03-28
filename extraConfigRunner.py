@@ -11,9 +11,10 @@ from extraConfigCX import ExtraConfigCX
 from clustersConfig import ClustersConfig
 from clustersConfig import ExtraConfigArgs
 from concurrent.futures import Future
-from typing import Dict
+from typing import Dict, Optional
 from logger import logger
 import sys
+import host
 
 
 class ExtraConfigRunner:
@@ -38,7 +39,7 @@ class ExtraConfigRunner:
             "cx_firmware": ExtraConfigCX,
         }
 
-    def run(self, to_run: ExtraConfigArgs, futures: Dict[str, Future[None]]) -> None:
+    def run(self, to_run: ExtraConfigArgs, futures: Dict[str, Future[Optional[host.Result]]]) -> None:
         if to_run.name not in self._extra_config:
             logger.info(f"{to_run.name} is not an extra config")
             sys.exit(-1)
