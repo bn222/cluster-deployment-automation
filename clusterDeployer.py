@@ -104,19 +104,19 @@ def setup_vm(h: host.Host, cfg: NodeConfig, iso_or_image_path: str) -> host.Resu
     else:
         network = "bridge=virbr0"
     cmd = f"""
-    virt-install
-        --connect qemu:///system
-        -n {name}
-        -r {cfg.ram}
-        --cpu host
-        --vcpus {cfg.cpu}
-        --os-variant={cfg.os_variant}
-        --import
-        --network {network},mac={mac}
-        --events on_reboot=restart
-        {cdrom_line}
-        --disk path={cfg.image_path}
-        {append}
+    virt-install                        \
+        --connect qemu:///system        \
+        -n {name}                       \
+        -r {cfg.ram}                    \
+        --cpu host                      \
+        --vcpus {cfg.cpu}               \
+        --os-variant={cfg.os_variant}   \
+        --import                        \
+        --network {network},mac={mac}   \
+        --events on_reboot=restart      \
+        {cdrom_line}                    \
+        --disk path={cfg.image_path}    \
+        {append}                        \
     """
 
     logger.info(f"Starting VM {name}")
