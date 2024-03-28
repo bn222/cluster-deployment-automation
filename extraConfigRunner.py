@@ -1,5 +1,5 @@
 from extraConfigBFB import ExtraConfigBFB, ExtraConfigSwitchNicMode
-from extraConfigSriov import ExtraConfigSriov, ExtraConfigSriovOvSHWOL, ExtraConfigSriovOvSHWOL_NewAPI
+from extraConfigSriov import ExtraConfigSriov, ExtraConfigSriovSubscription, ExtraConfigSriovOvSHWOL, ExtraConfigSriovOvSHWOL_NewAPI
 from extraConfigDpuTenant import ExtraConfigDpuTenantMC, ExtraConfigDpuTenant, ExtraConfigDpuTenant_NewAPI
 from extraConfigDpuInfra import ExtraConfigDpuInfra, ExtraConfigDpuInfra_NewAPI
 from extraConfigOvnK import ExtraConfigOvnK
@@ -23,6 +23,7 @@ class ExtraConfigRunner:
             "bf_bfb_image": ExtraConfigBFB,
             "switch_to_nic_mode": ExtraConfigSwitchNicMode,
             "sriov_network_operator": ExtraConfigSriov,
+            "sriov_network_operator_subscription": ExtraConfigSriovSubscription,
             "sriov_ovs_hwol": ExtraConfigSriovOvSHWOL,
             "sriov_ovs_hwol_new_api": ExtraConfigSriovOvSHWOL_NewAPI,
             "dpu_infra": ExtraConfigDpuInfra,
