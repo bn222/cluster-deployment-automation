@@ -297,51 +297,22 @@ class ClusterDeployer:
     is hardcoded to be the network hosting the API network.
     """
 
-    def teardown(self) -> None:
-        cluster_name = self._cc.name
-        logger.info(f"Tearing down {cluster_name}")
-        self._ai.ensure_cluster_deleted(self._cc.name)
+    def remove_dhcp_entries(self, vms: List[NodeConfig]) -> None:
         lh = host.LocalHost()
-        for m in self._cc.all_vms():
-            h = host.Host(m.node)
-            if m.node != "localhost":
-                host_config = self.local_host_config(m.node)
-                h.ssh_connect(host_config.username, host_config.password)
-                if not host_config.pre_installed:
-                    h.need_sudo()
-
-            # remove the image only if it really exists
-            image_path = m.image_path
-            h.remove(image_path.replace(".qcow2", ".img"))
-            h.remove(image_path)
-
-            # destroy the VM only if it really exists
-            if h.run(f"virsh desc {m.name}").returncode == 0:
-                r = h.run(f"virsh destroy {m.name}")
-                logger.info(r.err if r.err else r.out.strip())
-                r = h.run(f"virsh undefine {m.name}")
-                logger.info(r.err if r.err else r.out.strip())
-
-        self._ai.ensure_infraenv_deleted(f"{cluster_name}-x86")
-        self._ai.ensure_infraenv_deleted(f"{cluster_name}-arm")
-
         xml_str = lh.run("virsh net-dumpxml default").out
         q = et.fromstring(xml_str)
         removed_macs = []
-        names = [x.name for x in self._cc.all_vms()]
-        ips = [x.ip for x in self._cc.all_vms()]
+        names = [x.name for x in vms]
+        ips = [x.ip for x in vms]
         for e in q[-1][0][1:]:
             if e.attrib["name"] in names or e.attrib["ip"] in ips:
                 mac = e.attrib["mac"]
                 name = e.attrib["name"]
                 ip = e.attrib["ip"]
                 pre = "virsh net-update default delete ip-dhcp-host"
-                cmd = f"{pre} \"<host mac='{mac}' name='{name}' ip='{ip}'/>\" --live --config"
+                cmd = f"{pre} \"<host mac='{mac}' name='{name}' ip='{ip}'/>\" --config"
                 logger.info(lh.run(cmd))
                 removed_macs.append(mac)
-
-        # bring back initial dynamic dhcp range.
-        limit_dhcp_range(lh, "192.168.122.129", "192.168.122.2")
 
         fn = "/var/lib/libvirt/dnsmasq/virbr0.status"
         with open(fn) as f:
@@ -349,7 +320,7 @@ class ClusterDeployer:
 
         if contents:
             j = json.loads(contents)
-            names = [x.name for x in self._cc.all_vms()]
+            names = [x.name for x in vms]
             logger.info(f'Cleaning up {fn}')
             logger.info(f'removing hosts with mac in {removed_macs} or name in {names}')
             filtered = []
@@ -369,25 +340,112 @@ class ClusterDeployer:
             logger.info(lh.run("virsh net-start default"))
             logger.info(lh.run("systemctl restart libvirtd"))
 
-        if self.need_api_network():
-            for hc in self._cc.hosts:
-                h = host.Host(hc.name)
-                if hc.name != "localhost":
-                    host_config = self.local_host_config(hc.name)
-                    h.ssh_connect(host_config.username, host_config.password)
-                    if not host_config.is_preinstalled():
-                        h.need_sudo()
+            # Running net-destroy/net-start/restart libvirtd removes the bridge master.
+            # Set it back. It will be removed later if needed (e.g. when tearing down full cluster).
+            host_config = self.local_host_config(lh.hostname())
+            api_network = host_config.network_api_port
+            rc = lh.run(f"ip link set {api_network} master virbr0")
+            logger.info(rc if rc.err else rc.out.strip())
 
-                intif = self._validate_api_port(h)
-                if not intif:
-                    logger.info("can't find network API port")
-                else:
-                    logger.info(h.run(f"ip link set {intif} nomaster"))
-                    logger.info(f"Setting interface {intif} as managed in NetworkManager")
-                    lh.run(f"nmcli device set {intif} managed yes")
+    def reset_api_network(self, hosts: List[str]) -> None:
+        for hc in hosts:
+            h = host.Host(hc)
+            if hc != "localhost":
+                host_config = self.local_host_config(hc)
+                try:
+                    h.ssh_connect(host_config.username, host_config.password)
+                except paramiko.ssh_exception.AuthenticationException as e:
+                    logger.error(type(e))
+                    continue
+                if not host_config.is_preinstalled():
+                    h.need_sudo()
+
+            intif = self._validate_api_port(h)
+            if not intif:
+                logger.info("can't find network API port")
+            else:
+                logger.info(h.run(f"ip link set {intif} nomaster"))
+                logger.info(f"Setting interface {intif} as managed in NetworkManager")
+                h.run(f"nmcli device set {intif} managed yes")
+
+    def remove_vms(self, vms: List[NodeConfig]) -> None:
+        for m in vms:
+            h = host.Host(m.node)
+            if m.node != "localhost":
+                host_config = self.local_host_config(m.node)
+                try:
+                    h.ssh_connect(host_config.username, host_config.password)
+                except paramiko.ssh_exception.AuthenticationException as e:
+                    logger.error(type(e))
+                    continue
+                if not host_config.pre_installed:
+                    h.need_sudo()
+
+            # remove the image only if it really exists
+            image_path = m.image_path
+            h.remove(image_path.replace(".qcow2", ".img"))
+            h.remove(image_path)
+
+            # destroy the VM only if it really exists
+            if h.run(f"virsh desc {m.name}").returncode == 0:
+                r = h.run(f"virsh destroy {m.name}")
+                logger.info(r.err if r.err else r.out.strip())
+                r = h.run(f"virsh undefine {m.name}")
+                logger.info(r.err if r.err else r.out.strip())
+
+    def teardown_masters(self) -> None:
+        cluster_name = self._cc.name
+        if "masters" not in self.steps:
+            logger.info(f"Not tearing down {cluster_name}")
+            return
+
+        logger.info(f"Tearing down {cluster_name}")
+        self._ai.ensure_cluster_deleted(self._cc.name)
+        lh = host.LocalHost()
+
+        vms = self._cc.master_vms()
+        self.remove_vms(vms)
+
+        self._ai.ensure_infraenv_deleted(f"{cluster_name}-x86")
+        self._ai.ensure_infraenv_deleted(f"{cluster_name}-arm")
+
+        self.remove_dhcp_entries(self._cc.all_vms())
+
+        # bring back initial dynamic dhcp range.
+        limit_dhcp_range(lh, "192.168.122.129", "192.168.122.2")
+
+        if self.need_api_network():
+            hosts = self._cc.master_vm_hosts
+            self.reset_api_network(hosts)
 
         if os.path.exists(self._cc.kubeconfig):
             os.remove(self._cc.kubeconfig)
+
+    def teardown_workers(self) -> None:
+        cluster_name = self._cc.name
+
+        # If "masters" is specified in steps and "workers" not, still tear down the workers as this is an invalid configuration.
+        if "workers" in self.steps or "masters" in self.steps:
+            logger.info(f"Tearing down (some) workers on {cluster_name}")
+        else:
+            logger.info(f"Not tearing down workers on {cluster_name}")
+            return
+
+        vms = self._cc.worker_vms()
+        self.remove_vms(vms)
+
+        # if masters in  steps, no need to stop worker one by one; the cluster deletion will take care of this.
+        if "workers" in self.steps and "masters" not in self.steps:
+            for w in self._cc.workers:
+                logger.info(f"Stopping worker {w.name}")
+                self.client().delete_node(w.name)
+                self._ai.delete_host(w.name)
+
+        self.remove_dhcp_entries(vms)
+
+        if self.need_api_network():
+            hosts = self._cc.worker_vm_only_hosts
+            self.reset_api_network(hosts)
 
     def _validate_api_port(self, lh: host.Host) -> Optional[str]:
         host_config = self.local_host_config(lh.hostname())
@@ -471,11 +529,11 @@ class ClusterDeployer:
                 logger.info("Skipping pre configuration.")
 
             if self._cc.kind != "microshift":
-                lh = host.LocalHost()
-                self.ensure_linked_to_bridge(lh)
+                if "masters" in self.steps or "workers" in self.steps:
+                    self.teardown_workers()
 
                 if "masters" in self.steps:
-                    self.teardown()
+                    self.teardown_masters()
                     self.create_cluster()
                     self.create_masters()
                 else:
@@ -650,6 +708,9 @@ class ClusterDeployer:
             assert self._verify_package_is_installed(w, "kernel-modules-extra"), err_str
 
     def create_workers(self) -> None:
+        lh = host.LocalHost()
+        self.ensure_linked_to_bridge(lh)
+
         for e in self._cc.workers:
             self._futures[e.name].result()
         is_bf = (x.kind == "bf" for x in self._cc.workers)
