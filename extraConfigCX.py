@@ -4,7 +4,7 @@ import coreosBuilder
 from concurrent.futures import ThreadPoolExecutor
 from nfs import NFS
 from concurrent.futures import Future
-from typing import Dict
+from typing import Dict, Optional
 import sys
 from logger import logger
 from clustersConfig import ExtraConfigArgs
@@ -21,14 +21,14 @@ tools available. https://github.com/bn222/dpu-tools/
 """
 
 
-def ExtraConfigCX(cc: ClustersConfig, _: ExtraConfigArgs, futures: Dict[str, Future[None]]) -> None:
+def ExtraConfigCX(cc: ClustersConfig, _: ExtraConfigArgs, futures: Dict[str, Future[Optional[host.Result]]]) -> None:
     coreosBuilder.ensure_fcos_exists()
     logger.info("Updating CX firmware on all workers")
     lh = host.LocalHost()
     nfs = NFS(lh, cc.external_port)
     iso_url = nfs.host_file("/root/iso/fedora-coreos.iso")
 
-    def helper(h: host.HostWithCX) -> None:
+    def helper(h: host.HostWithCX) -> Optional[host.Result]:
         def check(result: host.Result) -> None:
             if result.returncode != 0:
                 logger.info(result)
@@ -38,6 +38,7 @@ def ExtraConfigCX(cc: ClustersConfig, _: ExtraConfigArgs, futures: Dict[str, Fut
         h.ssh_connect("core")
         check(h.cx_firmware_upgrade())
         h.cold_boot()
+        return None
 
     executor = ThreadPoolExecutor(max_workers=len(cc.workers))
     # Assuming all workers have CX that need to update their firmware

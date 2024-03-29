@@ -104,6 +104,19 @@ def ipr_to_entries(input: str) -> List[IPRouteRouteEntry]:
     return ret
 
 
+def ip_range(start_addr: str, n_addrs: int) -> Tuple[str, str]:
+    return start_addr, str(ipaddress.ip_address(start_addr) + n_addrs)
+
+
+def ip_range_contains(range: Tuple[str, str], ip: str) -> bool:
+    ip_val = ipaddress.IPv4Address(ip)
+    return ipaddress.IPv4Address(range[0]) <= ip_val and ipaddress.IPv4Address(range[1]) > ip_val
+
+
+def ip_range_size(range: Tuple[str, str]) -> int:
+    return int(ipaddress.IPv4Address(range[1])) - int(ipaddress.IPv4Address(range[0]))
+
+
 def ip_in_subnet(addr: str, subnet: str) -> bool:
     return ipaddress.ip_address(addr) in ipaddress.ip_network(subnet)
 

@@ -7,6 +7,7 @@ from extraConfigDpuInfra import run_dpu_network_operator_git
 import extraConfigSriov
 from typing import Dict
 from typing import List
+from typing import Optional
 import sys
 import jinja2
 import json
@@ -16,7 +17,7 @@ from logger import logger
 from clustersConfig import ExtraConfigArgs
 
 
-def ExtraConfigDpuTenantMC(cc: ClustersConfig, _: ExtraConfigArgs, futures: Dict[str, Future[None]]) -> None:
+def ExtraConfigDpuTenantMC(cc: ClustersConfig, _: ExtraConfigArgs, futures: Dict[str, Future[Optional[host.Result]]]) -> None:
     [f.result() for (_, f) in futures.items()]
     logger.info("Running post config step")
     tclient = K8sClient("/root/kubeconfig.tenantcluster")
@@ -71,7 +72,7 @@ def render_envoverrides_cm(client: K8sClient, mapping: List[Dict[str, str]], ns:
     return f"/tmp/envoverrides-{ns}.yaml"
 
 
-def ExtraConfigDpuTenant(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: Dict[str, Future[None]]) -> None:
+def ExtraConfigDpuTenant(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: Dict[str, Future[Optional[host.Result]]]) -> None:
     [f.result() for (_, f) in futures.items()]
     logger.info("Running post config step")
 
@@ -213,7 +214,7 @@ def ExtraConfigDpuTenant(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: Dict
     extraConfigSriov.ensure_pci_realloc(cc, tclient, "dpu-host")
 
 
-def ExtraConfigDpuTenant_NewAPI(cc: ClustersConfig, _: ExtraConfigArgs, futures: Dict[str, Future[None]]) -> None:
+def ExtraConfigDpuTenant_NewAPI(cc: ClustersConfig, _: ExtraConfigArgs, futures: Dict[str, Future[Optional[host.Result]]]) -> None:
     [f.result() for (_, f) in futures.items()]
     logger.info("Running post config step")
     tclient = K8sClient("/root/kubeconfig.tenantcluster")

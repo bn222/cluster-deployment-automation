@@ -5,7 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 from k8sClient import K8sClient
 from nfs import NFS
 from concurrent.futures import Future
-from typing import Dict
+from typing import Dict, Optional
 import sys
 from logger import logger
 from clustersConfig import ExtraConfigArgs
@@ -27,14 +27,14 @@ to be in a good state.
 """
 
 
-def ExtraConfigBFB(cc: ClustersConfig, _: ExtraConfigArgs, futures: Dict[str, Future[None]]) -> None:
+def ExtraConfigBFB(cc: ClustersConfig, _: ExtraConfigArgs, futures: Dict[str, Future[Optional[host.Result]]]) -> None:
     coreosBuilder.ensure_fcos_exists()
     logger.info("Loading BF-2 with BFB image on all workers")
     lh = host.LocalHost()
     nfs = NFS(lh, cc.external_port)
     iso_url = nfs.host_file("/root/iso/fedora-coreos.iso")
 
-    def helper(h: host.HostWithBF2) -> None:
+    def helper(h: host.HostWithBF2) -> Optional[host.Result]:
         def check(result: host.Result) -> None:
             if result.returncode != 0:
                 logger.info(result)
@@ -48,6 +48,7 @@ def ExtraConfigBFB(cc: ClustersConfig, _: ExtraConfigArgs, futures: Dict[str, Fu
         h.boot_iso_redfish(iso_url)
         h.ssh_connect("core")
         check(h.bf_load_bfb())
+        return None
 
     executor = ThreadPoolExecutor(max_workers=len(cc.workers))
     # Assuming that all workers have BF that need to reset to bfb image in
@@ -61,7 +62,7 @@ def ExtraConfigBFB(cc: ClustersConfig, _: ExtraConfigArgs, futures: Dict[str, Fu
     logger.info("BFB setup complete")
 
 
-def ExtraConfigSwitchNicMode(cc: ClustersConfig, _: ExtraConfigArgs, futures: Dict[str, Future[None]]) -> None:
+def ExtraConfigSwitchNicMode(cc: ClustersConfig, _: ExtraConfigArgs, futures: Dict[str, Future[Optional[host.Result]]]) -> None:
     [f.result() for (_, f) in futures.items()]
     client = K8sClient(cc.kubeconfig)
 
