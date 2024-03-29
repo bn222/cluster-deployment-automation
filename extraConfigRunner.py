@@ -11,7 +11,7 @@ from extraConfigCX import ExtraConfigCX
 from clustersConfig import ClustersConfig
 from clustersConfig import ExtraConfigArgs
 from concurrent.futures import Future
-from typing import Dict, Optional
+from typing import Callable, Dict, Optional
 from logger import logger
 import sys
 import host
@@ -20,7 +20,7 @@ import host
 class ExtraConfigRunner:
     def __init__(self, cc: ClustersConfig):
         self._cc = cc
-        self._extra_config = {
+        self._extra_config: Dict[str, Callable[[ClustersConfig, ExtraConfigArgs, Dict[str, Future[Optional[host.Result]]]], None]] = {
             "bf_bfb_image": ExtraConfigBFB,
             "switch_to_nic_mode": ExtraConfigSwitchNicMode,
             "sriov_network_operator": ExtraConfigSriov,

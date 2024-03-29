@@ -56,7 +56,7 @@ def ExtraConfigSriov(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: Dict[str
     client.oc("apply -f manifests/nicmode/sriov-operator-config.yaml")
 
 
-def ExtraConfigSriovSubscription(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: Dict[str, Future[None]]) -> None:
+def ExtraConfigSriovSubscription(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: Dict[str, Future[Optional[host.Result]]]) -> None:
     [f.result() for (_, f) in futures.items()]
     client = K8sClient(cc.kubeconfig)
     lh = host.LocalHost()
