@@ -332,9 +332,8 @@ class AssistedInstallerService:
         pod_name = "assisted-installer"
         target = [x for x in json.loads(ret.out) if x["Name"] == pod_name]
         if target:
-            logger.info(f"Stopping {pod_name}")
-            lh.run(f"podman pod stop {pod_name}")
-            lh.run(f"podman pod rm {pod_name}")
+            logger.info(f"Stopping and removing {pod_name}")
+            lh.run(f"podman pod rm -f {pod_name}")
 
     def start(self, force: bool = False) -> None:
         self._configure()
