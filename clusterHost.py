@@ -23,11 +23,13 @@ class ClusterHost:
     hostconn: host.Host
     bridge: VirBridge
     config: HostConfig
+    needs_api_network: bool
+    api_port: Optional[str] = None
     k8s_master_nodes: List[ClusterNode]
     k8s_worker_nodes: List[ClusterNode]
     hosts_vms: bool
 
-    def __init__(self, h: host.Host, c: HostConfig, cc: ClustersConfig, bc: BridgeConfig):
+    def __init__(self, h: host.Host, c: HostConfig, cc: ClustersConfig, bc: BridgeConfig, serves_dhcp: bool):
         self.bridge = VirBridge(h, bc)
         self.hostconn = h
         self.config = c
@@ -54,8 +56,19 @@ class ClusterHost:
         if not self.config.pre_installed:
             self.hostconn.need_sudo()
 
-        if self.hosts_vms and not self.hostconn.is_localhost():
-            self.hostconn.ssh_connect(self.config.username, self.config.password)
+        if self.hosts_vms:
+            if not self.hostconn.is_localhost():
+                self.hostconn.ssh_connect(self.config.username, self.config.password)
+
+        self.needs_api_network = self.hosts_vms or serves_dhcp
+        if self.needs_api_network:
+            if self.config.network_api_port == "auto":
+                self.api_port = common.get_auto_port(self.hostconn)
+            else:
+                self.api_port = self.config.network_api_port
+            if self.api_port is None:
+                logger.error_and_exit(f"Can't find a valid network API port, config is {self.config.network_api_port}")
+            logger.info(f"Using {self.api_port} as network API port")
 
     def _k8s_nodes(self) -> List[ClusterNode]:
         return self.k8s_master_nodes + self.k8s_worker_nodes
@@ -75,57 +88,49 @@ class ClusterHost:
             logger.debug(f"iso_path is now {iso_path} for {self.hostconn.hostname()}")
 
     def configure_bridge(self) -> None:
-        if not self.hosts_vms:
+        if not self.needs_api_network:
             return
+        assert self.api_port is not None
 
-        self.bridge.configure()
+        self.bridge.configure(self.api_port)
 
     def ensure_linked_to_network(self) -> None:
-        if not self.hosts_vms:
+        if not self.needs_api_network:
             return
+        assert self.api_port is not None
 
-        api_network = self.config.network_api_port
-        logger.info(f"link {api_network} to virbr0")
-        interface = common.find_port(self.hostconn, api_network)
+        logger.info(f"link {self.api_port} to virbr0")
+        interface = common.find_port(self.hostconn, self.api_port)
         if not interface:
-            logger.error_and_exit(f"Host {self.config.name} misses API network interface {api_network}")
+            logger.error_and_exit(f"Host {self.config.name} misses API network interface {self.api_port}")
 
         br_name = "virbr0"
 
         if interface.master is None:
-            logger.info(f"No master set for interface {api_network}, setting it to {br_name}")
-            self.hostconn.run(f"ip link set {api_network} master {br_name}")
+            logger.info(f"No master set for interface {self.api_port}, setting it to {br_name}")
+            self.hostconn.run(f"ip link set {self.api_port} master {br_name}")
         elif interface.master != br_name:
-            logger.error_and_exit(f"Incorrect master set for interface {api_network}")
+            logger.error_and_exit(f"Incorrect master set for interface {self.api_port}")
 
-        logger.info(f"Setting interface {api_network} as unmanaged in NetworkManager")
-        self.hostconn.run(f"nmcli device set {api_network} managed no")
+        logger.info(f"Setting interface {self.api_port} as unmanaged in NetworkManager")
+        self.hostconn.run(f"nmcli device set {self.api_port} managed no")
 
     def ensure_not_linked_to_network(self) -> None:
-        if not self.hosts_vms:
+        if not self.needs_api_network:
+            return
+        assert self.api_port is not None
+
+        logger.info(f'Validating API network port {self.api_port}')
+        if not self.hostconn.port_exists(self.api_port):
+            logger.error(f"Can't find API network port {self.api_port}")
+            return
+        if not self.hostconn.port_has_carrier(self.api_port):
+            logger.error(f"API network port {self.api_port} doesn't have a carrier")
             return
 
-        intif = self.validate_api_port()
-        if not intif:
-            logger.info("can't find network API port")
-        else:
-            logger.info(self.hostconn.run(f"ip link set {intif} nomaster"))
-            logger.info(f"Setting interface {intif} as managed in NetworkManager")
-            self.hostconn.run(f"nmcli device set {intif} managed yes")
-
-    def validate_api_port(self) -> Optional[str]:
-        if self.config.network_api_port == "auto":
-            self.config.network_api_port = common.get_auto_port(self.hostconn)
-
-        port = self.config.network_api_port
-        logger.info(f'Validating API network port {port}')
-        if not self.hostconn.port_exists(port):
-            logger.error(f"Can't find API network port {port}")
-            return None
-        if not self.hostconn.port_has_carrier(port):
-            logger.error(f"API network port {port} doesn't have a carrier")
-            return None
-        return port
+        logger.info(self.hostconn.run(f"ip link set {self.api_port} nomaster"))
+        logger.info(f"Setting interface {self.api_port} as managed in NetworkManager")
+        self.hostconn.run(f"nmcli device set {self.api_port} managed yes")
 
     def _configure_dhcp_entries(self, dhcp_bridge: VirBridge, nodes: List[ClusterNode]) -> None:
         if not self.hosts_vms:
