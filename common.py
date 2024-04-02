@@ -65,6 +65,7 @@ class IPRouteAddressEntry:
     ifname: str
     flags: List[str]
     master: Optional[str]
+    address: str  # Ethernet address.
     addr_info: List[IPRouteAddressInfoEntry]
 
 
@@ -82,7 +83,7 @@ def ipa_to_entries(input: str) -> List[IPRouteAddressEntry]:
 
         master = e["master"] if "master" in e else None
 
-        ret.append(IPRouteAddressEntry(e["ifindex"], e["ifname"], e["flags"], master, addr_infos))
+        ret.append(IPRouteAddressEntry(e["ifindex"], e["ifname"], e["flags"], master, e["address"], addr_infos))
     return ret
 
 

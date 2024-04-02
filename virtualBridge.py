@@ -5,6 +5,7 @@ import time
 from logger import logger
 from typing import Optional, Tuple
 
+import common
 import host
 from clustersConfig import BridgeConfig, NodeConfig
 
@@ -169,3 +170,17 @@ class VirBridge:
             # Not sure why/whether this is needed. But we saw failures w/o it.
             # We need to investigate how to remove the sleep to speed up
             time.sleep(5)
+
+    def eth_address(self) -> str:
+        max_tries = 3
+        logger.info(f"Will try {max_tries} to get the virbr0 ethernet address on {self.hostconn.hostname()}")
+
+        for i in range(max_tries):
+            logger.debug(f"Trying to get the virbr0 ethernet address on {self.hostconn.hostname()} (try #{i})")
+            bridge_port = common.find_port(self.hostconn, 'virbr0')
+            if bridge_port is not None:
+                return bridge_port.address
+            time.sleep(5)
+
+        logger.error_and_exit(f"Failed to get the virbr0 ethernet address on {self.hostconn.hostname()}")
+        return ""
