@@ -143,7 +143,7 @@ def try_get_ovs_pf(rh: host.Host, name: str) -> str:
     sys.exit(-1)
 
 
-def ExtraConfigSriovOvSHWOL(cc: ClustersConfig, _: ExtraConfigArgs, futures: Dict[str, Future[Optional[host.Result]]]) -> None:
+def _ExtraConfigSriovOvSHWOL_common(cc: ClustersConfig, futures: Dict[str, Future[Optional[host.Result]]], *, new_api: bool) -> None:
     [f.result() for (_, f) in futures.items()]
     client = K8sClient(cc.kubeconfig)
     client.oc("create -f manifests/nicmode/pool.yaml")
@@ -195,74 +195,29 @@ def ExtraConfigSriovOvSHWOL(cc: ClustersConfig, _: ExtraConfigArgs, futures: Dic
     logger.info(client.oc("create -f manifests/nicmode/nad.yaml"))
     client.wait_for_mcp("sriov", "nad.yaml")
 
+    if new_api:
+        mgmtPortResourceName = "openshift.io/" + managementResourceName
+        logger.info(f"Creating Config Map for Hardware Offload with resource name {mgmtPortResourceName}")
+        with open('./manifests/nicmode/hardware-offload-config.yaml.j2') as f:
+            j2_template = jinja2.Template(f.read())
+            rendered = j2_template.render(mgmtPortResourceName=mgmtPortResourceName)
+            logger.info(rendered)
+
+        with open("/tmp/hardware-offload-config.yaml", "w") as outFile:
+            outFile.write(rendered)
+
+        logger.info(client.oc("create -f /tmp/hardware-offload-config.yaml"))
+
     ensure_pci_realloc(cc, client, "sriov")
+
+
+def ExtraConfigSriovOvSHWOL(cc: ClustersConfig, _: ExtraConfigArgs, futures: Dict[str, Future[Optional[host.Result]]]) -> None:
+    _ExtraConfigSriovOvSHWOL_common(cc, futures, new_api=False)
 
 
 # VF Management port requires a new API. We need a new extra config class to handle the API changes.
 def ExtraConfigSriovOvSHWOL_NewAPI(cc: ClustersConfig, _: ExtraConfigArgs, futures: Dict[str, Future[Optional[host.Result]]]) -> None:
-    [f.result() for (_, f) in futures.items()]
-    client = K8sClient(cc.kubeconfig)
-    client.oc("create -f manifests/nicmode/pool.yaml")
-
-    workloadVFsAll = []
-    managementVFsAll = []
-    numVfs = 12
-    numMgmtVfs = 1
-    workloadResourceName = "mlxnics"
-    managementResourceName = "mgmtvf"
-    for e in cc.workers:
-        logger.info(client.oc(f'label node {e.name} --overwrite=true feature.node.kubernetes.io/network-sriov.capable=true'))
-        logger.info(client.oc(f'label node {e.name} --overwrite=true network.operator.openshift.io/smart-nic='))
-        # Find out what the PF attached to br-ex is (uplink port). We only do HWOL on uplink ports.
-        ip = client.get_ip(e.name)
-        if ip is None:
-            sys.exit(-1)
-        rh = host.RemoteHost(ip)
-        result = try_get_ovs_pf(rh, e.name)
-
-        # Reserve VF(s) for management port(s).
-        workloadVFs = f"{result}#{numMgmtVfs}-{numVfs - 1}"
-        managementVFs = f"{result}#0-{numMgmtVfs - 1}"
-        if workloadVFs not in workloadVFsAll:
-            workloadVFsAll.append(workloadVFs)
-        if managementVFs not in managementVFsAll:
-            managementVFsAll.append(managementVFs)
-
-    # We error out if we can't find any PFs.
-    if not workloadVFsAll:
-        logger.info("PF Name is not found on any nodes.")
-        sys.exit(-1)
-
-    workloadPolicyName = "sriov-workload-node-policy"
-    workloadPolicyFile = "/tmp/" + workloadPolicyName + ".yaml"
-    render_sriov_node_policy(workloadPolicyName, workloadVFsAll, numVfs, workloadResourceName, workloadPolicyFile)
-
-    mgmtPolicyName = "sriov-mgmt-node-policy"
-    mgmtPolicyFile = "/tmp/" + mgmtPolicyName + ".yaml"
-    render_sriov_node_policy(mgmtPolicyName, managementVFsAll, numVfs, managementResourceName, mgmtPolicyFile)
-
-    logger.info(client.oc("create -f manifests/nicmode/sriov-pool-config.yaml"))
-    client.wait_for_mcp("sriov", "sriov-pool-config.yaml")
-    logger.info(client.oc("create -f " + workloadPolicyFile))
-    client.wait_for_mcp("sriov", "sriov-workload-node-policy.yaml")
-    logger.info(client.oc("create -f " + mgmtPolicyFile))
-    client.wait_for_mcp("sriov", "sriov-mgmt-node-policy.yaml")
-    logger.info(client.oc("create -f manifests/nicmode/nad.yaml"))
-    client.wait_for_mcp("sriov", "nad.yaml")
-
-    mgmtPortResourceName = "openshift.io/" + managementResourceName
-    logger.info(f"Creating Config Map for Hardware Offload with resource name {mgmtPortResourceName}")
-    with open('./manifests/nicmode/hardware-offload-config.yaml.j2') as f:
-        j2_template = jinja2.Template(f.read())
-        rendered = j2_template.render(mgmtPortResourceName=mgmtPortResourceName)
-        logger.info(rendered)
-
-    with open("/tmp/hardware-offload-config.yaml", "w") as outFile:
-        outFile.write(rendered)
-
-    logger.info(client.oc("create -f /tmp/hardware-offload-config.yaml"))
-
-    ensure_pci_realloc(cc, client, "sriov")
+    _ExtraConfigSriovOvSHWOL_common(cc, futures, new_api=True)
 
 
 def _check_sriov_installed(client: K8sClient) -> None:
