@@ -351,7 +351,7 @@ class ClusterDeployer:
         # NOTE: this must happen after the masters are installed by AI
         # to ensure AI doesn't detect other nodes on the network.
         for h in hosts_with_masters:
-            h.ensure_linked_to_network()
+            h.ensure_linked_to_network(self._local_host.bridge)
 
         logger.info("Setting password to for root to redhat")
         for h in hosts_with_masters:
@@ -388,7 +388,7 @@ class ClusterDeployer:
         for h in hosts_with_workers:
             h.configure_bridge()
             h.configure_worker_dhcp_entries(self._local_host.bridge)
-            h.ensure_linked_to_network()
+            h.ensure_linked_to_network(self._local_host.bridge)
 
         executor = ThreadPoolExecutor(max_workers=len(self._cc.workers))
 

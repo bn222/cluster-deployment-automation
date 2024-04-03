@@ -94,16 +94,20 @@ class ClusterHost:
 
         self.bridge.configure(self.api_port)
 
-    def ensure_linked_to_network(self) -> None:
+    def ensure_linked_to_network(self, dhcp_bridge: VirBridge) -> None:
         if not self.needs_api_network:
             return
         assert self.api_port is not None
 
-        logger.info(f"link {self.api_port} to virbr0")
         interface = common.find_port(self.hostconn, self.api_port)
         if not interface:
             logger.error_and_exit(f"Host {self.config.name} misses API network interface {self.api_port}")
 
+        logger.info(f"Block all DHCP replies on {self.api_port} except the ones coming from the DHCP bridge")
+        self.hostconn.run(f"ebtables -t filter -A FORWARD -p IPv4 --in-interface {self.api_port} --src {dhcp_bridge.eth_address()} --ip-proto udp --ip-sport 67 --ip-dport 68 -j ACCEPT")
+        self.hostconn.run(f"ebtables -t filter -A FORWARD -p IPv4 --in-interface {self.api_port} --ip-proto udp --ip-sport 67 --ip-dport 68 -j DROP")
+
+        logger.info(f"Link {self.api_port} to virbr0")
         br_name = "virbr0"
 
         if interface.master is None:
@@ -131,6 +135,9 @@ class ClusterHost:
         logger.info(self.hostconn.run(f"ip link set {self.api_port} nomaster"))
         logger.info(f"Setting interface {self.api_port} as managed in NetworkManager")
         self.hostconn.run(f"nmcli device set {self.api_port} managed yes")
+
+        logger.info(f"Removing DHCP reply drop rules on {self.api_port}")
+        self.hostconn.run("ebtables -t filter -F FORWARD")
 
     def _configure_dhcp_entries(self, dhcp_bridge: VirBridge, nodes: List[ClusterNode]) -> None:
         if not self.hosts_vms:
