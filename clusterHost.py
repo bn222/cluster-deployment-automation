@@ -64,7 +64,7 @@ class ClusterHost:
         if not self.hosts_vms:
             return
 
-        image_paths = (node.config.image_path for node in nodes)
+        image_paths = {node.config.image_path for node in nodes}
         for vm_image_path in image_paths:
             image_path = os.path.dirname(vm_image_path)
             self.hostconn.run(f"mkdir -p {image_path}")
