@@ -68,7 +68,7 @@ class VirBridge:
         cmd = f"virsh net-update default add ip-dhcp-host \"{host_xml}\" --live --config"
         self.hostconn.run_or_die(cmd)
 
-    def _ensure_started(self, bridge_xml: str) -> None:
+    def _ensure_started(self, bridge_xml: str, api_port: str) -> None:
         cmd = "virsh net-destroy default"
         self.hostconn.run(cmd)  # ignore return code - it might fail if net was not started
 
@@ -86,12 +86,12 @@ class VirBridge:
 
         # set interface down before starting bridge as otherwise bridge start might fail if interface
         # already got an IP address in same network as bridge
-        self.hostconn.run(f"ip link set {self.config.api_network} down")
+        self.hostconn.run(f"ip link set {api_port} down")
 
         cmd = "virsh net-start default"
         self.hostconn.run_or_die(cmd)
 
-        self.hostconn.run(f"ip link set {self.config.api_network} up")
+        self.hostconn.run(f"ip link set {api_port} up")
 
     def _network_xml(self) -> str:
         if self.config.dynamic_ip_range is None:
@@ -121,7 +121,7 @@ class VirBridge:
         self.hostconn.run("sed -e 's/#\\(user\\|group\\) = \".*\"$/\\1 = \"root\"/' -i /etc/libvirt/qemu.conf")
         self._restart()
 
-    def configure(self) -> None:
+    def configure(self, api_port: str) -> None:
         hostname = self.hostconn.hostname()
         cmd = "systemctl enable libvirtd --now"
         self.hostconn.run_or_die(cmd)
@@ -162,7 +162,7 @@ class VirBridge:
             # Without this, net-undefine within ensure_bridge_is_started fails as libvirtd fails to restart
             # We need to investigate how to remove the sleep to speed up
             time.sleep(5)
-            self._ensure_started(bridge_xml)
+            self._ensure_started(bridge_xml, api_port)
 
             self._restart()
 

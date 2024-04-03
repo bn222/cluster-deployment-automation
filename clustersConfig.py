@@ -108,7 +108,6 @@ class HostConfig:
 
 @dataclass
 class BridgeConfig:
-    api_network: str
     ip: str
     mask: str
     dynamic_ip_range: Optional[Tuple[str, str]] = None
@@ -214,8 +213,8 @@ class ClustersConfig:
             logger.error_and_exit("The supplied cluster_ip_range config is too small for the number of nodes")
 
         dynamic_ip_range = common.ip_range(self.cluster_ip_range[1], common.ip_range_size(ip_range) - n_nodes)
-        self.local_bridge_config = BridgeConfig(api_network=self.network_api_port, ip=self.cluster_ip_range[0], mask=cluster_ip_mask, dynamic_ip_range=dynamic_ip_range)
-        self.remote_bridge_config = BridgeConfig(api_network=self.network_api_port, ip=ip_range[1], mask=cluster_ip_mask)
+        self.local_bridge_config = BridgeConfig(ip=self.cluster_ip_range[0], mask=cluster_ip_mask, dynamic_ip_range=dynamic_ip_range)
+        self.remote_bridge_config = BridgeConfig(ip=ip_range[1], mask=cluster_ip_mask)
 
         # creates hosts entries for each referenced node name
         node_names = {x["name"] for x in cc["hosts"]}

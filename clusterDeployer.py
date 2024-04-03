@@ -50,8 +50,9 @@ class ClusterDeployer:
 
         lh = host.LocalHost()
         lh_config = list(filter(lambda hc: hc.name == lh.hostname(), self._cc.hosts))[0]
-        self._local_host = ClusterHost(lh, lh_config, cc, cc.local_bridge_config)
-        self._remote_hosts = {bm.name: ClusterHost(host.RemoteHost(bm.name), bm, cc, cc.remote_bridge_config) for bm in self._cc.hosts if bm.name != lh.hostname()}
+        serves_dhcp = cc.kind == "openshift" and len(cc.local_vms()) != len(cc.all_nodes())
+        self._local_host = ClusterHost(lh, lh_config, cc, cc.local_bridge_config, serves_dhcp=serves_dhcp)
+        self._remote_hosts = {bm.name: ClusterHost(host.RemoteHost(bm.name), bm, cc, cc.remote_bridge_config, serves_dhcp=False) for bm in self._cc.hosts if bm.name != lh.hostname()}
         self._all_hosts = [self._local_host] + list(self._remote_hosts.values())
         self._futures = {k8s_node.config.name: k8s_node.future for h in self._all_hosts for k8s_node in h._k8s_nodes()}
         self._all_nodes = {k8s_node.config.name: k8s_node for h in self._all_hosts for k8s_node in h._k8s_nodes()}
@@ -153,9 +154,8 @@ class ClusterDeployer:
             logger.info(self._local_host.hostconn.run("virsh net-start default"))
             logger.info(self._local_host.hostconn.run("systemctl restart libvirtd"))
 
-        if self.need_api_network():
-            for h in self._all_hosts:
-                h.ensure_not_linked_to_network()
+        for h in self._all_hosts:
+            h.ensure_not_linked_to_network()
 
         if os.path.exists(self._cc.kubeconfig):
             os.remove(self._cc.kubeconfig)
@@ -172,9 +172,6 @@ class ClusterDeployer:
         if not to_run:
             return
         self._extra_config.run(to_run, self._futures)
-
-    def need_api_network(self) -> bool:
-        return len(self._cc.local_vms()) != len(self._cc.all_nodes())
 
     def need_external_network(self) -> bool:
         vm_bm = [x for x in self._cc.workers if x.kind == "vm" and x.node != "localhost"]
@@ -234,11 +231,6 @@ class ClusterDeployer:
                 logger.error_and_exit(f"Invalid external port, config is {self._cc.external_port}")
         else:
             logger.info("Don't need external network so will not set it up")
-        if self._cc.kind != "microshift":
-            if self.need_api_network() and not self._local_host.validate_api_port():
-                logger.error_and_exit(f"Can't find a valid network API port, config is {self._local_host.config.network_api_port}")
-            else:
-                logger.info(f"Using {self._local_host.config.network_api_port} as network API port")
         if not self._cc.validate_node_ips():
             logger.error_and_exit("Invalid master/worker IPs.")
 
