@@ -172,10 +172,6 @@ def _ExtraConfigDpuTenant_common(cc: ClustersConfig, cfg: ExtraConfigArgs, futur
         logger.info("creating config map to put ovn-k into dpu host mode")
         tclient.oc("create -f manifests/tenant/sriovdpuconfigmap.yaml")
 
-    if new_api:
-        # DELTA: We don't create env-override to set management port. https://github.com/ovn-org/ovn-kubernetes/pull/3467
-        pass
-    else:
         logger.info("setting ovn kube node env-override to set management port")
         logger.info(os.getcwd())
         contents = open("manifests/tenant/setenvovnkube.yaml").read()
@@ -211,10 +207,8 @@ def _ExtraConfigDpuTenant_common(cc: ClustersConfig, cfg: ExtraConfigArgs, futur
                 logger.info("Unexpected ovn-k8s-mp0 interface found in br-int.")
                 # FIXME: The above patch did not seem to entirely work. We will need to investigate further
                 # For now we will delete the port.
-        else:
-            # workaround for https://issues.redhat.com/browse/NHE-335
-            pass
 
+        # workaround for https://issues.redhat.com/browse/NHE-335
         logger.info(rh.run("sudo ovs-vsctl del-port br-int ovn-k8s-mp0"))
 
     logger.info("creating mc to disable ovs")
@@ -228,10 +222,7 @@ def _ExtraConfigDpuTenant_common(cc: ClustersConfig, cfg: ExtraConfigArgs, futur
 
     tclient.oc("create -f manifests/tenant/disable-ovs.yaml")
     logger.info("Waiting for mcp")
-    if new_api:
-        tclient.wait_for_mcp("dpu-host", "disable-ovs.yaml")
-    else:
-        tclient.wait_for_mcp("dpu-host", "dpu host mode")
+    tclient.wait_for_mcp("dpu-host", "disable-ovs.yaml")
 
     logger.info("Final infrastructure cluster configuration")
     iclient = K8sClient("/root/kubeconfig.infracluster")
@@ -260,9 +251,8 @@ def _ExtraConfigDpuTenant_common(cc: ClustersConfig, cfg: ExtraConfigArgs, futur
     logger.info(r)
     logger.info("Creating network attachement definition")
     tclient.oc("create -f manifests/tenant/nad.yaml")
-    if not new_api:
-        tclient.approve_csr()
-        iclient.approve_csr()
+    tclient.approve_csr()
+    iclient.approve_csr()
 
     extraConfigSriov.ensure_pci_realloc(cc, tclient, "dpu-host")
 
