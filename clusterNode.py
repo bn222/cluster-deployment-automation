@@ -77,6 +77,13 @@ class ClusterNode:
         return not ret.returncode
 
     def health_check(self) -> None:
+        # Check that the boot stage completed correctly.
+        if self.future.done():
+            result = self.future.result()
+            if result is not None and result.returncode != 0:
+                logger.error_and_exit(f"Failed to provision node {self.config.name}: {result.err}")
+
+        # Check that the right packages are installed.
         required_packages = ["kernel-modules-extra"]
         missing_packages = [p for p in required_packages if not self._verify_package_is_installed(p)]
         for p in missing_packages:
@@ -150,7 +157,14 @@ class VmClusterNode(ClusterNode):
         self.future = executor.submit(self.setup_vm, iso_or_image_path)
 
     def has_booted(self) -> bool:
-        return self.hostconn.vm_is_running(self.config.name)
+        if self.install_wait:
+            # If the future is done an error probably happened.  Declare
+            # successful "boot".  The real status is checked in the
+            # health_check stage.
+            if self.future.done():
+                return True
+            return self.hostconn.vm_is_running(self.config.name)
+        return self.future.done()
 
     def post_boot(self, desired_ip_range: Tuple[str, str]) -> bool:
         if not self.install_wait:
