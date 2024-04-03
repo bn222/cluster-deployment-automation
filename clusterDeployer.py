@@ -484,14 +484,14 @@ class ClusterDeployer:
 
         logger.info("Connectivity established to all workers, renaming them in Assisted installer")
         logger.info(f"looking for workers with ip {[w.ip() for w in workers]}")
-        while True:
+        for try_count in itertools.count(0):
             renamed = self._try_rename_workers(infra_env)
             expected = len(workers)
             if renamed == expected:
                 logger.info(f"Found and renamed {renamed} workers")
                 break
             if renamed:
-                logger.info(f"Found and renamed {renamed} workers, but waiting for {expected}, retrying")
+                logger.info(f"Found and renamed {renamed} workers, but waiting for {expected}, retrying (try #{try_count})")
                 time.sleep(5)
 
     def _try_rename_workers(self, infra_env: str) -> int:

@@ -1,3 +1,4 @@
+import itertools
 import os
 import time
 from concurrent.futures import Future, ThreadPoolExecutor
@@ -187,9 +188,7 @@ class ClusterHost:
         if not nodes:
             return
 
-        try_count = 0
-        while True:
-            try_count += 1
+        for try_count in itertools.count(0):
             states = {node.config.name: node.has_booted() for node in nodes}
             node_names = ', '.join(states.keys())
             logger.info(f"Waiting for nodes ({node_names}) to have booted (try #{try_count})..")
@@ -199,9 +198,7 @@ class ClusterHost:
             time.sleep(10)
         logger.info(f"It took {try_count} tries to wait for nodes ({node_names}) to have booted.")
 
-        try_count = 0
-        while True:
-            try_count += 1
+        for try_count in itertools.count(0):
             states = {node.config.name: node.post_boot(desired_ip_range) for node in nodes}
             node_names = ', '.join(states.keys())
             logger.info(f"Waiting for nodes ({node_names}) to have run post_boot (try #{try_count})..")
