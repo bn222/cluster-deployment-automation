@@ -192,8 +192,7 @@ class CoreosBuilder:
             logger.info(f"Writing ignition to {ign}")
             f.write(ign)
 
-        if os.path.exists(dst):
-            os.remove(dst)
+        os.makedirs(os.path.dirname(dst), exist_ok=True)
 
         cmd = f"coreos-installer iso ignition embed -i {fn_ign} -o {dst} {embed_src}"
         lh = host.LocalHost()
