@@ -135,21 +135,47 @@ class IPRouteAddressEntry:
     addr_info: list[IPRouteAddressInfoEntry]
 
 
+def _parse_json_list(jstr: str, *, strict_parsing: bool = False) -> list[typing.Any]:
+    try:
+        lst = json.loads(jstr)
+    except ValueError:
+        if strict_parsing:
+            raise
+        return []
+
+    if not isinstance(lst, list):
+        try:
+            lst = list(lst)
+        except Exception:
+            if strict_parsing:
+                raise
+            return []
+
+    return typing.cast(list[typing.Any], lst)
+
+
 def ipa(host: host.Host) -> str:
     return host.run("ip -json a").out
 
 
-def ipa_to_entries(input: str) -> list[IPRouteAddressEntry]:
-    j = json.loads(input)
+def ipa_to_entries(jstr: str, *, strict_parsing: bool = False) -> list[IPRouteAddressEntry]:
     ret: list[IPRouteAddressEntry] = []
-    for e in j:
-        addr_infos = []
-        for addr in e["addr_info"]:
-            addr_infos.append(IPRouteAddressInfoEntry(addr["family"], addr["local"]))
+    for e in _parse_json_list(jstr, strict_parsing=strict_parsing):
+        try:
+            entry = IPRouteAddressEntry(
+                e["ifindex"],
+                e["ifname"],
+                e["flags"],
+                e["master"] if "master" in e else None,
+                e["address"],
+                [IPRouteAddressInfoEntry(addr["family"], addr["local"]) for addr in e["addr_info"]],
+            )
+        except (KeyError, ValueError, TypeError):
+            if strict_parsing:
+                raise
+            continue
 
-        master = e["master"] if "master" in e else None
-
-        ret.append(IPRouteAddressEntry(e["ifindex"], e["ifname"], e["flags"], master, e["address"], addr_infos))
+        ret.append(entry)
     return ret
 
 
@@ -163,11 +189,20 @@ class IPRouteRouteEntry:
     dev: str
 
 
-def ipr_to_entries(input: str) -> list[IPRouteRouteEntry]:
-    j = json.loads(input)
+def ipr_to_entries(jstr: str, *, strict_parsing: bool = False) -> list[IPRouteRouteEntry]:
     ret: list[IPRouteRouteEntry] = []
-    for e in j:
-        ret.append(IPRouteRouteEntry(e["dst"], e["dev"]))
+    for e in _parse_json_list(jstr, strict_parsing=strict_parsing):
+        try:
+            entry = IPRouteRouteEntry(
+                e["dst"],
+                e["dev"],
+            )
+        except (KeyError, ValueError, TypeError):
+            if strict_parsing:
+                raise
+            continue
+
+        ret.append(entry)
     return ret
 
 
