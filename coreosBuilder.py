@@ -135,10 +135,8 @@ class CoreosBuilder:
         cur_dir = os.getcwd()
         os.chdir(fcos_dir)
 
-        # -e COSA_NO_KVM=1 \
         cmd = f"""
-        podman run --rm -ti --security-opt label=disable --privileged         \
-               --uidmap=1000:0:1 --uidmap=0:1:1000 --uidmap 1001:1001:64536   \
+        podman run --rm -ti --userns=host -u root --privileged                \
                -v {fcos_dir}:/srv/ --device /dev/kvm --device /dev/fuse       \
                --tmpfs /tmp -v /var/tmp:/var/tmp --name cosa                  \
                -v {config_dir}:/git:ro                                        \
@@ -194,8 +192,7 @@ class CoreosBuilder:
             logger.info(f"Writing ignition to {ign}")
             f.write(ign)
 
-        if os.path.exists(dst):
-            os.remove(dst)
+        os.makedirs(os.path.dirname(dst), exist_ok=True)
 
         cmd = f"coreos-installer iso ignition embed -i {fn_ign} -o {dst} {embed_src}"
         lh = host.LocalHost()
