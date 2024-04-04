@@ -1,10 +1,13 @@
 from dataclasses import dataclass
 import ipaddress
 from typing import Optional, TypeVar, Iterator
+import contextlib
 import host
 import json
 import os
 import glob
+import tempfile
+import typing
 
 
 T = TypeVar("T")
@@ -179,3 +182,72 @@ def iterate_ssh_keys() -> Iterator[tuple[str, str, str]]:
             pub_key_content = f.read().strip()
             priv_key_file = os.path.splitext(pub_file)[0]
             yield pub_file, pub_key_content, priv_key_file
+
+
+# Taken from https://code.activestate.com/recipes/579097-safely-and-atomically-write-to-a-file/
+@contextlib.contextmanager
+def atomic_write(
+    filename: str,
+    *,
+    text: bool = True,
+    keep: bool = False,
+    owner: Optional[int] = None,
+    group: Optional[int] = None,
+    mode: int = 0o644,
+) -> Iterator[typing.IO[typing.Any]]:
+    """Context manager for overwriting a file atomically.
+
+    Usage:
+
+    >>> with atomic_write("myfile.txt") as f:  # doctest: +SKIP
+    ...     f.write("data")
+
+    The context manager opens a temporary file for writing in the same
+    directory as `filename`. On cleanly exiting the with-block, the temp
+    file is renamed to the given filename. If the original file already
+    exists, it will be overwritten and any existing contents replaced.
+
+    If an uncaught exception occurs inside the with-block, the original
+    file is left untouched. By default the temporary file is also
+    deleted. For diagnosis, pass keep=True to preserve the file.
+    Any errors in deleting the temp file are ignored.
+
+    By default, the temp file is opened in text mode. To use binary mode,
+    pass `text=False` as an argument.
+
+    The temporary file is readable and writable only by the creating user.
+
+    The function does nothing about SELinux labels.
+    """
+
+    if (owner is None) != (group is None):
+        raise ValueError("Must set owner and group together")
+
+    path = os.path.dirname(filename)
+    basename = os.path.basename(filename)
+
+    tmp: Optional[str]
+
+    fd, tmp = tempfile.mkstemp(prefix=basename, dir=path, text=text)
+
+    try:
+        with os.fdopen(fd, 'w' if text else 'wb') as f:
+            yield f
+
+        # We update the owner, group and permission before renaming
+        # the file. Unfortunately, this could result in no longer having
+        # the suitable permissions to rename. Don't set permissions
+        # that cut yourself off.
+        if owner is not None and group is not None:
+            os.chown(tmp, owner, group)
+        os.chmod(tmp, mode)
+
+        os.replace(tmp, filename)
+        tmp = None
+    finally:
+        if (tmp is not None) and (not keep):
+            # Silently delete the temporary file. Ignore any errors.
+            try:
+                os.unlink(tmp)
+            except IOError:
+                pass
