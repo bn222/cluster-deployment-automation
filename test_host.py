@@ -171,6 +171,8 @@ def test_sudo_local() -> None:
 
     r = _run(lsh, "sudo -n whoami")
     if r != (0, "root\n", ""):
+        if os.environ.get("CDA_GITHUB_CI") is not None:
+            pytest.fail(f"sudo on localhost does not seem to work passwordless ({r})")
         pytest.skip(f"sudo on localhost does not seem to work passwordless ({r})")
 
     lsh.need_sudo()
