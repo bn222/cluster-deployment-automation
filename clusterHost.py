@@ -30,7 +30,7 @@ class ClusterHost:
     k8s_worker_nodes: List[ClusterNode]
     hosts_vms: bool
 
-    def __init__(self, h: host.Host, c: HostConfig, cc: ClustersConfig, bc: BridgeConfig, serves_dhcp: bool):
+    def __init__(self, h: host.Host, c: HostConfig, cc: ClustersConfig, bc: BridgeConfig):
         self.bridge = VirBridge(h, bc)
         self.hostconn = h
         self.config = c
@@ -61,7 +61,9 @@ class ClusterHost:
             if not self.hostconn.is_localhost():
                 self.hostconn.ssh_connect(self.config.username, self.config.password)
 
-        self.needs_api_network = self.hosts_vms or serves_dhcp
+        # This host needs an api network port if it runs vms and there are more
+        # than one physical host in the deployment.
+        self.needs_api_network = self.hosts_vms and any(node_config.node != c.name for node_config in cc.all_nodes())
         if self.needs_api_network:
             if self.config.network_api_port == "auto":
                 self.api_port = common.get_auto_port(self.hostconn)
@@ -88,9 +90,8 @@ class ClusterHost:
             logger.debug(f"iso_path is now {iso_path} for {self.hostconn.hostname()}")
 
     def configure_bridge(self) -> None:
-        if not self.needs_api_network:
+        if not self.hosts_vms:
             return
-        assert self.api_port is not None
 
         self.bridge.configure(self.api_port)
 

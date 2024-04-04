@@ -69,7 +69,7 @@ class VirBridge:
         cmd = f"virsh net-update default add ip-dhcp-host \"{host_xml}\" --live --config"
         self.hostconn.run_or_die(cmd)
 
-    def _ensure_started(self, bridge_xml: str, api_port: str) -> None:
+    def _ensure_started(self, bridge_xml: str, api_port: Optional[str]) -> None:
         cmd = "virsh net-destroy default"
         self.hostconn.run(cmd)  # ignore return code - it might fail if net was not started
 
@@ -85,14 +85,16 @@ class VirBridge:
         cmd = f"virsh net-define {bridge_xml}"
         self.hostconn.run_or_die(cmd)
 
-        # set interface down before starting bridge as otherwise bridge start might fail if interface
-        # already got an IP address in same network as bridge
-        self.hostconn.run(f"ip link set {api_port} down")
+        if api_port is not None:
+            # set interface down before starting bridge as otherwise bridge start might fail if interface
+            # already got an IP address in same network as bridge
+            self.hostconn.run(f"ip link set {api_port} down")
 
         cmd = "virsh net-start default"
         self.hostconn.run_or_die(cmd)
 
-        self.hostconn.run(f"ip link set {api_port} up")
+        if api_port is not None:
+            self.hostconn.run(f"ip link set {api_port} up")
 
     def _network_xml(self) -> str:
         if self.config.dynamic_ip_range is None:
@@ -122,7 +124,7 @@ class VirBridge:
         self.hostconn.run("sed -e 's/#\\(user\\|group\\) = \".*\"$/\\1 = \"root\"/' -i /etc/libvirt/qemu.conf")
         self._restart()
 
-    def configure(self, api_port: str) -> None:
+    def configure(self, api_port: Optional[str]) -> None:
         hostname = self.hostconn.hostname()
         cmd = "systemctl enable libvirtd --now"
         self.hostconn.run_or_die(cmd)
