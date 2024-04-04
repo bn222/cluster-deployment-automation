@@ -1,3 +1,4 @@
+import itertools
 import os
 import sys
 import time
@@ -483,14 +484,14 @@ class ClusterDeployer:
 
         logger.info("Connectivity established to all workers, renaming them in Assisted installer")
         logger.info(f"looking for workers with ip {[w.ip() for w in workers]}")
-        while True:
+        for try_count in itertools.count(0):
             renamed = self._try_rename_workers(infra_env)
             expected = len(workers)
             if renamed == expected:
                 logger.info(f"Found and renamed {renamed} workers")
                 break
             if renamed:
-                logger.info(f"Found and renamed {renamed} workers, but waiting for {expected}, retrying")
+                logger.info(f"Found and renamed {renamed} workers, but waiting for {expected}, retrying (try #{try_count})")
                 time.sleep(5)
 
     def _try_rename_workers(self, infra_env: str) -> int:
@@ -553,11 +554,13 @@ class ClusterDeployer:
         lh = host.LocalHost()
         bf_workers = [x for x in self._cc.workers if x.kind == "bf"]
         connections: Dict[str, host.Host] = {}
-        while True:
+        for try_count in itertools.count(0):
             workers = [w.name for w in self._cc.workers]
-            if all(self.client().is_ready(w) for w in workers):
+            n_not_ready_workers = sum(1 for w in workers if not self.client().is_ready(w))
+            if n_not_ready_workers == 0:
                 break
 
+            logger.info(f"Not all workers ready (try #{try_count}). {n_not_ready_workers} are not ready yet.")
             self.client().approve_csr()
 
             if len(connections) != len(bf_workers):

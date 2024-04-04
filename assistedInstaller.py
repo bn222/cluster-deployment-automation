@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import itertools
 import time
 import os
 import json
@@ -99,10 +100,8 @@ class AssistedClientAutomation(AssistedClient):  # type: ignore
     def start_until_success(self, cluster_name: str) -> None:
         self.wait_cluster_ready(cluster_name)
         logger.info(f"Starting cluster {cluster_name} (will retry until success)")
-        tries = 0
-        while True:
+        for tries in itertools.count(0):
             try:
-                tries += 1
                 self.start_cluster(cluster_name)
             except Exception:
                 pass
