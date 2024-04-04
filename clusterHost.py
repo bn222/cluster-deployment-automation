@@ -77,9 +77,8 @@ class ClusterHost:
         if not self.hosts_vms:
             return
 
-        image_paths = {node.config.image_path for node in nodes}
-        for vm_image_path in image_paths:
-            image_path = os.path.dirname(vm_image_path)
+        image_paths = {os.path.dirname(node.config.image_path) for node in nodes}
+        for image_path in image_paths:
             self.hostconn.run(f"mkdir -p {image_path}")
             self.hostconn.run(f"chmod a+rw {image_path}")
             iso_path = os.path.join(image_path, f"{infra_env}.iso")
