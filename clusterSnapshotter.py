@@ -41,7 +41,10 @@ class ClusterSnapshotter:
             rh = host.RemoteHost(node)
             nfs = NFS(host.LocalHost(), self._cc.external_port)
             file = nfs.host_file("/root/iso/fedora-coreos.iso")
-            rh.boot_iso_redfish(file)
+
+            bmc = host.BMC.from_bmc(rh.hostname())
+            bmc.boot_iso_redfish(file)
+
             logger.info(f"Backing up node {node}")
             rh.ssh_connect("core")
             rh.run("sudo mount /dev/sdb1 /mnt/")
@@ -95,7 +98,10 @@ class ClusterSnapshotter:
             rh = host.RemoteHost(node)
             nfs = NFS(host.LocalHost(), self._cc.external_port)
             file = nfs.host_file("/root/iso/fedora-coreos.iso")
-            rh.boot_iso_redfish(file)
+
+            bmc = host.BMC.from_bmc(rh.hostname())
+            bmc.boot_iso_redfish(file)
+
             logger.info(f"Restoring node {node}")
             rh.ssh_connect("core")
             rh.run("sudo mount /dev/sdb1 /mnt/")
