@@ -115,19 +115,16 @@ def run_dpu_network_operator_git(lh: host.Host, kc: str) -> None:
     logger.info(f"Cloning repo to {repo_dir}")
     Repo.clone_from(url, repo_dir, branch='dpu_ovn_ic_changes')
 
-    cur_dir = os.getcwd()
-    os.chdir(repo_dir)
-    lh.run("rm -rf bin")
+    lh.run("rm -rf bin", cwd=repo_dir)
     env = {
         "KUBECONFIG": kc,
         "IMG": "quay.io/wizhao/dpu-network-operator:Nov1_WZ_DPU_DS_Test_1",
     }
     # cleanup first, to make this script idempotent
     logger.info("running make undeploy")
-    logger.info(lh.run("make undeploy", env=env))
+    logger.info(lh.run("make undeploy", env=env, cwd=repo_dir))
     logger.info("running make deploy")
-    logger.info(lh.run("make deploy", env=env))
-    os.chdir(cur_dir)
+    logger.info(lh.run("make deploy", env=env, cwd=repo_dir))
 
 
 def restart_ovs_configuration(ips: list[str]) -> None:
