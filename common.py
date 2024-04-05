@@ -198,6 +198,47 @@ def ip_addrs(rsh: host.Host, *, strict_parsing: bool = False, ifname: Optional[s
 
 @strict_dataclass
 @dataclass
+class IPRouteLinkEntry:
+    ifindex: int
+    ifname: str
+
+
+def ip_links_parse(jstr: str, *, strict_parsing: bool = False, ifname: Optional[str] = None) -> list[IPRouteLinkEntry]:
+    ret: list[IPRouteLinkEntry] = []
+    for e in _parse_json_list(jstr, strict_parsing=strict_parsing):
+        try:
+            entry = IPRouteLinkEntry(
+                e["ifindex"],
+                e["ifname"],
+            )
+        except (KeyError, ValueError, TypeError):
+            if strict_parsing:
+                raise
+            continue
+
+        if ifname is not None and ifname != entry.ifname:
+            continue
+        ret.append(entry)
+    return ret
+
+
+def ip_links(rsh: host.Host, *, strict_parsing: bool = False, ifname: Optional[str] = None) -> list[IPRouteLinkEntry]:
+    # If @ifname is requested, we could issue a `ip -json link show $IFNAME`. However,
+    # that means we do different things for requesting one link vs. all links. That
+    # seems undesirable. Instead, in all cases fetch all links. Any filtering then happens
+    # in code that we control. Performance should not make a difference, since the JSON data
+    # is probably small anyway (compared to the overhead of invoking a shell command).
+    ret = rsh.run("ip -json link")
+    if ret.returncode != 0:
+        if strict_parsing:
+            raise RuntimeError(f"calling ip-link on {rsh.hostname()} failed ({ret})")
+        return []
+
+    return ip_links_parse(ret.out, strict_parsing=strict_parsing, ifname=ifname)
+
+
+@strict_dataclass
+@dataclass
 class IPRouteRouteEntry:
     dst: str
     dev: str

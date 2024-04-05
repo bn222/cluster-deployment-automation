@@ -195,6 +195,14 @@ def test_ip_addrs() -> None:
     assert common.ip_addrs(host.LocalHost())
 
 
+def test_ip_links() -> None:
+    links = common.ip_links(host.LocalHost())
+    assert links
+    assert [link.ifindex for link in links if link.ifname == "lo"] == [1]
+
+    assert [link.ifindex for link in common.ip_links(host.LocalHost(), ifname="lo")] == [1]
+
+
 def test_ip_routes() -> None:
     # We expect to have at least one route configured on the system and that
     # `ip -json route` works. The unit test requires that.
