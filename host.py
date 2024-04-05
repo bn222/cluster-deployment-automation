@@ -419,9 +419,6 @@ class Host:
     def ipa(self) -> Any:
         return json.loads(self.run("ip -json a", logging.DEBUG).out)
 
-    def ipr(self) -> Any:
-        return json.loads(self.run("ip -json r", logging.DEBUG).out)
-
     def all_ports(self) -> Any:
         return json.loads(self.run("ip -json link", logging.DEBUG).out)
 

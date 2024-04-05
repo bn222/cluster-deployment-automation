@@ -6,6 +6,7 @@ import typing
 
 
 import common
+import host
 
 
 def _read_file(filename: str) -> str:
@@ -186,3 +187,9 @@ def test_strict_dataclass() -> None:
     C8("hi")
     with pytest.raises(ValueError):
         C8("invalid")
+
+
+def test_ip_routes() -> None:
+    # We expect to have at least one route configured on the system and that
+    # `ip -json route` works. The unit test requires that.
+    assert common.ip_routes(host.LocalHost())

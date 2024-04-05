@@ -185,10 +185,6 @@ def ipa_to_entries(jstr: str, *, strict_parsing: bool = False) -> list[IPRouteAd
     return ret
 
 
-def ipr(host: host.Host) -> str:
-    return host.run("ip -json r").out
-
-
 @strict_dataclass
 @dataclass
 class IPRouteRouteEntry:
@@ -196,7 +192,7 @@ class IPRouteRouteEntry:
     dev: str
 
 
-def ipr_to_entries(jstr: str, *, strict_parsing: bool = False) -> list[IPRouteRouteEntry]:
+def ip_routes_parse(jstr: str, *, strict_parsing: bool = False) -> list[IPRouteRouteEntry]:
     ret: list[IPRouteRouteEntry] = []
     for e in _parse_json_list(jstr, strict_parsing=strict_parsing):
         try:
@@ -211,6 +207,16 @@ def ipr_to_entries(jstr: str, *, strict_parsing: bool = False) -> list[IPRouteRo
 
         ret.append(entry)
     return ret
+
+
+def ip_routes(rsh: host.Host, *, strict_parsing: bool = False) -> list[IPRouteRouteEntry]:
+    ret = rsh.run("ip -json route")
+    if ret.returncode != 0:
+        if strict_parsing:
+            raise RuntimeError(f"calling ip-route on {rsh.hostname()} failed ({ret})")
+        return []
+
+    return ip_routes_parse(ret.out, strict_parsing=strict_parsing)
 
 
 def ip_range(start_addr: str, n_addrs: int) -> tuple[str, str]:
@@ -274,8 +280,7 @@ def find_port(host: host.Host, port_name: str) -> Optional[IPRouteAddressEntry]:
 
 
 def route_to_port(host: host.Host, route: str) -> Optional[str]:
-    entries = ipr_to_entries(ipr(host))
-    for e in entries:
+    for e in ip_routes(host):
         if e.dst == route:
             return e.dev
     return None
