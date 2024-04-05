@@ -414,9 +414,6 @@ class Host:
         ret = self.run(f"virsh dominfo {name}", logging.DEBUG)
         return not ret.returncode and state_running(ret.out)
 
-    def port_exists(self, port_name: str) -> bool:
-        return self.run(f"ip link show {port_name}").returncode == 0
-
     def write(self, fn: str, contents: str) -> None:
         if self.is_localhost():
             with open(fn, "w") as f:

@@ -156,7 +156,7 @@ class ClusterHost:
         assert self.api_port is not None
 
         logger.info(f'Validating API network port {self.api_port}')
-        if not self.hostconn.port_exists(self.api_port):
+        if not common.ip_links(self.hostconn, ifname=self.api_port):
             logger.error(f"Can't find API network port {self.api_port}")
             return
         if not any(a.has_carrier() for a in common.ip_addrs(self.hostconn, ifname=self.api_port)):
