@@ -244,20 +244,28 @@ class Host:
 
         self.ssh_connect_looped(self._logins)
 
-    def ssh_connect_looped(self, logins: list[Login]) -> None:
+    def ssh_connect_looped(self, logins: list[Login], timeout: float = 2 * 60 * 60) -> None:
         if len(logins) == 0:
-            raise Exception("No usuable logins found")
+            raise RuntimeError("No usuable logins found")
+        end_timestamp = time.monotonic() + timeout
+        first_try = True
         while True:
-            for e in logins:
+            all_authexceptions = True
+            for login_item in logins:
                 try:
-                    self._host = e.login()
+                    self._host = login_item.login()
                     return
                 except ssh_exception.AuthenticationException as e:
-                    logger.info(type(e))
-                    raise e
+                    logger.debug(f"login to {self._hostname} failed: {e}")
                 except Exception as e:
-                    logger.info(type(e))
-                    time.sleep(10)
+                    all_authexceptions = False
+                    logger.log(logging.INFO if first_try else logging.DEBUG, f"login to {self._hostname} failed: {e}")
+            if all_authexceptions:
+                raise RuntimeError(f"all attempts to login to {self._hostname} failed with authentication error")
+            if time.monotonic() >= end_timestamp:
+                raise RuntimeError(f"failure to login to {self._hostname} after timeout")
+            time.sleep(2)
+            first_try = False
 
     def _rsa_login(self) -> Optional[KeyLogin]:
         for x in self._logins:
