@@ -160,11 +160,7 @@ def _parse_json_list(jstr: str, *, strict_parsing: bool = False) -> list[typing.
     return typing.cast(list[typing.Any], lst)
 
 
-def ipa(host: host.Host) -> str:
-    return host.run("ip -json a").out
-
-
-def ipa_to_entries(jstr: str, *, strict_parsing: bool = False) -> list[IPRouteAddressEntry]:
+def ip_addrs_parse(jstr: str, *, strict_parsing: bool = False) -> list[IPRouteAddressEntry]:
     ret: list[IPRouteAddressEntry] = []
     for e in _parse_json_list(jstr, strict_parsing=strict_parsing):
         try:
@@ -183,6 +179,16 @@ def ipa_to_entries(jstr: str, *, strict_parsing: bool = False) -> list[IPRouteAd
 
         ret.append(entry)
     return ret
+
+
+def ip_addrs(rsh: host.Host, *, strict_parsing: bool = False) -> list[IPRouteAddressEntry]:
+    ret = rsh.run("ip -json addr")
+    if ret.returncode != 0:
+        if strict_parsing:
+            raise RuntimeError(f"calling ip-route on {rsh.hostname()} failed ({ret})")
+        return []
+
+    return ip_addrs_parse(ret.out, strict_parsing=strict_parsing)
 
 
 @strict_dataclass
@@ -266,13 +272,8 @@ def ipaddr_norm(addr: str | bytes) -> Optional[str]:
     return socket.inet_ntop(family, a)
 
 
-def extract_interfaces(input: str) -> list[str]:
-    entries = ipa_to_entries(input)
-    return [x.ifname for x in entries]
-
-
 def find_port(host: host.Host, port_name: str) -> Optional[IPRouteAddressEntry]:
-    entries = ipa_to_entries(ipa(host))
+    entries = ip_addrs(host)
     for entry in entries:
         if entry.ifname == port_name:
             return entry
@@ -290,7 +291,7 @@ def port_to_ip(host: host.Host, port_name: str) -> Optional[str]:
     if port_name == "auto":
         port_name = get_auto_port(host)
 
-    entries = ipa_to_entries(ipa(host))
+    entries = ip_addrs(host)
     for entry in entries:
         if entry.ifname == port_name:
             for addr in entry.addr_info:
@@ -303,7 +304,7 @@ def carrier_no_addr(host: host.Host) -> list[IPRouteAddressEntry]:
     def carrier_no_addr(intf: IPRouteAddressEntry) -> bool:
         return len(intf.addr_info) == 0 and "NO-CARRIER" not in intf.flags
 
-    entries = ipa_to_entries(ipa(host))
+    entries = ip_addrs(host)
 
     return [x for x in entries if carrier_no_addr(x)]
 

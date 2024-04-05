@@ -189,6 +189,12 @@ def test_strict_dataclass() -> None:
         C8("invalid")
 
 
+def test_ip_addrs() -> None:
+    # We expect to have at least one address configured on the system and that
+    # `ip -json addr` works. The unit test requires that.
+    assert common.ip_addrs(host.LocalHost())
+
+
 def test_ip_routes() -> None:
     # We expect to have at least one route configured on the system and that
     # `ip -json route` works. The unit test requires that.

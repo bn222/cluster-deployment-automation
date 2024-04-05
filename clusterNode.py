@@ -225,9 +225,8 @@ class X86ClusterNode(ClusterNode):
     def post_boot(self, desired_ip_range: tuple[str, str]) -> bool:
         rh = host.RemoteHost(self.config.node)
         rh.ssh_connect("core")
-        ipr_entries = common.ipa_to_entries(rh.run("ip -json a").out)
         ips = []
-        for ipr in ipr_entries:
+        for ipr in common.ip_addrs(rh):
             for addr_info in ipr.addr_info:
                 if addr_info.family != "inet":
                     continue
@@ -292,8 +291,11 @@ class BFClusterNode(ClusterNode):
         ip = None
         tries = 0
         while True:
-            ipa = h.run_on_bf("ip -json a").out
-            detected = common.ipa_to_entries(ipa)
+            # FIXME: instead of calling h.run_on_bf(), we should be able to
+            # have a host.Host instace where h.run() does the right thing. With
+            # such abstraction, we could call common.ip_addrs(h).
+            ipa = h.run_on_bf("ip -json addr").out
+            detected = common.ip_addrs_parse(ipa)
             found = [e for e in detected if e.ifname in bf_interfaces]
             if len(found) != 1:
                 logger.error(f"Failed to find expected number of interfaces on bf {self.config.node}")
