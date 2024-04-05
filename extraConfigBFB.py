@@ -34,18 +34,18 @@ def ExtraConfigBFB(cc: ClustersConfig, _: ExtraConfigArgs, futures: dict[str, Fu
     nfs = NFS(lh, cc.external_port)
     iso_url = nfs.host_file("/root/iso/fedora-coreos.iso")
 
-    def helper(h: host.HostWithBF2) -> Optional[host.Result]:
+    def helper(h: host.HostWithBF2, bmc: host.BMC) -> Optional[host.Result]:
         def check(result: host.Result) -> None:
             if result.returncode != 0:
                 logger.info(result)
                 sys.exit(-1)
 
-        h.boot_iso_redfish(iso_url)
+        bmc.boot_iso_redfish(iso_url)
         h.ssh_connect("core")
         check(h.bf_firmware_upgrade())
         check(h.bf_firmware_defaults())
-        h.cold_boot()
-        h.boot_iso_redfish(iso_url)
+        bmc.cold_boot()
+        bmc.boot_iso_redfish(iso_url)
         h.ssh_connect("core")
         check(h.bf_load_bfb())
         return None
@@ -55,9 +55,9 @@ def ExtraConfigBFB(cc: ClustersConfig, _: ExtraConfigArgs, futures: dict[str, Fu
     # dpu mode
     for e in cc.workers:
         bmc = BMC.from_bmc(e.bmc, e.bmc_user, e.bmc_password)
-        h = host.HostWithBF2(e.node, bmc)
+        h = host.HostWithBF2(e.node)
         futures[e.name].result()
-        f = executor.submit(helper, h)
+        f = executor.submit(helper, h, bmc)
         futures[e.name] = f
     logger.info("BFB setup complete")
 

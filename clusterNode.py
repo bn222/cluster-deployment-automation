@@ -210,10 +210,10 @@ class X86ClusterNode(ClusterNode):
         nfs = NFS(lh, self.external_port)
 
         bmc = BMC.from_bmc(self.config.bmc, self.config.bmc_user, self.config.bmc_password)
-        h = host.HostWithBF2(self.config.node, bmc)
+        h = host.HostWithBF2(self.config.node)
 
         iso = nfs.host_file(os.path.join(os.getcwd(), iso))
-        h.boot_iso_redfish(iso)
+        bmc.boot_iso_redfish(iso)
         h.ssh_connect("core")
         logger.info("connected")
         return h.run("hostname")
@@ -256,7 +256,7 @@ class BFClusterNode(ClusterNode):
 
         logger.info(f"Preparing BF on host {self.config.node}")
         bmc = BMC.from_bmc(self.config.bmc, self.config.bmc_user, self.config.bmc_password)
-        h = host.HostWithBF2(self.config.node, bmc)
+        h = host.HostWithBF2(self.config.node)
         skip_boot = False
         if h.ping():
             try:
@@ -269,7 +269,7 @@ class BFClusterNode(ClusterNode):
             logger.info(f"Skipping booting {self.config.node}, already booted with FCOS")
         else:
             nfs_file = nfs.host_file("/root/iso/fedora-coreos.iso")
-            h.boot_iso_redfish(nfs_file)
+            bmc.boot_iso_redfish(nfs_file)
             time.sleep(10)
             h.ssh_connect("core")
 
