@@ -335,12 +335,19 @@ class Host:
             self.run(["rm", "-f", source])
 
     # Copying local_file to "Host", which can be local or remote
-    def copy_to(self, src_file: str, dst_file: str) -> None:
+    def copy_to(
+        self,
+        src_file: str,
+        dst_file: str,
+        sudo: Optional[bool] = None,
+    ) -> None:
         if not os.path.exists(src_file):
             raise FileNotFoundError(2, f"No such file or dir: {src_file}")
+        if sudo is None:
+            sudo = self.sudo_needed
 
         orig_dst = None
-        if self.sudo_needed:
+        if sudo:
             # With sudo, the file may not be writable as normal user.
             # Copy first to a temp location.
             orig_dst = dst_file
@@ -363,12 +370,8 @@ class Host:
             # The file should be owned by whoever is this sudoer. Create another
             # file, and copy over the owner:group that we got thereby.
             self.run(
-                f"""
-                rc=0
-                cat {shlex.quote(dst_file)} > {shlex.quote(orig_dst)} || rc=$?
-                rm -rf {shlex.quote(dst_file)}
-                exit $rc
-                """
+                f"rc=0 ; cat {shlex.quote(dst_file)} > {shlex.quote(orig_dst)} || rc=$? ; rm -rf {shlex.quote(dst_file)} ; exit $rc ",
+                sudo=sudo,
             )
 
     def need_sudo(self) -> None:
@@ -398,17 +401,21 @@ class Host:
         *,
         env: Optional[Mapping[str, Optional[str]]] = None,
         cwd: Optional[str] = None,
+        sudo: Optional[bool] = None,
         log_prefix: str = "",
         log_level_result: Optional[int] = None,
         log_level_fail: Optional[int] = None,
     ) -> Result:
+        if sudo is None:
+            sudo = self.sudo_needed
+
         cmd = self._cmd_to_script(cmd)
 
         logger.log(log_level, f"{log_prefix}running command {repr(cmd)} on {self._hostname}")
         if self.is_localhost():
-            ret_val = self._run_local(cmd, env=env, cwd=cwd)
+            ret_val = self._run_local(cmd, env=env, cwd=cwd, sudo=sudo)
         else:
-            ret_val = self._run_remote(cmd, log_level, env=env, cwd=cwd)
+            ret_val = self._run_remote(cmd, log_level, env=env, cwd=cwd, sudo=sudo)
 
         if ret_val.returncode != 0 and log_level_fail is not None:
             level = log_level_fail
@@ -427,16 +434,17 @@ class Host:
         *,
         env: Optional[Mapping[str, Optional[str]]] = None,
         cwd: Optional[str] = None,
+        sudo: bool = False,
     ) -> Result:
         is_shell = True
-        if self.sudo_needed:
+        if sudo:
             is_shell = False
             argv = ["sudo", "sh", "-c", cmd]
         else:
             argv = None
         full_env: Optional[dict[str, str]] = None
         if env:
-            if self.sudo_needed:
+            if sudo:
                 extra = []
                 for k, v in env.items():
                     assert k == shlex.quote(k)
@@ -465,11 +473,12 @@ class Host:
         *,
         env: Optional[Mapping[str, Optional[str]]] = None,
         cwd: Optional[str] = None,
+        sudo: bool = False,
     ) -> Result:
         if cwd:
             cmd = f"cd {shlex.quote(cwd)} || exit 10\n{cmd}"
 
-        if self.sudo_needed:
+        if sudo:
             cmd2 = "sudo"
             if env:
                 for k, v in env.items():
@@ -506,8 +515,9 @@ class Host:
         *,
         env: Optional[Mapping[str, Optional[str]]] = None,
         cwd: Optional[str] = None,
+        sudo: Optional[bool] = None,
     ) -> Result:
-        ret = self.run(cmd, env=env, cwd=cwd)
+        ret = self.run(cmd, env=env, cwd=cwd, sudo=sudo)
         if ret.returncode:
             logger.error(f"{self._cmd_to_script(cmd)} failed: {ret.err}")
             sys.exit(-1)
@@ -589,19 +599,27 @@ class Host:
             return False
         return "NO-CARRIER" not in ports[port_name]["flags"]
 
-    def write(self, fn: str, contents: str | bytes) -> None:
+    def write(
+        self,
+        fn: str,
+        contents: str | bytes,
+        *,
+        sudo: Optional[bool] = None,
+    ) -> None:
+        if sudo is None:
+            sudo = self.sudo_needed
         if isinstance(contents, str):
             b_contents = contents.encode('utf-8')
         else:
             b_contents = contents
-        if self.is_localhost():
+        if not sudo and self.is_localhost():
             with open(fn, "wb") as f:
                 f.write(b_contents)
         else:
             with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
                 tmp_filename = tmp_file.name
                 tmp_file.write(b_contents)
-            self.copy_to(tmp_filename, fn)
+            self.copy_to(tmp_filename, fn, sudo=sudo)
             os.remove(tmp_filename)
 
     def read_file(self, file_name: str) -> str:
