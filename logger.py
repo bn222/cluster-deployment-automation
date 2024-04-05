@@ -1,4 +1,5 @@
 import logging
+import os
 import sys
 import typing
 from typing import Optional
@@ -22,8 +23,17 @@ class ExtendedLogger(logging.Logger):
         sys.exit(exit_code)
 
 
-def configure_logger(lvl: int) -> ExtendedLogger:
+def configure_logger(lvl: Optional[int] = None) -> ExtendedLogger:
     logger = logging.getLogger("CDA")
+
+    if lvl is None:
+        lvl = logging.INFO
+        s = os.environ.get("CDA_LOG_LEVEL")
+        if s:
+            s = s.strip().upper()
+            if s in ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"):
+                lvl = typing.cast(int, getattr(logging, s))
+
     logger.setLevel(lvl)
 
     fmt = "%(asctime)s %(levelname)s: %(message)s"
@@ -44,4 +54,5 @@ def configure_logger(lvl: int) -> ExtendedLogger:
 
 
 prev_handler: Optional['logging.StreamHandler[TextIO]'] = None
-logger = configure_logger(logging.INFO)
+
+logger = configure_logger()
