@@ -4,7 +4,6 @@ import io
 import os
 import re
 import time
-import json
 import shlex
 import shutil
 import sys
@@ -12,7 +11,6 @@ import logging
 import tempfile
 from typing import Optional
 from typing import Union
-from typing import Any
 from functools import lru_cache
 from ailib import Redfish
 import paramiko
@@ -415,9 +413,6 @@ class Host:
 
         ret = self.run(f"virsh dominfo {name}", logging.DEBUG)
         return not ret.returncode and state_running(ret.out)
-
-    def all_ports(self) -> Any:
-        return json.loads(self.run("ip -json link", logging.DEBUG).out)
 
     def port_exists(self, port_name: str) -> bool:
         return self.run(f"ip link show {port_name}").returncode == 0

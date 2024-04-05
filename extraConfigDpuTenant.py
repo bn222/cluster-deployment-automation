@@ -13,6 +13,7 @@ import os
 import re
 from logger import logger
 from clustersConfig import ExtraConfigArgs
+import common
 
 
 def ExtraConfigDpuTenantMC(cc: ClustersConfig, _: ExtraConfigArgs, futures: dict[str, Future[Optional[host.Result]]]) -> None:
@@ -115,8 +116,8 @@ def _ExtraConfigDpuTenant_common(cc: ClustersConfig, cfg: ExtraConfigArgs, futur
     logger.info(f"BF is at {bf}")
 
     bf_port = None
-    for port in rh.all_ports():
-        ret = rh.run(f'ethtool -i {port["ifname"]}')
+    for port in common.ip_links(rh):
+        ret = rh.run(f'ethtool -i {port.ifname}')
         if ret.returncode != 0:
             continue
 
@@ -125,7 +126,7 @@ def _ExtraConfigDpuTenant_common(cc: ClustersConfig, cfg: ExtraConfigArgs, futur
             key, value = part.split(":", 1)
             d[key] = value
         if d["bus-info"].endswith(bf):
-            bf_port = port["ifname"]
+            bf_port = port.ifname
     logger.info(bf_port)
     if bf_port is None:
         logger.info("Couldn't find bf port")
