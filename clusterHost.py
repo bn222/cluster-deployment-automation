@@ -159,7 +159,7 @@ class ClusterHost:
         if not self.hostconn.port_exists(self.api_port):
             logger.error(f"Can't find API network port {self.api_port}")
             return
-        if not self.hostconn.port_has_carrier(self.api_port):
+        if not any(a.has_carrier() for a in common.ip_addrs(self.hostconn, ifname=self.api_port)):
             logger.error(f"API network port {self.api_port} doesn't have a carrier")
             return
 

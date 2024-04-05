@@ -140,6 +140,9 @@ class IPRouteAddressEntry:
     address: str  # Ethernet address.
     addr_info: list[IPRouteAddressInfoEntry]
 
+    def has_carrier(self) -> bool:
+        return "NO-CARRIER" not in self.flags
+
 
 def _parse_json_list(jstr: str, *, strict_parsing: bool = False) -> list[typing.Any]:
     try:

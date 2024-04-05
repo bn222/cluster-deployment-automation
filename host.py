@@ -425,12 +425,6 @@ class Host:
     def port_exists(self, port_name: str) -> bool:
         return self.run(f"ip link show {port_name}").returncode == 0
 
-    def port_has_carrier(self, port_name: str) -> bool:
-        ports = {x["ifname"]: x for x in self.ipa()}
-        if port_name not in ports:
-            return False
-        return "NO-CARRIER" not in ports[port_name]["flags"]
-
     def write(self, fn: str, contents: str) -> None:
         if self.is_localhost():
             with open(fn, "w") as f:
