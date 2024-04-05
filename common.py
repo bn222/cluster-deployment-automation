@@ -160,7 +160,7 @@ def _parse_json_list(jstr: str, *, strict_parsing: bool = False) -> list[typing.
     return typing.cast(list[typing.Any], lst)
 
 
-def ip_addrs_parse(jstr: str, *, strict_parsing: bool = False) -> list[IPRouteAddressEntry]:
+def ip_addrs_parse(jstr: str, *, strict_parsing: bool = False, ifname: Optional[str] = None) -> list[IPRouteAddressEntry]:
     ret: list[IPRouteAddressEntry] = []
     for e in _parse_json_list(jstr, strict_parsing=strict_parsing):
         try:
@@ -177,18 +177,20 @@ def ip_addrs_parse(jstr: str, *, strict_parsing: bool = False) -> list[IPRouteAd
                 raise
             continue
 
+        if ifname is not None and entry.ifname != ifname:
+            continue
         ret.append(entry)
     return ret
 
 
-def ip_addrs(rsh: host.Host, *, strict_parsing: bool = False) -> list[IPRouteAddressEntry]:
+def ip_addrs(rsh: host.Host, *, strict_parsing: bool = False, ifname: Optional[str] = None) -> list[IPRouteAddressEntry]:
     ret = rsh.run("ip -json addr")
     if ret.returncode != 0:
         if strict_parsing:
             raise RuntimeError(f"calling ip-route on {rsh.hostname()} failed ({ret})")
         return []
 
-    return ip_addrs_parse(ret.out, strict_parsing=strict_parsing)
+    return ip_addrs_parse(ret.out, strict_parsing=strict_parsing, ifname=ifname)
 
 
 @strict_dataclass
