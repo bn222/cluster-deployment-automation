@@ -535,13 +535,14 @@ class ClusterDeployer:
 
     def update_etc_hosts(self) -> None:
         cluster_name = self._cc.name
-        api_name = f"api.{cluster_name}.redhat.com"
+        api_names = [f"api.{cluster_name}.redhat.com", f"prometheus-k8s-openshift-monitoring.apps.{cluster_name}.redhat.com"]
         api_vip = self._ai.get_ai_cluster_info(cluster_name).api_vip
 
         hosts = Hosts()
-        hosts.remove_all_matching(name=api_name)
+        for api_name in api_names:
+            hosts.remove_all_matching(name=api_name)
         hosts.remove_all_matching(address=api_vip)
-        hosts.add([HostsEntry(entry_type='ipv4', address=api_vip, names=[api_name])])
+        hosts.add([HostsEntry(entry_type='ipv4', address=api_vip, names=api_names)])
         hosts.write()
 
         # libvirtd also runs dnsmasq, and dnsmasq reads /etc/hosts.
