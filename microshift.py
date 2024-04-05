@@ -219,7 +219,7 @@ rhsm = true'''.strip()
 def deploy(cluster_name: str, node: NodeConfig, external_port: str, version: str) -> None:
     lh = host.LocalHost()
     bmc = BMC.from_bmc(node.bmc, node.bmc_user, node.bmc_password)
-    h = Host(node.node, bmc)
+    h = Host(node.node)
     name_of_final_iso = os.path.join(os.getcwd(), 'final.iso')
     login_uname = "redhat"
 
@@ -234,6 +234,6 @@ def deploy(cluster_name: str, node: NodeConfig, external_port: str, version: str
 
     nfs = NFS(lh, external_port)
     iso = nfs.host_file(name_of_final_iso)
-    h.boot_iso_redfish(iso)
+    bmc.boot_iso_redfish(iso)
     h.ssh_connect(login_uname)
     logger.info("Microshift finished booting")

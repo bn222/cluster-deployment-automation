@@ -197,16 +197,15 @@ class BMC:
 
 
 class Host:
-    def __new__(cls, hostname: str, bmc: Optional[BMC] = None) -> 'Host':
-        key = (hostname, bmc.url if bmc else None)
+    def __new__(cls, hostname: str) -> 'Host':
+        key = hostname
         if key not in host_instances:
             host_instances[key] = super().__new__(cls)
             logger.debug(f"new instance for {hostname}")
         return host_instances[key]
 
-    def __init__(self, hostname: str, bmc: Optional[BMC] = None):
+    def __init__(self, hostname: str):
         self._hostname = hostname
-        self._bmc = bmc
         self._logins: list[Login] = []
         self.sudo_needed = False
 
@@ -363,26 +362,6 @@ class Host:
     def close(self) -> None:
         assert self._host is not None
         self._host.close()
-
-    def boot_iso_redfish(self, iso_path: str) -> None:
-        if self._bmc is None:
-            raise Exception(f"Can't boot iso without bmc on {self.hostname()}")
-        self._bmc.boot_iso_redfish(iso_path)
-
-    def stop(self) -> None:
-        if self._bmc is None:
-            raise Exception(f"Can't stop host without bmc on {self.hostname()}")
-        self._bmc.stop()
-
-    def start(self) -> None:
-        if self._bmc is None:
-            raise Exception(f"Can't start host without bmc on {self.hostname()}")
-        self._bmc.start()
-
-    def cold_boot(self) -> None:
-        if self._bmc is None:
-            raise Exception(f"Can't cold boot host without bmc on {self.hostname()}")
-        self._bmc.cold_boot()
 
     def wait_ping(self) -> None:
         while not self.ping():
@@ -566,7 +545,7 @@ class HostWithBF2(Host):
         return self.run_in_container("/bfb")
 
 
-host_instances: dict[tuple[str, Optional[str]], Host] = {}
+host_instances: dict[str, Host] = {}
 
 
 def sync_time(src: Host, dst: Host) -> Result:
