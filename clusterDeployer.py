@@ -478,22 +478,19 @@ class ClusterDeployer:
         ip_range = self._cc.full_ip_range
         logger.info(f"Connectivity established to all workers; checking that they have an IP in range: {ip_range}")
 
-        def addresses(h: host.Host) -> list[str]:
-            ret = []
-            for e in h.ipa():
-                if "addr_info" not in e:
-                    continue
-                for k in e["addr_info"]:
-                    if k["family"] == "inet":
-                        ret.append(k["local"])
-            return ret
-
-        def addr_ok(a: str) -> bool:
-            return common.ip_range_contains(ip_range, a)
+        def any_address_in_range(h: host.Host, ip_range: tuple[str, str]) -> bool:
+            for ipaddr in common.ip_addrs(h):
+                for ainfo in ipaddr.addr_info:
+                    if ainfo.family != "inet":
+                        continue
+                    if not common.ip_range_contains(ip_range, ainfo.local):
+                        continue
+                    return True
+            return False
 
         any_worker_bad = False
         for w, h in zip(workers, hosts):
-            if all(not addr_ok(a) for a in addresses(h)):
+            if not any_address_in_range(h, ip_range):
                 logger.error(f"Worker {w.config.name} doesn't have an IP in range {ip_range}.")
                 any_worker_bad = True
 

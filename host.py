@@ -416,9 +416,6 @@ class Host:
         ret = self.run(f"virsh dominfo {name}", logging.DEBUG)
         return not ret.returncode and state_running(ret.out)
 
-    def ipa(self) -> Any:
-        return json.loads(self.run("ip -json a", logging.DEBUG).out)
-
     def all_ports(self) -> Any:
         return json.loads(self.run("ip -json link", logging.DEBUG).out)
 
