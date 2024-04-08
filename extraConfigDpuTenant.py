@@ -5,7 +5,6 @@ from common_patches import apply_common_pathches
 from concurrent.futures import Future
 from extraConfigDpuInfra import run_dpu_network_operator_git
 import extraConfigSriov
-from typing import Dict
 from typing import Optional
 import sys
 import jinja2
@@ -16,7 +15,7 @@ from logger import logger
 from clustersConfig import ExtraConfigArgs
 
 
-def ExtraConfigDpuTenantMC(cc: ClustersConfig, _: ExtraConfigArgs, futures: Dict[str, Future[Optional[host.Result]]]) -> None:
+def ExtraConfigDpuTenantMC(cc: ClustersConfig, _: ExtraConfigArgs, futures: dict[str, Future[Optional[host.Result]]]) -> None:
     [f.result() for (_, f) in futures.items()]
     logger.info("Running post config step")
     tclient = K8sClient("/root/kubeconfig.tenantcluster")
@@ -48,13 +47,13 @@ def render_sriov_node_policy(policyname: str, bf_port: str, bf_addr: str, numvfs
         outFile.write(rendered)
 
 
-def render_envoverrides_cm(client: K8sClient, mapping: Optional[list[Dict[str, str]]], ns: str) -> str:
+def render_envoverrides_cm(client: K8sClient, mapping: Optional[list[dict[str, str]]], ns: str) -> str:
     assert mapping is not None
     contents = open("manifests/tenant/envoverrides.yaml").read()
     contents += f"{ns}\n"
     contents += "data:\n"
     for e in mapping:
-        a: Dict[str, str] = {}
+        a: dict[str, str] = {}
         a["TENANT_K8S_NODE"] = e["worker"]
         # Can be removed since API is replaced https://github.com/openshift/dpu-network-operator/pull/67
         dpu_ip = client.get_ip(e["bf"])
@@ -72,7 +71,7 @@ def render_envoverrides_cm(client: K8sClient, mapping: Optional[list[Dict[str, s
     return f"/tmp/envoverrides-{ns}.yaml"
 
 
-def _ExtraConfigDpuTenant_common(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: Dict[str, Future[Optional[host.Result]]], *, new_api: bool = False) -> None:
+def _ExtraConfigDpuTenant_common(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, Future[Optional[host.Result]]], *, new_api: bool = False) -> None:
     [f.result() for (_, f) in futures.items()]
     logger.info("Running post config step")
 
@@ -177,7 +176,7 @@ def _ExtraConfigDpuTenant_common(cc: ClustersConfig, cfg: ExtraConfigArgs, futur
 
         assert cfg.mapping is not None
         for bfmap in cfg.mapping:
-            a: Dict[str, str] = {}
+            a: dict[str, str] = {}
             mp = re.sub(r'np\d$', '', bf_port)
             a["OVNKUBE_NODE_MGMT_PORT_NETDEV"] = f"{mp}v0"
             contents += f"  {bfmap['worker']}: |\n"
@@ -256,11 +255,11 @@ def _ExtraConfigDpuTenant_common(cc: ClustersConfig, cfg: ExtraConfigArgs, futur
     extraConfigSriov.ensure_pci_realloc(cc, tclient, "dpu-host")
 
 
-def ExtraConfigDpuTenant(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: Dict[str, Future[Optional[host.Result]]]) -> None:
+def ExtraConfigDpuTenant(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, Future[Optional[host.Result]]]) -> None:
     _ExtraConfigDpuTenant_common(cc, cfg, futures, new_api=False)
 
 
-def ExtraConfigDpuTenant_NewAPI(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: Dict[str, Future[Optional[host.Result]]]) -> None:
+def ExtraConfigDpuTenant_NewAPI(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, Future[Optional[host.Result]]]) -> None:
     _ExtraConfigDpuTenant_common(cc, cfg, futures, new_api=True)
 
 

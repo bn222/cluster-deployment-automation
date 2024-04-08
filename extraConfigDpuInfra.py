@@ -10,7 +10,6 @@ import os
 import sys
 import shutil
 from common_patches import apply_common_pathches
-from typing import Dict
 from typing import Optional
 from logger import logger
 from clustersConfig import ExtraConfigArgs
@@ -139,7 +138,7 @@ def restart_ovs_configuration(ips: list[str]) -> None:
         rh.run("sudo systemctl restart ovs-configuration")
 
 
-def _ExtraConfigDpuInfra_common(cc: ClustersConfig, futures: Dict[str, Future[Optional[host.Result]]], *, new_api: bool) -> None:
+def _ExtraConfigDpuInfra_common(cc: ClustersConfig, futures: dict[str, Future[Optional[host.Result]]], *, new_api: bool) -> None:
     [f.result() for (_, f) in futures.items()]
     kc = "/root/kubeconfig.infracluster"
     client = K8sClient(kc)
@@ -224,12 +223,12 @@ def _ExtraConfigDpuInfra_common(cc: ClustersConfig, futures: Dict[str, Future[Op
             sys.exit(-1)
 
 
-def ExtraConfigDpuInfra(cc: ClustersConfig, _: ExtraConfigArgs, futures: Dict[str, Future[Optional[host.Result]]]) -> None:
+def ExtraConfigDpuInfra(cc: ClustersConfig, _: ExtraConfigArgs, futures: dict[str, Future[Optional[host.Result]]]) -> None:
     _ExtraConfigDpuInfra_common(cc, futures, new_api=False)
 
 
 # VF Management port requires a new API. We need a new extra config class to handle the API changes.
-def ExtraConfigDpuInfra_NewAPI(cc: ClustersConfig, _: ExtraConfigArgs, futures: Dict[str, Future[Optional[host.Result]]]) -> None:
+def ExtraConfigDpuInfra_NewAPI(cc: ClustersConfig, _: ExtraConfigArgs, futures: dict[str, Future[Optional[host.Result]]]) -> None:
     _ExtraConfigDpuInfra_common(cc, futures, new_api=True)
 
 

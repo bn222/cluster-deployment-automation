@@ -11,7 +11,7 @@ from extraConfigCX import ExtraConfigCX
 from clustersConfig import ClustersConfig
 from clustersConfig import ExtraConfigArgs
 from concurrent.futures import Future
-from typing import Callable, Dict, Optional
+from typing import Callable, Optional
 from logger import logger
 import sys
 import host
@@ -20,7 +20,7 @@ import host
 class ExtraConfigRunner:
     def __init__(self, cc: ClustersConfig):
         self._cc = cc
-        self._extra_config: Dict[str, Callable[[ClustersConfig, ExtraConfigArgs, Dict[str, Future[Optional[host.Result]]]], None]] = {
+        self._extra_config: dict[str, Callable[[ClustersConfig, ExtraConfigArgs, dict[str, Future[Optional[host.Result]]]], None]] = {
             "bf_bfb_image": ExtraConfigBFB,
             "switch_to_nic_mode": ExtraConfigSwitchNicMode,
             "sriov_network_operator": ExtraConfigSriov,
@@ -40,7 +40,7 @@ class ExtraConfigRunner:
             "cx_firmware": ExtraConfigCX,
         }
 
-    def run(self, to_run: ExtraConfigArgs, futures: Dict[str, Future[Optional[host.Result]]]) -> None:
+    def run(self, to_run: ExtraConfigArgs, futures: dict[str, Future[Optional[host.Result]]]) -> None:
         if to_run.name not in self._extra_config:
             logger.info(f"{to_run.name} is not an extra config")
             sys.exit(-1)

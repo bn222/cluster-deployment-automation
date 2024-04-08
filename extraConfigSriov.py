@@ -8,13 +8,12 @@ from concurrent.futures import Future
 import shutil
 import jinja2
 import sys
-from typing import Dict
 from typing import Optional
 from logger import logger
 from clustersConfig import ExtraConfigArgs
 
 
-def ExtraConfigSriov(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: Dict[str, Future[Optional[host.Result]]]) -> None:
+def ExtraConfigSriov(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, Future[Optional[host.Result]]]) -> None:
     [f.result() for (_, f) in futures.items()]
     client = K8sClient(cc.kubeconfig)
     lh = host.LocalHost()
@@ -55,7 +54,7 @@ def ExtraConfigSriov(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: Dict[str
     client.oc("apply -f manifests/nicmode/sriov-operator-config.yaml")
 
 
-def ExtraConfigSriovSubscription(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: Dict[str, Future[Optional[host.Result]]]) -> None:
+def ExtraConfigSriovSubscription(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, Future[Optional[host.Result]]]) -> None:
     [f.result() for (_, f) in futures.items()]
     client = K8sClient(cc.kubeconfig)
     lh = host.LocalHost()
@@ -142,7 +141,7 @@ def try_get_ovs_pf(rh: host.Host, name: str) -> str:
     sys.exit(-1)
 
 
-def _ExtraConfigSriovOvSHWOL_common(cc: ClustersConfig, futures: Dict[str, Future[Optional[host.Result]]], *, new_api: bool) -> None:
+def _ExtraConfigSriovOvSHWOL_common(cc: ClustersConfig, futures: dict[str, Future[Optional[host.Result]]], *, new_api: bool) -> None:
     [f.result() for (_, f) in futures.items()]
     client = K8sClient(cc.kubeconfig)
     client.oc("create -f manifests/nicmode/pool.yaml")
@@ -210,12 +209,12 @@ def _ExtraConfigSriovOvSHWOL_common(cc: ClustersConfig, futures: Dict[str, Futur
     ensure_pci_realloc(cc, client, "sriov")
 
 
-def ExtraConfigSriovOvSHWOL(cc: ClustersConfig, _: ExtraConfigArgs, futures: Dict[str, Future[Optional[host.Result]]]) -> None:
+def ExtraConfigSriovOvSHWOL(cc: ClustersConfig, _: ExtraConfigArgs, futures: dict[str, Future[Optional[host.Result]]]) -> None:
     _ExtraConfigSriovOvSHWOL_common(cc, futures, new_api=False)
 
 
 # VF Management port requires a new API. We need a new extra config class to handle the API changes.
-def ExtraConfigSriovOvSHWOL_NewAPI(cc: ClustersConfig, _: ExtraConfigArgs, futures: Dict[str, Future[Optional[host.Result]]]) -> None:
+def ExtraConfigSriovOvSHWOL_NewAPI(cc: ClustersConfig, _: ExtraConfigArgs, futures: dict[str, Future[Optional[host.Result]]]) -> None:
     _ExtraConfigSriovOvSHWOL_common(cc, futures, new_api=True)
 
 

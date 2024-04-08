@@ -5,7 +5,6 @@ import io
 import sys
 import re
 from typing import Optional
-from typing import Dict
 from typing import Tuple
 import jinja2
 from yaml import safe_load
@@ -33,7 +32,7 @@ class ExtraConfigArgs:
     ovnk_rollout_timeout: str = "20m"
 
     kubeconfig: Optional[str] = None
-    mapping: Optional[list[Dict[str, str]]] = None
+    mapping: Optional[list[dict[str, str]]] = None
 
     # Custom OVN build extra configs:
     # Time to wait for the builders to roll out.
@@ -121,8 +120,8 @@ def current_host() -> str:
 class ClustersConfig:
     name: str
     kubeconfig: str
-    api_vip: Dict[str, str]
-    ingress_vip: Dict[str, str]
+    api_vip: dict[str, str]
+    ingress_vip: dict[str, str]
     external_port: str = "auto"
     kind: str = "openshift"
     version: str = "4.14.0-nightly"
@@ -144,7 +143,7 @@ class ClustersConfig:
 
     # All configurations that used to be supported but are not anymore.
     # Used to warn the user to change their config.
-    deprecated_configs: Dict[str, Optional[str]] = {"api_ip": "api_vip", "ingress_ip": "ingress_vip"}
+    deprecated_configs: dict[str, Optional[str]] = {"api_ip": "api_vip", "ingress_ip": "ingress_vip"}
 
     def __init__(self, yaml_path: str, worker_range: common.RangeList):
         self._cluster_info: Optional[ClusterInfo] = None

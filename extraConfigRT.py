@@ -2,12 +2,12 @@ from clustersConfig import ClustersConfig
 from k8sClient import K8sClient
 from logger import logger
 from concurrent.futures import Future
-from typing import Dict, Optional
+from typing import Optional
 from clustersConfig import ExtraConfigArgs
 import host
 
 
-def ExtraConfigRT(cc: ClustersConfig, _: ExtraConfigArgs, futures: Dict[str, Future[Optional[host.Result]]]) -> None:
+def ExtraConfigRT(cc: ClustersConfig, _: ExtraConfigArgs, futures: dict[str, Future[Optional[host.Result]]]) -> None:
     [f.result() for (_, f) in futures.items()]
 
     is_sno = cc.is_sno()

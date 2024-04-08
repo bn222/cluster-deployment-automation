@@ -8,7 +8,6 @@ import shutil
 from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 from typing import Generator
-from typing import Dict
 from typing import Union
 from typing import Callable
 from typing import Set
@@ -241,9 +240,9 @@ class ClusterDeployer:
     def _wait_known_state(self, names_gen: Generator[str, None, None], cb: Callable[[], None] = lambda: None) -> None:
         names = list(names_gen)
         logger.info(f"Waiting for {names} to be in \'known\' state")
-        status: Dict[str, Optional[str]] = {n: "" for n in names}
+        status: dict[str, Optional[str]] = {n: "" for n in names}
         while not all(v == "known" for v in status.values()):
-            new_status: Dict[str, Optional[str]] = {n: self._get_status(n) for n in names}
+            new_status: dict[str, Optional[str]] = {n: self._get_status(n) for n in names}
             if new_status != status:
                 logger.info(f"latest status: {new_status}")
                 status = new_status
@@ -263,7 +262,7 @@ class ClusterDeployer:
 
     def create_cluster(self) -> None:
         cluster_name = self._cc.name
-        cfg: Dict[str, Union[str, bool, list[str], list[Dict[str, str]]]] = {}
+        cfg: dict[str, Union[str, bool, list[str], list[dict[str, str]]]] = {}
         cfg["openshift_version"] = self._cc.version
         cfg["cpu_architecture"] = "multi"
         cfg["pull_secret"] = self._secrets_path
@@ -552,7 +551,7 @@ class ClusterDeployer:
         logger.info(f'waiting for {len(self._cc.workers)} workers')
         lh = host.LocalHost()
         bf_workers = [x for x in self._cc.workers if x.kind == "bf"]
-        connections: Dict[str, host.Host] = {}
+        connections: dict[str, host.Host] = {}
         for try_count in itertools.count(0):
             workers = [w.name for w in self._cc.workers]
             n_not_ready_workers = sum(1 for w in workers if not self.client().is_ready(w))

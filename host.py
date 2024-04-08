@@ -14,7 +14,6 @@ from typing import Optional
 from typing import Union
 from typing import Type
 from typing import Any
-from typing import Dict
 from typing import Tuple
 from functools import lru_cache
 from ailib import Redfish
@@ -294,7 +293,7 @@ class Host:
     def need_sudo(self) -> None:
         self.sudo_needed = True
 
-    def run(self, cmd: str, log_level: int = logging.DEBUG, env: Dict[str, str] = os.environ.copy()) -> Result:
+    def run(self, cmd: str, log_level: int = logging.DEBUG, env: dict[str, str] = os.environ.copy()) -> Result:
         if self.sudo_needed:
             cmd = "sudo " + cmd
 
@@ -307,7 +306,7 @@ class Host:
         logger.log(log_level, ret_val)
         return ret_val
 
-    def _run_local(self, cmd: str, env: Dict[str, str]) -> Result:
+    def _run_local(self, cmd: str, env: dict[str, str]) -> Result:
         args = shlex.split(cmd)
         pipe = subprocess.PIPE
         with subprocess.Popen(args, stdout=pipe, stderr=pipe, env=env) as proc:
@@ -394,7 +393,7 @@ class Host:
         r = lh.run(ping_cmd)
         return r.returncode == 0
 
-    def os_release(self) -> Dict[str, str]:
+    def os_release(self) -> dict[str, str]:
         d = {}
         for e in self.read_file("/etc/os-release").split("\n"):
             split_e = e.split("=", maxsplit=1)
@@ -566,7 +565,7 @@ class HostWithBF2(Host):
         return self.run_in_container("/bfb")
 
 
-host_instances: Dict[Tuple[str, Optional[str]], Host] = {}
+host_instances: dict[Tuple[str, Optional[str]], Host] = {}
 
 
 def sync_time(src: Host, dst: Host) -> Result:

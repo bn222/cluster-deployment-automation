@@ -1,4 +1,3 @@
-from typing import Dict
 import sys
 import os
 import gspread
@@ -34,7 +33,7 @@ def read_sheet() -> list[list[str]]:
     return [list(e.values()) for e in sheet.get_all_records()]
 
 
-def load_all_cluster_info() -> Dict[str, ClusterInfo]:
+def load_all_cluster_info() -> dict[str, ClusterInfo]:
     cluster = None
     ret = []
     logger.info("loading cluster information")

@@ -6,7 +6,6 @@ import sys
 import re
 import filecmp
 from typing import Optional
-from typing import Dict
 from typing import Union
 from typing import Any
 from typing import Sequence
@@ -89,7 +88,7 @@ class AssistedInstallerService:
     def _last_run_pod(self) -> str:
         return f'{self.workdir}/pod-persistent-last.yml'
 
-    def _customized_configmap(self) -> Dict[str, str]:
+    def _customized_configmap(self) -> dict[str, str]:
         y = yaml.safe_load(self.podConfig)
         if not isinstance(y, dict):
             logger.error(f"Failed to load yaml: {self.podConfig}")
@@ -119,7 +118,7 @@ class AssistedInstallerService:
             y["data"]["no_proxy"] = self._noproxy
         return y
 
-    def _customized_pod_persistent(self) -> Dict[str, str]:
+    def _customized_pod_persistent(self) -> dict[str, str]:
         y = yaml.safe_load(self.podFile)
         if not isinstance(y, dict):
             logger.error(f"Failed to load yaml: {self.podFile}")
@@ -133,7 +132,7 @@ class AssistedInstallerService:
 
         return y
 
-    def prep_version(self, version: str) -> Dict[str, Union[str, Sequence[str]]]:
+    def prep_version(self, version: str) -> dict[str, Union[str, Sequence[str]]]:
         if re.search(r'4\.12\.[0-9]+', version):
             # Note how 4.12.0 has the -multi suffix because AI requires that
             # for 4.12. CDA hides this and simply expect 4.12.0 from the user

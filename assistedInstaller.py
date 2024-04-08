@@ -8,7 +8,7 @@ import requests
 from ailib import AssistedClient
 import common
 from logger import logger
-from typing import Dict, Tuple
+from typing import Tuple
 import sys
 
 
@@ -40,7 +40,7 @@ class AssistedClientAutomation(AssistedClient):  # type: ignore
                 logger.info("failed to delete cluster, will retry..")
             time.sleep(5)
 
-    def ensure_infraenv_created(self, name: str, cfg: Dict[str, str]) -> None:
+    def ensure_infraenv_created(self, name: str, cfg: dict[str, str]) -> None:
         if name not in (x["name"] for x in self.list_infra_envs()):
             logger.info(f"Creating infraenv {name}")
             self.create_infra_env(name, cfg)
