@@ -12,7 +12,6 @@ import logging
 import tempfile
 from typing import Optional
 from typing import Union
-from typing import Type
 from typing import Any
 from functools import lru_cache
 from ailib import Redfish
@@ -57,7 +56,7 @@ class KeyLogin(Login):
         key_loader = self._key_loader()
         self._pkey = key_loader.from_private_key(io.StringIO(self._key))
 
-    def _key_loader(self) -> Union[Type[Ed25519Key], Type[RSAKey]]:
+    def _key_loader(self) -> Union[type[Ed25519Key], type[RSAKey]]:
         if self._is_rsa():
             return RSAKey
         else:
