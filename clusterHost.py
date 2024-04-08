@@ -3,7 +3,7 @@ import os
 import time
 from concurrent.futures import Future, ThreadPoolExecutor
 from logger import logger
-from typing import Optional, Tuple
+from typing import Optional
 
 import common
 import coreosBuilder
@@ -183,7 +183,7 @@ class ClusterHost:
     def start_workers(self, iso_path: str, infra_env: str, executor: ThreadPoolExecutor) -> list[Future[Optional[host.Result]]]:
         return self._start_nodes(iso_path, infra_env, executor, self.k8s_worker_nodes)
 
-    def _wait_for_boot(self, nodes: list[ClusterNode], desired_ip_range: Tuple[str, str]) -> None:
+    def _wait_for_boot(self, nodes: list[ClusterNode], desired_ip_range: tuple[str, str]) -> None:
         if not nodes:
             return
 
@@ -210,10 +210,10 @@ class ClusterHost:
         for node in nodes:
             node.health_check()
 
-    def wait_for_masters_boot(self, desired_ip_range: Tuple[str, str]) -> None:
+    def wait_for_masters_boot(self, desired_ip_range: tuple[str, str]) -> None:
         return self._wait_for_boot(self.k8s_master_nodes, desired_ip_range)
 
-    def wait_for_workers_boot(self, desired_ip_range: Tuple[str, str]) -> None:
+    def wait_for_workers_boot(self, desired_ip_range: tuple[str, str]) -> None:
         return self._wait_for_boot(self.k8s_worker_nodes, desired_ip_range)
 
     def teardown(self) -> None:

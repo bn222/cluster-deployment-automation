@@ -8,7 +8,6 @@ import requests
 from ailib import AssistedClient
 import common
 from logger import logger
-from typing import Tuple
 import sys
 
 
@@ -122,7 +121,7 @@ class AssistedClientAutomation(AssistedClient):  # type: ignore
                 return AssistedClientHostInfo(h["status"], h["inventory"])
         return None
 
-    def get_ai_ip(self, name: str, ip_range: Tuple[str, str]) -> Optional[str]:
+    def get_ai_ip(self, name: str, ip_range: tuple[str, str]) -> Optional[str]:
         ai_host = self.get_ai_host(name)
         if ai_host:
             inventory = json.loads(ai_host.inventory)

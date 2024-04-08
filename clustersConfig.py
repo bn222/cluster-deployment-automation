@@ -5,7 +5,6 @@ import io
 import sys
 import re
 from typing import Optional
-from typing import Tuple
 import jinja2
 from yaml import safe_load
 import host
@@ -108,7 +107,7 @@ class HostConfig:
 class BridgeConfig:
     ip: str
     mask: str
-    dynamic_ip_range: Optional[Tuple[str, str]] = None
+    dynamic_ip_range: Optional[tuple[str, str]] = None
 
 
 # Run the full hostname command
@@ -131,8 +130,8 @@ class ClustersConfig:
     configured_workers: list[NodeConfig] = []
     local_bridge_config: BridgeConfig
     remote_bridge_config: BridgeConfig
-    full_ip_range: Tuple[str, str]
-    cluster_ip_range: Tuple[str, str]
+    full_ip_range: tuple[str, str]
+    cluster_ip_range: tuple[str, str]
     hosts: list[HostConfig] = []
     proxy: Optional[str] = None
     noproxy: Optional[str] = None

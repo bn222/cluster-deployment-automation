@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 import ipaddress
-from typing import Optional, Set, Tuple, TypeVar, Iterator
+from typing import Optional, Set, TypeVar, Iterator
 import host
 import json
 import os
@@ -25,7 +25,7 @@ def str_to_list(input_str: str) -> list[int]:
 
 
 class RangeList:
-    _range: list[Tuple[bool, list[int]]] = []
+    _range: list[tuple[bool, list[int]]] = []
     initial_values: Optional[list[int]] = None
 
     def __init__(self, initial_values: Optional[list[int]] = None):
@@ -105,16 +105,16 @@ def ipr_to_entries(input: str) -> list[IPRouteRouteEntry]:
     return ret
 
 
-def ip_range(start_addr: str, n_addrs: int) -> Tuple[str, str]:
+def ip_range(start_addr: str, n_addrs: int) -> tuple[str, str]:
     return start_addr, str(ipaddress.ip_address(start_addr) + n_addrs)
 
 
-def ip_range_contains(range: Tuple[str, str], ip: str) -> bool:
+def ip_range_contains(range: tuple[str, str], ip: str) -> bool:
     ip_val = ipaddress.IPv4Address(ip)
     return ipaddress.IPv4Address(range[0]) <= ip_val and ipaddress.IPv4Address(range[1]) > ip_val
 
 
-def ip_range_size(range: Tuple[str, str]) -> int:
+def ip_range_size(range: tuple[str, str]) -> int:
     return int(ipaddress.IPv4Address(range[1])) - int(ipaddress.IPv4Address(range[0]))
 
 
@@ -173,7 +173,7 @@ def get_auto_port(host: host.Host) -> str:
         return interfaces[0].ifname
 
 
-def iterate_ssh_keys() -> Iterator[Tuple[str, str, str]]:
+def iterate_ssh_keys() -> Iterator[tuple[str, str, str]]:
     for pub_file in glob.glob("/root/.ssh/*.pub"):
         with open(pub_file, 'r') as f:
             pub_key_content = f.read().strip()

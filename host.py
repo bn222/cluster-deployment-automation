@@ -14,7 +14,6 @@ from typing import Optional
 from typing import Union
 from typing import Type
 from typing import Any
-from typing import Tuple
 from functools import lru_cache
 from ailib import Redfish
 import paramiko
@@ -565,7 +564,7 @@ class HostWithBF2(Host):
         return self.run_in_container("/bfb")
 
 
-host_instances: dict[Tuple[str, Optional[str]], Host] = {}
+host_instances: dict[tuple[str, Optional[str]], Host] = {}
 
 
 def sync_time(src: Host, dst: Host) -> Result:
