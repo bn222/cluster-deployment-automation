@@ -38,6 +38,9 @@ class Result:
     def __str__(self) -> str:
         return f"(returncode: {self.returncode}, error: {self.err})"
 
+    def success(self) -> bool:
+        return self.returncode == 0
+
 
 class Login(ABC):
     @abstractmethod
