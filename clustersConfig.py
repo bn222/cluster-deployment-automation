@@ -5,9 +5,6 @@ import io
 import sys
 import re
 from typing import Optional
-from typing import List
-from typing import Dict
-from typing import Tuple
 import jinja2
 from yaml import safe_load
 import host
@@ -34,7 +31,7 @@ class ExtraConfigArgs:
     ovnk_rollout_timeout: str = "20m"
 
     kubeconfig: Optional[str] = None
-    mapping: Optional[List[Dict[str, str]]] = None
+    mapping: Optional[list[dict[str, str]]] = None
 
     # Custom OVN build extra configs:
     # Time to wait for the builders to roll out.
@@ -110,7 +107,7 @@ class HostConfig:
 class BridgeConfig:
     ip: str
     mask: str
-    dynamic_ip_range: Optional[Tuple[str, str]] = None
+    dynamic_ip_range: Optional[tuple[str, str]] = None
 
 
 # Run the full hostname command
@@ -122,30 +119,30 @@ def current_host() -> str:
 class ClustersConfig:
     name: str
     kubeconfig: str
-    api_vip: Dict[str, str]
-    ingress_vip: Dict[str, str]
+    api_vip: dict[str, str]
+    ingress_vip: dict[str, str]
     external_port: str = "auto"
     kind: str = "openshift"
     version: str = "4.14.0-nightly"
     network_api_port: str = "auto"
-    masters: List[NodeConfig] = []
-    workers: List[NodeConfig] = []
-    configured_workers: List[NodeConfig] = []
+    masters: list[NodeConfig] = []
+    workers: list[NodeConfig] = []
+    configured_workers: list[NodeConfig] = []
     local_bridge_config: BridgeConfig
     remote_bridge_config: BridgeConfig
-    full_ip_range: Tuple[str, str]
-    cluster_ip_range: Tuple[str, str]
-    hosts: List[HostConfig] = []
+    full_ip_range: tuple[str, str]
+    cluster_ip_range: tuple[str, str]
+    hosts: list[HostConfig] = []
     proxy: Optional[str] = None
     noproxy: Optional[str] = None
-    preconfig: List[ExtraConfigArgs] = []
-    postconfig: List[ExtraConfigArgs] = []
+    preconfig: list[ExtraConfigArgs] = []
+    postconfig: list[ExtraConfigArgs] = []
     ntp_source: str = "clock.redhat.com"
     base_dns_domain: str = "redhat.com"
 
     # All configurations that used to be supported but are not anymore.
     # Used to warn the user to change their config.
-    deprecated_configs: Dict[str, Optional[str]] = {"api_ip": "api_vip", "ingress_ip": "ingress_vip"}
+    deprecated_configs: dict[str, Optional[str]] = {"api_ip": "api_vip", "ingress_ip": "ingress_vip"}
 
     def __init__(self, yaml_path: str, worker_range: common.RangeList):
         self._cluster_info: Optional[ClusterInfo] = None
@@ -344,22 +341,22 @@ class ClustersConfig:
     # def __setitem__(self, key, value) -> None:
     #     self.fullConfig[key] = value
 
-    def all_nodes(self) -> List[NodeConfig]:
+    def all_nodes(self) -> list[NodeConfig]:
         return self.masters + self.workers
 
-    def all_vms(self) -> List[NodeConfig]:
+    def all_vms(self) -> list[NodeConfig]:
         return [x for x in self.all_nodes() if x.kind == "vm"]
 
-    def worker_vms(self) -> List[NodeConfig]:
+    def worker_vms(self) -> list[NodeConfig]:
         return [x for x in self.workers if x.kind == "vm"]
 
-    def master_vms(self) -> List[NodeConfig]:
+    def master_vms(self) -> list[NodeConfig]:
         return [x for x in self.masters if x.kind == "vm"]
 
-    def local_vms(self) -> List[NodeConfig]:
+    def local_vms(self) -> list[NodeConfig]:
         return [x for x in self.all_vms() if x.node == "localhost"]
 
-    def local_worker_vms(self) -> List[NodeConfig]:
+    def local_worker_vms(self) -> list[NodeConfig]:
         return [x for x in self.worker_vms() if x.node == "localhost"]
 
     def is_sno(self) -> bool:

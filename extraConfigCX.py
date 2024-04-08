@@ -4,7 +4,7 @@ import coreosBuilder
 from concurrent.futures import ThreadPoolExecutor
 from nfs import NFS
 from concurrent.futures import Future
-from typing import Dict, Optional
+from typing import Optional
 import sys
 from logger import logger
 from clustersConfig import ExtraConfigArgs
@@ -21,7 +21,7 @@ tools available. https://github.com/bn222/dpu-tools/
 """
 
 
-def ExtraConfigCX(cc: ClustersConfig, _: ExtraConfigArgs, futures: Dict[str, Future[Optional[host.Result]]]) -> None:
+def ExtraConfigCX(cc: ClustersConfig, _: ExtraConfigArgs, futures: dict[str, Future[Optional[host.Result]]]) -> None:
     coreosBuilder.ensure_fcos_exists()
     logger.info("Updating CX firmware on all workers")
     lh = host.LocalHost()

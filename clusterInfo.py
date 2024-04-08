@@ -1,5 +1,3 @@
-from typing import List
-from typing import Dict
 import sys
 import os
 import gspread
@@ -12,11 +10,11 @@ class ClusterInfo:
         self.name = name
         self.provision_host = ""
         self.network_api_port = ""
-        self.workers = []  # type: List[str]
-        self.bmcs = []  # type: List[str]
+        self.workers = []  # type: list[str]
+        self.bmcs = []  # type: list[str]
 
 
-def read_sheet() -> List[List[str]]:
+def read_sheet() -> list[list[str]]:
     logger.info("Downloading sheet from Google")
     scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
     cred_paths = [os.path.join(os.getcwd(), "credentials.json"), os.path.join(os.environ["HOME"], "credentials.json")]
@@ -35,7 +33,7 @@ def read_sheet() -> List[List[str]]:
     return [list(e.values()) for e in sheet.get_all_records()]
 
 
-def load_all_cluster_info() -> Dict[str, ClusterInfo]:
+def load_all_cluster_info() -> dict[str, ClusterInfo]:
     cluster = None
     ret = []
     logger.info("loading cluster information")

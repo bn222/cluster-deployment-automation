@@ -5,7 +5,7 @@ import sys
 import time
 from concurrent.futures import Future, ThreadPoolExecutor
 from logger import logger
-from typing import Optional, Tuple
+from typing import Optional
 
 import common
 import host
@@ -54,7 +54,7 @@ class ClusterNode:
         pass
 
     @abc.abstractmethod
-    def post_boot(self, desired_ip_range: Tuple[str, str]) -> bool:
+    def post_boot(self, desired_ip_range: tuple[str, str]) -> bool:
         pass
 
     def teardown(self) -> None:
@@ -166,7 +166,7 @@ class VmClusterNode(ClusterNode):
             return self.hostconn.vm_is_running(self.config.name)
         return self.future.done()
 
-    def post_boot(self, desired_ip_range: Tuple[str, str]) -> bool:
+    def post_boot(self, desired_ip_range: tuple[str, str]) -> bool:
         if not self.install_wait:
             self.future.result()
         return True
@@ -213,7 +213,7 @@ class X86ClusterNode(ClusterNode):
     def has_booted(self) -> bool:
         return self.future.done()
 
-    def post_boot(self, desired_ip_range: Tuple[str, str]) -> bool:
+    def post_boot(self, desired_ip_range: tuple[str, str]) -> bool:
         rh = host.RemoteHost(self.config.node)
         rh.ssh_connect("core")
         ipr_entries = common.ipa_to_entries(rh.run("ip -json a").out)
@@ -315,7 +315,7 @@ class BFClusterNode(ClusterNode):
     def has_booted(self) -> bool:
         return self.future.done()
 
-    def post_boot(self, desired_ip_range: Tuple[str, str]) -> bool:
+    def post_boot(self, desired_ip_range: tuple[str, str]) -> bool:
         result: Optional[host.Result] = self.future.result()
         if result is not None:
             self.dynamic_ip = result.out

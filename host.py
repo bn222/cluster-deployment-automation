@@ -12,11 +12,7 @@ import logging
 import tempfile
 from typing import Optional
 from typing import Union
-from typing import List
-from typing import Type
 from typing import Any
-from typing import Dict
-from typing import Tuple
 from functools import lru_cache
 from ailib import Redfish
 import paramiko
@@ -60,7 +56,7 @@ class KeyLogin(Login):
         key_loader = self._key_loader()
         self._pkey = key_loader.from_private_key(io.StringIO(self._key))
 
-    def _key_loader(self) -> Union[Type[Ed25519Key], Type[RSAKey]]:
+    def _key_loader(self) -> Union[type[Ed25519Key], type[RSAKey]]:
         if self._is_rsa():
             return RSAKey
         else:
@@ -208,7 +204,7 @@ class Host:
     def __init__(self, hostname: str, bmc: Optional[BMC] = None):
         self._hostname = hostname
         self._bmc = bmc
-        self._logins: List[Login] = []
+        self._logins: list[Login] = []
         self.sudo_needed = False
 
     @lru_cache(maxsize=None)
@@ -242,7 +238,7 @@ class Host:
 
         self.ssh_connect_looped(self._logins)
 
-    def ssh_connect_looped(self, logins: List[Login]) -> None:
+    def ssh_connect_looped(self, logins: list[Login]) -> None:
         if len(logins) == 0:
             raise Exception("No usuable logins found")
         while True:
@@ -295,7 +291,7 @@ class Host:
     def need_sudo(self) -> None:
         self.sudo_needed = True
 
-    def run(self, cmd: str, log_level: int = logging.DEBUG, env: Dict[str, str] = os.environ.copy()) -> Result:
+    def run(self, cmd: str, log_level: int = logging.DEBUG, env: dict[str, str] = os.environ.copy()) -> Result:
         if self.sudo_needed:
             cmd = "sudo " + cmd
 
@@ -308,7 +304,7 @@ class Host:
         logger.log(log_level, ret_val)
         return ret_val
 
-    def _run_local(self, cmd: str, env: Dict[str, str]) -> Result:
+    def _run_local(self, cmd: str, env: dict[str, str]) -> Result:
         args = shlex.split(cmd)
         pipe = subprocess.PIPE
         with subprocess.Popen(args, stdout=pipe, stderr=pipe, env=env) as proc:
@@ -395,7 +391,7 @@ class Host:
         r = lh.run(ping_cmd)
         return r.returncode == 0
 
-    def os_release(self) -> Dict[str, str]:
+    def os_release(self) -> dict[str, str]:
         d = {}
         for e in self.read_file("/etc/os-release").split("\n"):
             split_e = e.split("=", maxsplit=1)
@@ -456,7 +452,7 @@ class Host:
                 return ret.out
             raise Exception(f"Error reading {file_name}")
 
-    def listdir(self, path: Optional[str] = None) -> List[str]:
+    def listdir(self, path: Optional[str] = None) -> list[str]:
         if self.is_localhost():
             return os.listdir(path)
         path = path if path is not None else ""
@@ -520,7 +516,7 @@ class HostWithBF2(Host):
             logger.log(log_level, f"{self._hostname} -> BF: {line.strip()}")
             out.append(line)
 
-        err: List[str] = []
+        err: list[str] = []
         for line in iter(stderr.readline, ""):
             err.append(line)
 
@@ -567,7 +563,7 @@ class HostWithBF2(Host):
         return self.run_in_container("/bfb")
 
 
-host_instances: Dict[Tuple[str, Optional[str]], Host] = {}
+host_instances: dict[tuple[str, Optional[str]], Host] = {}
 
 
 def sync_time(src: Host, dst: Host) -> Result:

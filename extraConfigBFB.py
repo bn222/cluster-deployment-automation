@@ -5,7 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 from k8sClient import K8sClient
 from nfs import NFS
 from concurrent.futures import Future
-from typing import Dict, Optional
+from typing import Optional
 import sys
 from logger import logger
 from clustersConfig import ExtraConfigArgs
@@ -27,7 +27,7 @@ to be in a good state.
 """
 
 
-def ExtraConfigBFB(cc: ClustersConfig, _: ExtraConfigArgs, futures: Dict[str, Future[Optional[host.Result]]]) -> None:
+def ExtraConfigBFB(cc: ClustersConfig, _: ExtraConfigArgs, futures: dict[str, Future[Optional[host.Result]]]) -> None:
     coreosBuilder.ensure_fcos_exists()
     logger.info("Loading BF-2 with BFB image on all workers")
     lh = host.LocalHost()
@@ -62,7 +62,7 @@ def ExtraConfigBFB(cc: ClustersConfig, _: ExtraConfigArgs, futures: Dict[str, Fu
     logger.info("BFB setup complete")
 
 
-def ExtraConfigSwitchNicMode(cc: ClustersConfig, _: ExtraConfigArgs, futures: Dict[str, Future[Optional[host.Result]]]) -> None:
+def ExtraConfigSwitchNicMode(cc: ClustersConfig, _: ExtraConfigArgs, futures: dict[str, Future[Optional[host.Result]]]) -> None:
     [f.result() for (_, f) in futures.items()]
     client = K8sClient(cc.kubeconfig)
 

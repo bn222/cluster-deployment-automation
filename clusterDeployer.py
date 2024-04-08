@@ -8,11 +8,8 @@ import shutil
 from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 from typing import Generator
-from typing import Dict
 from typing import Union
-from typing import List
 from typing import Callable
-from typing import Set
 import re
 import logging
 from assistedInstaller import AssistedClientAutomation
@@ -37,7 +34,7 @@ def match_to_proper_version_format(version_cluster_config: str) -> str:
 
 
 class ClusterDeployer:
-    def __init__(self, cc: ClustersConfig, ai: AssistedClientAutomation, steps: List[str], secrets_path: str):
+    def __init__(self, cc: ClustersConfig, ai: AssistedClientAutomation, steps: list[str], secrets_path: str):
         self._client: Optional[K8sClient] = None
         self.steps = steps
         self._cc = cc
@@ -68,10 +65,10 @@ class ClusterDeployer:
             self.workers_arch = "x86_64"
         self._validate()
 
-    def _all_hosts_with_masters(self) -> Set[ClusterHost]:
+    def _all_hosts_with_masters(self) -> set[ClusterHost]:
         return {ch for ch in self._all_hosts if len(ch.k8s_master_nodes) > 0}
 
-    def _all_hosts_with_workers(self) -> Set[ClusterHost]:
+    def _all_hosts_with_workers(self) -> set[ClusterHost]:
         return {ch for ch in self._all_hosts if len(ch.k8s_worker_nodes) > 0}
 
     """
@@ -242,9 +239,9 @@ class ClusterDeployer:
     def _wait_known_state(self, names_gen: Generator[str, None, None], cb: Callable[[], None] = lambda: None) -> None:
         names = list(names_gen)
         logger.info(f"Waiting for {names} to be in \'known\' state")
-        status: Dict[str, Optional[str]] = {n: "" for n in names}
+        status: dict[str, Optional[str]] = {n: "" for n in names}
         while not all(v == "known" for v in status.values()):
-            new_status: Dict[str, Optional[str]] = {n: self._get_status(n) for n in names}
+            new_status: dict[str, Optional[str]] = {n: self._get_status(n) for n in names}
             if new_status != status:
                 logger.info(f"latest status: {new_status}")
                 status = new_status
@@ -264,7 +261,7 @@ class ClusterDeployer:
 
     def create_cluster(self) -> None:
         cluster_name = self._cc.name
-        cfg: Dict[str, Union[str, bool, List[str], List[Dict[str, str]]]] = {}
+        cfg: dict[str, Union[str, bool, list[str], list[dict[str, str]]]] = {}
         cfg["openshift_version"] = self._cc.version
         cfg["cpu_architecture"] = "multi"
         cfg["pull_secret"] = self._secrets_path
@@ -460,7 +457,7 @@ class ClusterDeployer:
         ip_range = self._cc.full_ip_range
         logger.info(f"Connectivity established to all workers; checking that they have an IP in range: {ip_range}")
 
-        def addresses(h: host.Host) -> List[str]:
+        def addresses(h: host.Host) -> list[str]:
             ret = []
             for e in h.ipa():
                 if "addr_info" not in e:
@@ -504,7 +501,7 @@ class ClusterDeployer:
                     if "inventory" not in h:
                         continue
                     nics = json.loads(h["inventory"]).get("interfaces")
-                    addresses: List[str] = sum((nic["ipv4_addresses"] for nic in nics), [])
+                    addresses: list[str] = sum((nic["ipv4_addresses"] for nic in nics), [])
                     stripped_addresses = [a.split("/")[0] for a in addresses]
 
                     if k8s_node.ip() in stripped_addresses:
@@ -553,7 +550,7 @@ class ClusterDeployer:
         logger.info(f'waiting for {len(self._cc.workers)} workers')
         lh = host.LocalHost()
         bf_workers = [x for x in self._cc.workers if x.kind == "bf"]
-        connections: Dict[str, host.Host] = {}
+        connections: dict[str, host.Host] = {}
         for try_count in itertools.count(0):
             workers = [w.name for w in self._cc.workers]
             n_not_ready_workers = sum(1 for w in workers if not self.client().is_ready(w))

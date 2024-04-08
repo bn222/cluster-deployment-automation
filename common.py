@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 import ipaddress
-from typing import List, Optional, Set, Tuple, TypeVar, Iterator
+from typing import Optional, TypeVar, Iterator
 import host
 import json
 import os
@@ -10,8 +10,8 @@ import glob
 T = TypeVar("T")
 
 
-def str_to_list(input_str: str) -> List[int]:
-    result: Set[int] = set()
+def str_to_list(input_str: str) -> list[int]:
+    result: set[int] = set()
     parts = input_str.split(',')
 
     for part in parts:
@@ -25,22 +25,22 @@ def str_to_list(input_str: str) -> List[int]:
 
 
 class RangeList:
-    _range: List[Tuple[bool, List[int]]] = []
-    initial_values: Optional[List[int]] = None
+    _range: list[tuple[bool, list[int]]] = []
+    initial_values: Optional[list[int]] = None
 
-    def __init__(self, initial_values: Optional[List[int]] = None):
+    def __init__(self, initial_values: Optional[list[int]] = None):
         self.initial_values = initial_values
 
-    def _append(self, lst: List[int], expand: bool) -> None:
+    def _append(self, lst: list[int], expand: bool) -> None:
         self._range.append((expand, lst))
 
-    def include(self, lst: List[int]) -> None:
+    def include(self, lst: list[int]) -> None:
         self._append(lst, True)
 
-    def exclude(self, lst: List[int]) -> None:
+    def exclude(self, lst: list[int]) -> None:
         self._append(lst, False)
 
-    def filter_list(self, initial: List[T]) -> List[T]:
+    def filter_list(self, initial: list[T]) -> list[T]:
         applied = set(range(len(initial)))
         if self.initial_values is not None:
             applied &= set(self.initial_values)
@@ -63,19 +63,19 @@ class IPRouteAddressInfoEntry:
 class IPRouteAddressEntry:
     ifindex: int
     ifname: str
-    flags: List[str]
+    flags: list[str]
     master: Optional[str]
     address: str  # Ethernet address.
-    addr_info: List[IPRouteAddressInfoEntry]
+    addr_info: list[IPRouteAddressInfoEntry]
 
 
 def ipa(host: host.Host) -> str:
     return host.run("ip -json a").out
 
 
-def ipa_to_entries(input: str) -> List[IPRouteAddressEntry]:
+def ipa_to_entries(input: str) -> list[IPRouteAddressEntry]:
     j = json.loads(input)
-    ret: List[IPRouteAddressEntry] = []
+    ret: list[IPRouteAddressEntry] = []
     for e in j:
         addr_infos = []
         for addr in e["addr_info"]:
@@ -97,24 +97,24 @@ class IPRouteRouteEntry:
     dev: str
 
 
-def ipr_to_entries(input: str) -> List[IPRouteRouteEntry]:
+def ipr_to_entries(input: str) -> list[IPRouteRouteEntry]:
     j = json.loads(input)
-    ret: List[IPRouteRouteEntry] = []
+    ret: list[IPRouteRouteEntry] = []
     for e in j:
         ret.append(IPRouteRouteEntry(e["dst"], e["dev"]))
     return ret
 
 
-def ip_range(start_addr: str, n_addrs: int) -> Tuple[str, str]:
+def ip_range(start_addr: str, n_addrs: int) -> tuple[str, str]:
     return start_addr, str(ipaddress.ip_address(start_addr) + n_addrs)
 
 
-def ip_range_contains(range: Tuple[str, str], ip: str) -> bool:
+def ip_range_contains(range: tuple[str, str], ip: str) -> bool:
     ip_val = ipaddress.IPv4Address(ip)
     return ipaddress.IPv4Address(range[0]) <= ip_val and ipaddress.IPv4Address(range[1]) > ip_val
 
 
-def ip_range_size(range: Tuple[str, str]) -> int:
+def ip_range_size(range: tuple[str, str]) -> int:
     return int(ipaddress.IPv4Address(range[1])) - int(ipaddress.IPv4Address(range[0]))
 
 
@@ -122,7 +122,7 @@ def ip_in_subnet(addr: str, subnet: str) -> bool:
     return ipaddress.ip_address(addr) in ipaddress.ip_network(subnet)
 
 
-def extract_interfaces(input: str) -> List[str]:
+def extract_interfaces(input: str) -> list[str]:
     entries = ipa_to_entries(input)
     return [x.ifname for x in entries]
 
@@ -156,7 +156,7 @@ def port_to_ip(host: host.Host, port_name: str) -> Optional[str]:
     return None
 
 
-def carrier_no_addr(host: host.Host) -> List[IPRouteAddressEntry]:
+def carrier_no_addr(host: host.Host) -> list[IPRouteAddressEntry]:
     def carrier_no_addr(intf: IPRouteAddressEntry) -> bool:
         return len(intf.addr_info) == 0 and "NO-CARRIER" not in intf.flags
 
@@ -173,7 +173,7 @@ def get_auto_port(host: host.Host) -> str:
         return interfaces[0].ifname
 
 
-def iterate_ssh_keys() -> Iterator[Tuple[str, str, str]]:
+def iterate_ssh_keys() -> Iterator[tuple[str, str, str]]:
     for pub_file in glob.glob("/root/.ssh/*.pub"):
         with open(pub_file, 'r') as f:
             pub_key_content = f.read().strip()

@@ -3,14 +3,14 @@ import re
 import sys
 import time
 from logger import logger
-from typing import Optional, Tuple
+from typing import Optional
 
 import common
 import host
 from clustersConfig import BridgeConfig, NodeConfig
 
 
-def bridge_dhcp_range_str(dhcp_range: Optional[Tuple[str, str]]) -> str:
+def bridge_dhcp_range_str(dhcp_range: Optional[tuple[str, str]]) -> str:
     if dhcp_range is not None:
         return f"<range start='{dhcp_range[0]}' end='{dhcp_range[1]}'/>"
     return ""

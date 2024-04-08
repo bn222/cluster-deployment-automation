@@ -7,7 +7,6 @@ import argcomplete
 import difflib
 from logger import logger, configure_logger
 from typing import Optional
-from typing import List
 
 VALID_STEPS = ["pre", "masters", "workers", "post"]
 
@@ -21,11 +20,11 @@ def join_valid_steps() -> str:
     return ','.join(VALID_STEPS)
 
 
-def yaml_completer(prefix: str, parsed_args: str, **kwargs: str) -> List[str]:
+def yaml_completer(prefix: str, parsed_args: str, **kwargs: str) -> list[str]:
     return [f for f in os.listdir('.') if (f.endswith(('.yaml', '.yml')) and f.startswith(prefix))]
 
 
-def step_completer(prefix: str, parsed_args: str, **kwargs: str) -> List[str]:
+def step_completer(prefix: str, parsed_args: str, **kwargs: str) -> list[str]:
     if not prefix:
         return VALID_STEPS
 
@@ -44,7 +43,7 @@ def step_completer(prefix: str, parsed_args: str, **kwargs: str) -> List[str]:
     return suggestions
 
 
-def remove_empty_strings(comma_string: str) -> List[str]:
+def remove_empty_strings(comma_string: str) -> list[str]:
     return list(filter(None, comma_string.split(",")))
 
 

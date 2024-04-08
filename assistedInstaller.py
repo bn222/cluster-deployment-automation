@@ -8,7 +8,6 @@ import requests
 from ailib import AssistedClient
 import common
 from logger import logger
-from typing import Dict, Tuple
 import sys
 
 
@@ -40,7 +39,7 @@ class AssistedClientAutomation(AssistedClient):  # type: ignore
                 logger.info("failed to delete cluster, will retry..")
             time.sleep(5)
 
-    def ensure_infraenv_created(self, name: str, cfg: Dict[str, str]) -> None:
+    def ensure_infraenv_created(self, name: str, cfg: dict[str, str]) -> None:
         if name not in (x["name"] for x in self.list_infra_envs()):
             logger.info(f"Creating infraenv {name}")
             self.create_infra_env(name, cfg)
@@ -122,7 +121,7 @@ class AssistedClientAutomation(AssistedClient):  # type: ignore
                 return AssistedClientHostInfo(h["status"], h["inventory"])
         return None
 
-    def get_ai_ip(self, name: str, ip_range: Tuple[str, str]) -> Optional[str]:
+    def get_ai_ip(self, name: str, ip_range: tuple[str, str]) -> Optional[str]:
         ai_host = self.get_ai_host(name)
         if ai_host:
             inventory = json.loads(ai_host.inventory)

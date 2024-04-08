@@ -9,10 +9,9 @@ from logger import logger
 import coreosBuilder
 from concurrent.futures import ThreadPoolExecutor
 from nfs import NFS
-from typing import List
 
 
-def get_part_table(h: host.Host, drive: str) -> List[str]:
+def get_part_table(h: host.Host, drive: str) -> list[str]:
     fdisk_output = h.run(f"sudo fdisk -l {drive}").out.strip().split()
     parts = [x.split()[0] for x in fdisk_output if x.startswith(drive)]
     parts = [x for x in parts if ":" not in x]

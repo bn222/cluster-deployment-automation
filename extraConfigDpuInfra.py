@@ -10,14 +10,12 @@ import os
 import sys
 import shutil
 from common_patches import apply_common_pathches
-from typing import Dict
-from typing import List
 from typing import Optional
 from logger import logger
 from clustersConfig import ExtraConfigArgs
 
 
-def install_remotely(ip: str, links: List[str]) -> bool:
+def install_remotely(ip: str, links: list[str]) -> bool:
     try:
         return install_remotelyh(ip, links)
     except Exception as e:
@@ -25,7 +23,7 @@ def install_remotely(ip: str, links: List[str]) -> bool:
     return False
 
 
-def install_remotelyh(ip: str, links: List[str]) -> bool:
+def install_remotelyh(ip: str, links: list[str]) -> bool:
     logger.info(f"connecting to {ip}")
     rh = host.RemoteHost(ip)
     # Eventhough a buggy kernel can cause connections to drop,
@@ -67,7 +65,7 @@ def install_remotelyh(ip: str, links: List[str]) -> bool:
     return want in rh.run("uname -a").out
 
 
-def install_custom_kernel(lh: host.Host, client: K8sClient, bf_names: List[str], ips: List[str]) -> None:
+def install_custom_kernel(lh: host.Host, client: K8sClient, bf_names: list[str], ips: list[str]) -> None:
     logger.info(f"Installing custom kernel on {ips}")
     links = [
         "https://s3.upshift.redhat.com/DH-PROD-CKI/internal-artifacts/696717272/build%20aarch64/3333360250/artifacts/kernel-core-4.18.0-372.35.1.el8_6.mr3440_221116_1544.aarch64.rpm",
@@ -131,7 +129,7 @@ def run_dpu_network_operator_git(lh: host.Host, kc: str) -> None:
     os.chdir(cur_dir)
 
 
-def restart_ovs_configuration(ips: List[str]) -> None:
+def restart_ovs_configuration(ips: list[str]) -> None:
     logger.info("Restarting ovs config")
 
     for ip in ips:
@@ -140,7 +138,7 @@ def restart_ovs_configuration(ips: List[str]) -> None:
         rh.run("sudo systemctl restart ovs-configuration")
 
 
-def _ExtraConfigDpuInfra_common(cc: ClustersConfig, futures: Dict[str, Future[Optional[host.Result]]], *, new_api: bool) -> None:
+def _ExtraConfigDpuInfra_common(cc: ClustersConfig, futures: dict[str, Future[Optional[host.Result]]], *, new_api: bool) -> None:
     [f.result() for (_, f) in futures.items()]
     kc = "/root/kubeconfig.infracluster"
     client = K8sClient(kc)
@@ -225,12 +223,12 @@ def _ExtraConfigDpuInfra_common(cc: ClustersConfig, futures: Dict[str, Future[Op
             sys.exit(-1)
 
 
-def ExtraConfigDpuInfra(cc: ClustersConfig, _: ExtraConfigArgs, futures: Dict[str, Future[Optional[host.Result]]]) -> None:
+def ExtraConfigDpuInfra(cc: ClustersConfig, _: ExtraConfigArgs, futures: dict[str, Future[Optional[host.Result]]]) -> None:
     _ExtraConfigDpuInfra_common(cc, futures, new_api=False)
 
 
 # VF Management port requires a new API. We need a new extra config class to handle the API changes.
-def ExtraConfigDpuInfra_NewAPI(cc: ClustersConfig, _: ExtraConfigArgs, futures: Dict[str, Future[Optional[host.Result]]]) -> None:
+def ExtraConfigDpuInfra_NewAPI(cc: ClustersConfig, _: ExtraConfigArgs, futures: dict[str, Future[Optional[host.Result]]]) -> None:
     _ExtraConfigDpuInfra_common(cc, futures, new_api=True)
 
 
