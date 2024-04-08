@@ -48,9 +48,8 @@ class ClusterDeployer:
 
         lh = host.LocalHost()
         lh_config = list(filter(lambda hc: hc.name == lh.hostname(), self._cc.hosts))[0]
-        serves_dhcp = cc.kind == "openshift" and len(cc.local_vms()) != len(cc.all_nodes())
-        self._local_host = ClusterHost(lh, lh_config, cc, cc.local_bridge_config, serves_dhcp=serves_dhcp)
-        self._remote_hosts = {bm.name: ClusterHost(host.RemoteHost(bm.name), bm, cc, cc.remote_bridge_config, serves_dhcp=False) for bm in self._cc.hosts if bm.name != lh.hostname()}
+        self._local_host = ClusterHost(lh, lh_config, cc, cc.local_bridge_config)
+        self._remote_hosts = {bm.name: ClusterHost(host.RemoteHost(bm.name), bm, cc, cc.remote_bridge_config) for bm in self._cc.hosts if bm.name != lh.hostname()}
         self._all_hosts = [self._local_host] + list(self._remote_hosts.values())
         self._futures = {k8s_node.config.name: k8s_node.future for h in self._all_hosts for k8s_node in h._k8s_nodes()}
         self._all_nodes = {k8s_node.config.name: k8s_node for h in self._all_hosts for k8s_node in h._k8s_nodes()}
