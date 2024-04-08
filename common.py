@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 import ipaddress
-from typing import Optional, Set, TypeVar, Iterator
+from typing import Optional, TypeVar, Iterator
 import host
 import json
 import os
@@ -11,7 +11,7 @@ T = TypeVar("T")
 
 
 def str_to_list(input_str: str) -> list[int]:
-    result: Set[int] = set()
+    result: set[int] = set()
     parts = input_str.split(',')
 
     for part in parts:

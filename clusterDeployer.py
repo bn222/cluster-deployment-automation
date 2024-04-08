@@ -10,7 +10,6 @@ from typing import Optional
 from typing import Generator
 from typing import Union
 from typing import Callable
-from typing import Set
 import re
 import logging
 from assistedInstaller import AssistedClientAutomation
@@ -66,10 +65,10 @@ class ClusterDeployer:
             self.workers_arch = "x86_64"
         self._validate()
 
-    def _all_hosts_with_masters(self) -> Set[ClusterHost]:
+    def _all_hosts_with_masters(self) -> set[ClusterHost]:
         return {ch for ch in self._all_hosts if len(ch.k8s_master_nodes) > 0}
 
-    def _all_hosts_with_workers(self) -> Set[ClusterHost]:
+    def _all_hosts_with_workers(self) -> set[ClusterHost]:
         return {ch for ch in self._all_hosts if len(ch.k8s_worker_nodes) > 0}
 
     """
