@@ -216,6 +216,23 @@ class Host:
     def is_localhost(self) -> bool:
         return self._hostname in ("localhost", socket.gethostname())
 
+    @staticmethod
+    def ssh_run(sshclient: paramiko.SSHClient, cmd: str, log_prefix: str, log_level: int = logging.DEBUG) -> Result:
+        _, stdout, stderr = sshclient.exec_command(cmd)
+
+        out = []
+        for line in iter(stdout.readline, ""):
+            logger.log(log_level, f"{log_prefix}: stdout: {line.strip()}")
+            out.append(line)
+
+        err = []
+        for line in iter(stderr.readline, ""):
+            logger.log(log_level, f"{log_prefix}: stderr: {line.strip()}")
+            err.append(line)
+
+        exit_code = stdout.channel.recv_exit_status()
+        return Result("".join(out), "".join(err), exit_code)
+
     def ssh_connect(self, username: str, password: Optional[str] = None, rsa_path: str = default_id_rsa_path(), ed25519_path: str = default_ed25519_path()) -> None:
         assert not self.is_localhost()
         logger.info(f"waiting for '{self._hostname}' to respond to ping")
@@ -397,23 +414,6 @@ class Host:
         env: Optional[Mapping[str, Optional[str]]] = None,
         cwd: Optional[str] = None,
     ) -> Result:
-        def read_output(cmd: str, log_level: int) -> Result:
-            assert self._host is not None
-            _, stdout, stderr = self._host.exec_command(cmd)
-
-            out = []
-            for line in iter(stdout.readline, ""):
-                logger.log(log_level, f"{self._hostname}: {line.strip()}")
-                out.append(line)
-
-            err = []
-            for line in iter(stderr.readline, ""):
-                err.append(line)
-
-            exit_code = stdout.channel.recv_exit_status()
-
-            return Result("".join(out), "".join(err), exit_code)
-
         if cwd:
             cmd = f"cd {shlex.quote(cwd)} || exit 10\n{cmd}"
 
@@ -439,7 +439,7 @@ class Host:
 
         while True:
             try:
-                return read_output(cmd, log_level)
+                return self.ssh_run(self._host, cmd, log_prefix=self._hostname, log_level=log_level)
             except Exception as e:
                 logger.log(log_level, e)
                 logger.log(log_level, f"Connection lost while running command {cmd}, reconnecting...")
@@ -612,19 +612,7 @@ class HostWithBF2(Host):
         self._bf_host.connect(bf_addr, username='core', pkey=pkey, sock=chan)
 
     def run_on_bf(self, cmd: str, log_level: int = logging.DEBUG) -> Result:
-        _, stdout, stderr = self._bf_host.exec_command(cmd)
-
-        out = []
-        for line in iter(stdout.readline, ""):
-            logger.log(log_level, f"{self._hostname} -> BF: {line.strip()}")
-            out.append(line)
-
-        err: list[str] = []
-        for line in iter(stderr.readline, ""):
-            err.append(line)
-
-        exit_code = stdout.channel.recv_exit_status()
-        return Result("".join(out), "".join(err), exit_code)
+        return self.ssh_run(self._bf_host, cmd, log_prefix=f"{self._hostname}:BF", log_level=log_level)
 
     def run_in_container(self, cmd: str, interactive: bool = False) -> Result:
         name = "bf"
