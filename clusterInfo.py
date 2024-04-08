@@ -1,4 +1,3 @@
-from typing import List
 from typing import Dict
 import sys
 import os
@@ -12,11 +11,11 @@ class ClusterInfo:
         self.name = name
         self.provision_host = ""
         self.network_api_port = ""
-        self.workers = []  # type: List[str]
-        self.bmcs = []  # type: List[str]
+        self.workers = []  # type: list[str]
+        self.bmcs = []  # type: list[str]
 
 
-def read_sheet() -> List[List[str]]:
+def read_sheet() -> list[list[str]]:
     logger.info("Downloading sheet from Google")
     scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
     cred_paths = [os.path.join(os.getcwd(), "credentials.json"), os.path.join(os.environ["HOME"], "credentials.json")]

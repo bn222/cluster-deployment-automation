@@ -6,7 +6,6 @@ from concurrent.futures import Future
 from extraConfigDpuInfra import run_dpu_network_operator_git
 import extraConfigSriov
 from typing import Dict
-from typing import List
 from typing import Optional
 import sys
 import jinja2
@@ -49,7 +48,7 @@ def render_sriov_node_policy(policyname: str, bf_port: str, bf_addr: str, numvfs
         outFile.write(rendered)
 
 
-def render_envoverrides_cm(client: K8sClient, mapping: Optional[List[Dict[str, str]]], ns: str) -> str:
+def render_envoverrides_cm(client: K8sClient, mapping: Optional[list[Dict[str, str]]], ns: str) -> str:
     assert mapping is not None
     contents = open("manifests/tenant/envoverrides.yaml").read()
     contents += f"{ns}\n"

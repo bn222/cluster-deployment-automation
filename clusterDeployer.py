@@ -10,7 +10,6 @@ from typing import Optional
 from typing import Generator
 from typing import Dict
 from typing import Union
-from typing import List
 from typing import Callable
 from typing import Set
 import re
@@ -37,7 +36,7 @@ def match_to_proper_version_format(version_cluster_config: str) -> str:
 
 
 class ClusterDeployer:
-    def __init__(self, cc: ClustersConfig, ai: AssistedClientAutomation, steps: List[str], secrets_path: str):
+    def __init__(self, cc: ClustersConfig, ai: AssistedClientAutomation, steps: list[str], secrets_path: str):
         self._client: Optional[K8sClient] = None
         self.steps = steps
         self._cc = cc
@@ -264,7 +263,7 @@ class ClusterDeployer:
 
     def create_cluster(self) -> None:
         cluster_name = self._cc.name
-        cfg: Dict[str, Union[str, bool, List[str], List[Dict[str, str]]]] = {}
+        cfg: Dict[str, Union[str, bool, list[str], list[Dict[str, str]]]] = {}
         cfg["openshift_version"] = self._cc.version
         cfg["cpu_architecture"] = "multi"
         cfg["pull_secret"] = self._secrets_path
@@ -460,7 +459,7 @@ class ClusterDeployer:
         ip_range = self._cc.full_ip_range
         logger.info(f"Connectivity established to all workers; checking that they have an IP in range: {ip_range}")
 
-        def addresses(h: host.Host) -> List[str]:
+        def addresses(h: host.Host) -> list[str]:
             ret = []
             for e in h.ipa():
                 if "addr_info" not in e:
@@ -504,7 +503,7 @@ class ClusterDeployer:
                     if "inventory" not in h:
                         continue
                     nics = json.loads(h["inventory"]).get("interfaces")
-                    addresses: List[str] = sum((nic["ipv4_addresses"] for nic in nics), [])
+                    addresses: list[str] = sum((nic["ipv4_addresses"] for nic in nics), [])
                     stripped_addresses = [a.split("/")[0] for a in addresses]
 
                     if k8s_node.ip() in stripped_addresses:

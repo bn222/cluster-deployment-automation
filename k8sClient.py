@@ -3,7 +3,6 @@ import yaml
 import time
 import host
 import sys
-from typing import List
 from typing import Optional
 from typing import Callable
 from logger import logger
@@ -27,7 +26,7 @@ class K8sClient:
                         return str(con.status) == "True"
         return False
 
-    def get_nodes(self) -> List[str]:
+    def get_nodes(self) -> list[str]:
         return [e.metadata.name for e in self._client.list_node().items]
 
     def wait_ready(self, name: str, cb: Optional[Callable[[], None]] = None) -> None:

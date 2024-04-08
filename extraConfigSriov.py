@@ -9,7 +9,6 @@ import shutil
 import jinja2
 import sys
 from typing import Dict
-from typing import List
 from typing import Optional
 from logger import logger
 from clustersConfig import ExtraConfigArgs
@@ -110,7 +109,7 @@ def ensure_pci_realloc(cc: ClustersConfig, client: K8sClient, mcp_name: str) -> 
         enable_pci_realloc(client, mcp_name)
 
 
-def render_sriov_node_policy(policyname: str, pfnames: List[str], numvfs: int, resourcename: str, outfilename: str) -> None:
+def render_sriov_node_policy(policyname: str, pfnames: list[str], numvfs: int, resourcename: str, outfilename: str) -> None:
     with open('./manifests/nicmode/sriov-node-policy.yaml.j2') as f:
         j2_template = jinja2.Template(f.read())
         rendered = j2_template.render(policyName=policyname, pfNamesAll=pfnames, numVfs=numvfs, resourceName=resourcename)

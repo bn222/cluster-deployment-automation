@@ -3,7 +3,7 @@ import os
 import time
 from concurrent.futures import Future, ThreadPoolExecutor
 from logger import logger
-from typing import List, Optional, Tuple
+from typing import Optional, Tuple
 
 import common
 import coreosBuilder
@@ -26,8 +26,8 @@ class ClusterHost:
     config: HostConfig
     needs_api_network: bool
     api_port: Optional[str] = None
-    k8s_master_nodes: List[ClusterNode]
-    k8s_worker_nodes: List[ClusterNode]
+    k8s_master_nodes: list[ClusterNode]
+    k8s_worker_nodes: list[ClusterNode]
     hosts_vms: bool
 
     def __init__(self, h: host.Host, c: HostConfig, cc: ClustersConfig, bc: BridgeConfig, serves_dhcp: bool):
@@ -35,8 +35,8 @@ class ClusterHost:
         self.hostconn = h
         self.config = c
 
-        def _create_k8s_nodes(configs: List[NodeConfig]) -> List[ClusterNode]:
-            nodes: List[ClusterNode] = []
+        def _create_k8s_nodes(configs: list[NodeConfig]) -> list[ClusterNode]:
+            nodes: list[ClusterNode] = []
             for node_config in configs:
                 if node_config.node != self.config.name:
                     continue
@@ -71,10 +71,10 @@ class ClusterHost:
                 logger.error_and_exit(f"Can't find a valid network API port, config is {self.config.network_api_port}")
             logger.info(f"Using {self.api_port} as network API port")
 
-    def _k8s_nodes(self) -> List[ClusterNode]:
+    def _k8s_nodes(self) -> list[ClusterNode]:
         return self.k8s_master_nodes + self.k8s_worker_nodes
 
-    def _ensure_images(self, local_iso_path: str, infra_env: str, nodes: List[ClusterNode]) -> None:
+    def _ensure_images(self, local_iso_path: str, infra_env: str, nodes: list[ClusterNode]) -> None:
         if not self.hosts_vms:
             return
 
@@ -139,7 +139,7 @@ class ClusterHost:
         logger.info(f"Removing DHCP reply drop rules on {self.api_port}")
         self.hostconn.run("ebtables -t filter -F FORWARD")
 
-    def _configure_dhcp_entries(self, dhcp_bridge: VirBridge, nodes: List[ClusterNode]) -> None:
+    def _configure_dhcp_entries(self, dhcp_bridge: VirBridge, nodes: list[ClusterNode]) -> None:
         if not self.hosts_vms:
             return
 
@@ -168,7 +168,7 @@ class ClusterHost:
 
         return executor.submit(_preinstall)
 
-    def _start_nodes(self, iso_path: str, infra_env: str, executor: ThreadPoolExecutor, nodes: List[ClusterNode]) -> List[Future[Optional[host.Result]]]:
+    def _start_nodes(self, iso_path: str, infra_env: str, executor: ThreadPoolExecutor, nodes: list[ClusterNode]) -> list[Future[Optional[host.Result]]]:
         self._ensure_images(iso_path, infra_env, nodes)
         futures = []
         for node in nodes:
@@ -177,13 +177,13 @@ class ClusterHost:
             futures.append(node.future)
         return futures
 
-    def start_masters(self, iso_path: str, infra_env: str, executor: ThreadPoolExecutor) -> List[Future[Optional[host.Result]]]:
+    def start_masters(self, iso_path: str, infra_env: str, executor: ThreadPoolExecutor) -> list[Future[Optional[host.Result]]]:
         return self._start_nodes(iso_path, infra_env, executor, self.k8s_master_nodes)
 
-    def start_workers(self, iso_path: str, infra_env: str, executor: ThreadPoolExecutor) -> List[Future[Optional[host.Result]]]:
+    def start_workers(self, iso_path: str, infra_env: str, executor: ThreadPoolExecutor) -> list[Future[Optional[host.Result]]]:
         return self._start_nodes(iso_path, infra_env, executor, self.k8s_worker_nodes)
 
-    def _wait_for_boot(self, nodes: List[ClusterNode], desired_ip_range: Tuple[str, str]) -> None:
+    def _wait_for_boot(self, nodes: list[ClusterNode], desired_ip_range: Tuple[str, str]) -> None:
         if not nodes:
             return
 

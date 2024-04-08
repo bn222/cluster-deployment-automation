@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 import ipaddress
-from typing import List, Optional, Set, Tuple, TypeVar, Iterator
+from typing import Optional, Set, Tuple, TypeVar, Iterator
 import host
 import json
 import os
@@ -10,7 +10,7 @@ import glob
 T = TypeVar("T")
 
 
-def str_to_list(input_str: str) -> List[int]:
+def str_to_list(input_str: str) -> list[int]:
     result: Set[int] = set()
     parts = input_str.split(',')
 
@@ -25,22 +25,22 @@ def str_to_list(input_str: str) -> List[int]:
 
 
 class RangeList:
-    _range: List[Tuple[bool, List[int]]] = []
-    initial_values: Optional[List[int]] = None
+    _range: list[Tuple[bool, list[int]]] = []
+    initial_values: Optional[list[int]] = None
 
-    def __init__(self, initial_values: Optional[List[int]] = None):
+    def __init__(self, initial_values: Optional[list[int]] = None):
         self.initial_values = initial_values
 
-    def _append(self, lst: List[int], expand: bool) -> None:
+    def _append(self, lst: list[int], expand: bool) -> None:
         self._range.append((expand, lst))
 
-    def include(self, lst: List[int]) -> None:
+    def include(self, lst: list[int]) -> None:
         self._append(lst, True)
 
-    def exclude(self, lst: List[int]) -> None:
+    def exclude(self, lst: list[int]) -> None:
         self._append(lst, False)
 
-    def filter_list(self, initial: List[T]) -> List[T]:
+    def filter_list(self, initial: list[T]) -> list[T]:
         applied = set(range(len(initial)))
         if self.initial_values is not None:
             applied &= set(self.initial_values)
@@ -63,19 +63,19 @@ class IPRouteAddressInfoEntry:
 class IPRouteAddressEntry:
     ifindex: int
     ifname: str
-    flags: List[str]
+    flags: list[str]
     master: Optional[str]
     address: str  # Ethernet address.
-    addr_info: List[IPRouteAddressInfoEntry]
+    addr_info: list[IPRouteAddressInfoEntry]
 
 
 def ipa(host: host.Host) -> str:
     return host.run("ip -json a").out
 
 
-def ipa_to_entries(input: str) -> List[IPRouteAddressEntry]:
+def ipa_to_entries(input: str) -> list[IPRouteAddressEntry]:
     j = json.loads(input)
-    ret: List[IPRouteAddressEntry] = []
+    ret: list[IPRouteAddressEntry] = []
     for e in j:
         addr_infos = []
         for addr in e["addr_info"]:
@@ -97,9 +97,9 @@ class IPRouteRouteEntry:
     dev: str
 
 
-def ipr_to_entries(input: str) -> List[IPRouteRouteEntry]:
+def ipr_to_entries(input: str) -> list[IPRouteRouteEntry]:
     j = json.loads(input)
-    ret: List[IPRouteRouteEntry] = []
+    ret: list[IPRouteRouteEntry] = []
     for e in j:
         ret.append(IPRouteRouteEntry(e["dst"], e["dev"]))
     return ret
@@ -122,7 +122,7 @@ def ip_in_subnet(addr: str, subnet: str) -> bool:
     return ipaddress.ip_address(addr) in ipaddress.ip_network(subnet)
 
 
-def extract_interfaces(input: str) -> List[str]:
+def extract_interfaces(input: str) -> list[str]:
     entries = ipa_to_entries(input)
     return [x.ifname for x in entries]
 
@@ -156,7 +156,7 @@ def port_to_ip(host: host.Host, port_name: str) -> Optional[str]:
     return None
 
 
-def carrier_no_addr(host: host.Host) -> List[IPRouteAddressEntry]:
+def carrier_no_addr(host: host.Host) -> list[IPRouteAddressEntry]:
     def carrier_no_addr(intf: IPRouteAddressEntry) -> bool:
         return len(intf.addr_info) == 0 and "NO-CARRIER" not in intf.flags
 

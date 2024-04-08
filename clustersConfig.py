@@ -5,7 +5,6 @@ import io
 import sys
 import re
 from typing import Optional
-from typing import List
 from typing import Dict
 from typing import Tuple
 import jinja2
@@ -34,7 +33,7 @@ class ExtraConfigArgs:
     ovnk_rollout_timeout: str = "20m"
 
     kubeconfig: Optional[str] = None
-    mapping: Optional[List[Dict[str, str]]] = None
+    mapping: Optional[list[Dict[str, str]]] = None
 
     # Custom OVN build extra configs:
     # Time to wait for the builders to roll out.
@@ -128,18 +127,18 @@ class ClustersConfig:
     kind: str = "openshift"
     version: str = "4.14.0-nightly"
     network_api_port: str = "auto"
-    masters: List[NodeConfig] = []
-    workers: List[NodeConfig] = []
-    configured_workers: List[NodeConfig] = []
+    masters: list[NodeConfig] = []
+    workers: list[NodeConfig] = []
+    configured_workers: list[NodeConfig] = []
     local_bridge_config: BridgeConfig
     remote_bridge_config: BridgeConfig
     full_ip_range: Tuple[str, str]
     cluster_ip_range: Tuple[str, str]
-    hosts: List[HostConfig] = []
+    hosts: list[HostConfig] = []
     proxy: Optional[str] = None
     noproxy: Optional[str] = None
-    preconfig: List[ExtraConfigArgs] = []
-    postconfig: List[ExtraConfigArgs] = []
+    preconfig: list[ExtraConfigArgs] = []
+    postconfig: list[ExtraConfigArgs] = []
     ntp_source: str = "clock.redhat.com"
     base_dns_domain: str = "redhat.com"
 
@@ -344,22 +343,22 @@ class ClustersConfig:
     # def __setitem__(self, key, value) -> None:
     #     self.fullConfig[key] = value
 
-    def all_nodes(self) -> List[NodeConfig]:
+    def all_nodes(self) -> list[NodeConfig]:
         return self.masters + self.workers
 
-    def all_vms(self) -> List[NodeConfig]:
+    def all_vms(self) -> list[NodeConfig]:
         return [x for x in self.all_nodes() if x.kind == "vm"]
 
-    def worker_vms(self) -> List[NodeConfig]:
+    def worker_vms(self) -> list[NodeConfig]:
         return [x for x in self.workers if x.kind == "vm"]
 
-    def master_vms(self) -> List[NodeConfig]:
+    def master_vms(self) -> list[NodeConfig]:
         return [x for x in self.masters if x.kind == "vm"]
 
-    def local_vms(self) -> List[NodeConfig]:
+    def local_vms(self) -> list[NodeConfig]:
         return [x for x in self.all_vms() if x.node == "localhost"]
 
-    def local_worker_vms(self) -> List[NodeConfig]:
+    def local_worker_vms(self) -> list[NodeConfig]:
         return [x for x in self.worker_vms() if x.node == "localhost"]
 
     def is_sno(self) -> bool:

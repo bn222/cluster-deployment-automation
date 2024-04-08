@@ -12,7 +12,6 @@ import logging
 import tempfile
 from typing import Optional
 from typing import Union
-from typing import List
 from typing import Type
 from typing import Any
 from typing import Dict
@@ -208,7 +207,7 @@ class Host:
     def __init__(self, hostname: str, bmc: Optional[BMC] = None):
         self._hostname = hostname
         self._bmc = bmc
-        self._logins: List[Login] = []
+        self._logins: list[Login] = []
         self.sudo_needed = False
 
     @lru_cache(maxsize=None)
@@ -242,7 +241,7 @@ class Host:
 
         self.ssh_connect_looped(self._logins)
 
-    def ssh_connect_looped(self, logins: List[Login]) -> None:
+    def ssh_connect_looped(self, logins: list[Login]) -> None:
         if len(logins) == 0:
             raise Exception("No usuable logins found")
         while True:
@@ -456,7 +455,7 @@ class Host:
                 return ret.out
             raise Exception(f"Error reading {file_name}")
 
-    def listdir(self, path: Optional[str] = None) -> List[str]:
+    def listdir(self, path: Optional[str] = None) -> list[str]:
         if self.is_localhost():
             return os.listdir(path)
         path = path if path is not None else ""
@@ -520,7 +519,7 @@ class HostWithBF2(Host):
             logger.log(log_level, f"{self._hostname} -> BF: {line.strip()}")
             out.append(line)
 
-        err: List[str] = []
+        err: list[str] = []
         for line in iter(stderr.readline, ""):
             err.append(line)
 
