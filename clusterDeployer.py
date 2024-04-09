@@ -23,6 +23,7 @@ import microshift
 from extraConfigRunner import ExtraConfigRunner
 from clusterHost import ClusterHost
 import dnsutil
+from virshPool import VirshPool
 
 
 def match_to_proper_version_format(version_cluster_config: str) -> str:
@@ -153,6 +154,14 @@ class ClusterDeployer:
                 f.write(json.dumps(filtered, indent=4))
             logger.info(self._local_host.hostconn.run("virsh net-start default"))
             logger.info(self._local_host.hostconn.run("systemctl restart libvirtd"))
+
+            image_paths = {os.path.dirname(n.image_path) for n in self._cc.local_vms()}
+            for image_path in image_paths:
+                vp = VirshPool(
+                    name=os.path.basename(image_path),
+                    rsh=self._local_host.hostconn,
+                )
+                vp.ensure_removed()
 
         for h in self._all_hosts:
             h.ensure_not_linked_to_network()

@@ -11,6 +11,7 @@ import host
 from clustersConfig import BridgeConfig, ClustersConfig, HostConfig, NodeConfig
 from clusterNode import ClusterNode, X86ClusterNode, VmClusterNode, BFClusterNode
 from virtualBridge import VirBridge
+from virshPool import VirshPool
 
 
 class ClusterHost:
@@ -88,6 +89,17 @@ class ClusterHost:
             logger.info(f"Copying {local_iso_path} to {self.hostconn.hostname()}:/{iso_path}")
             self.hostconn.copy_to(local_iso_path, iso_path)
             logger.debug(f"iso_path is now {iso_path} for {self.hostconn.hostname()}")
+
+        # Create the storage pools. virt-install would create them, however, if two
+        # concurrent instances of virt-install try to create the same pool, there
+        # is a failure (a bug in virt-install?).
+        for image_path in image_paths:
+            vp = VirshPool(
+                name=os.path.basename(image_path),
+                rsh=self.hostconn,
+                image_path=image_path,
+            )
+            vp.ensure_initialized()
 
     def configure_bridge(self) -> None:
         if not self.hosts_vms:
