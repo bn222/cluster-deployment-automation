@@ -201,7 +201,9 @@ class ClusterDeployer:
                     if len(self._cc.workers) != 0:
                         self.create_workers()
                     else:
-                        logger.info("Skipping worker creation.")
+                        logger.info("No worker to setup. Skip")
+                else:
+                    logger.info("Skipping worker creation.")
         if self._cc.kind == "microshift":
             version = match_to_proper_version_format(self._cc.version)
 
