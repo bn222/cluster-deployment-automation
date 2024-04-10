@@ -329,17 +329,26 @@ class Host:
         *,
         env: Optional[Mapping[str, Optional[str]]] = None,
         cwd: Optional[str] = None,
+        log_prefix: str = "",
+        log_level_result: Optional[int] = None,
+        log_level_fail: Optional[int] = None,
     ) -> Result:
         cmd = self._cmd_to_script(cmd)
 
-        logger.log(log_level, f"running command {repr(cmd)} on {self._hostname}")
+        logger.log(log_level, f"{log_prefix}running command {repr(cmd)} on {self._hostname}")
         if self.is_localhost():
             ret_val = self._run_local(cmd, env=env, cwd=cwd)
         else:
             ret_val = self._run_remote(cmd, log_level, env=env, cwd=cwd)
 
+        if ret_val.returncode != 0 and log_level_fail is not None:
+            level = log_level_fail
+        elif log_level_result is not None:
+            level = log_level_result
+        else:
+            level = log_level
         status = f"failed (rc={ret_val.returncode})" if ret_val.returncode != 0 else "succeeded"
-        logger.log(log_level, f"command {repr(cmd)} on {self._hostname} {status}{':' if ret_val.out or ret_val.err else ''}{f' out={repr(ret_val.out)};' if ret_val.out else ''}{f' err={repr(ret_val.err)};' if ret_val.err else ''}")
+        logger.log(level, f"{log_prefix}command {repr(cmd)} on {self._hostname} {status}{':' if ret_val.out or ret_val.err else ''}{f' out={repr(ret_val.out)};' if ret_val.out else ''}{f' err={repr(ret_val.err)};' if ret_val.err else ''}")
 
         return ret_val
 
