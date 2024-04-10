@@ -163,7 +163,7 @@ class ClustersConfig:
         if "proxy" not in cc:
             cc["proxy"] = None
         if "hosts" not in cc:
-            cc["hosts"] = []
+            cc["hosts"] = [{"name": "localhost"}]
         if "proxy" in cc:
             self.proxy = cc["proxy"]
         if "noproxy" in cc:
@@ -182,7 +182,7 @@ class ClustersConfig:
         if "base_dns_domain" in cc:
             self.base_dns_domain = cc["base_dns_domain"]
         if "ip_range" not in cc:
-            cc["ip_range"] = "192.168.122.1-192.168.255.254"
+            cc["ip_range"] = "192.168.1.1-192.168.255.254"
         if "ip_mask" not in cc:
             cc["ip_mask"] = "255.255.0.0"
 
