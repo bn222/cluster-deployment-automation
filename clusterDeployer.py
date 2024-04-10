@@ -228,8 +228,7 @@ class ClusterDeployer:
                 logger.error_and_exit(f"Invalid external port, config is {self._cc.external_port}")
         else:
             logger.info("Don't need external network so will not set it up")
-        if not self._cc.validate_node_ips():
-            logger.error_and_exit("Invalid master/worker IPs.")
+        self._cc.validate_node_ips()
 
     def _get_status(self, name: str) -> Optional[str]:
         h = self._ai.get_ai_host(name)

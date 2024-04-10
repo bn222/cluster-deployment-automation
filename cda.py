@@ -7,15 +7,21 @@ from clustersConfig import ClustersConfig
 from clusterDeployer import ClusterDeployer
 from arguments import parse_args
 import argparse
+import host
 from logger import logger
 from clusterSnapshotter import ClusterSnapshotter
+from virtualBridge import VirBridge
 
 
 def main_deploy(args: argparse.Namespace) -> None:
     cc = ClustersConfig(args.config, args.worker_range)
 
+    # Make sure the local virtual bridge base configuration is correct.
+    local_bridge = VirBridge(host.LocalHost(), cc.local_bridge_config)
+    local_bridge.configure(api_port=None)
+
     # microshift does not use assisted installer so we don't need this check
-    if args.url == cc.cluster_ip_range[0] and not cc.kind == "microshift":
+    if args.url == cc.ip_range[0] and not cc.kind == "microshift":
         ais = AssistedInstallerService(cc.version, args.url, cc.proxy, cc.noproxy)
         ais.start()
         # workaround, this will still install 4.14, but AI will think

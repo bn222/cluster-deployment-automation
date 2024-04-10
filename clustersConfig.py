@@ -1,5 +1,4 @@
 from os import path, getcwd
-import functools
 import os
 import io
 import sys
@@ -131,7 +130,7 @@ class ClustersConfig:
     local_bridge_config: BridgeConfig
     remote_bridge_config: BridgeConfig
     full_ip_range: tuple[str, str]
-    cluster_ip_range: tuple[str, str]
+    ip_range: tuple[str, str]
     hosts: list[HostConfig] = []
     proxy: Optional[str] = None
     noproxy: Optional[str] = None
@@ -164,7 +163,7 @@ class ClustersConfig:
         if "proxy" not in cc:
             cc["proxy"] = None
         if "hosts" not in cc:
-            cc["hosts"] = []
+            cc["hosts"] = [{"name": "localhost"}]
         if "proxy" in cc:
             self.proxy = cc["proxy"]
         if "noproxy" in cc:
@@ -182,10 +181,10 @@ class ClustersConfig:
             self.ntp_source = cc["ntp_source"]
         if "base_dns_domain" in cc:
             self.base_dns_domain = cc["base_dns_domain"]
-        if "cluster_ip_range" not in cc:
-            cc["cluster_ip_range"] = "192.168.122.1-192.168.255.254"
-        if "cluster_ip_mask" not in cc:
-            cc["cluster_ip_mask"] = "255.255.0.0"
+        if "ip_range" not in cc:
+            cc["ip_range"] = "192.168.1.1-192.168.255.254"
+        if "ip_mask" not in cc:
+            cc["ip_mask"] = "255.255.0.0"
 
         self.kubeconfig = path.join(getcwd(), f'kubeconfig.{cc["name"]}')
         if "kubeconfig" in cc:
@@ -198,20 +197,20 @@ class ClustersConfig:
         self.workers = [NodeConfig(self.name, **w) for w in worker_range.filter_list(cc["workers"])]
 
         # Reserve IPs for AI, masters and workers.
-        cluster_ip_mask = cc["cluster_ip_mask"]
-        ip_range = cc["cluster_ip_range"].split("-")
+        ip_mask = cc["ip_mask"]
+        ip_range = cc["ip_range"].split("-")
         if len(ip_range) != 2:
-            logger.error_and_exit(f"Invalid cluster_ip_range config {cc['cluster_ip_range']};  it must be of the form '<startIP>-<endIP>.")
+            logger.error_and_exit(f"Invalid ip_range config {cc['ip_range']};  it must be of the form '<startIP>-<endIP>.")
 
         self.full_ip_range = (ip_range[0], ip_range[1])
         n_nodes = len(cc["masters"]) + len(cc["workers"]) + 1
-        self.cluster_ip_range = common.ip_range(ip_range[0], n_nodes)
-        if common.ip_range_size(ip_range) < common.ip_range_size(self.cluster_ip_range):
-            logger.error_and_exit("The supplied cluster_ip_range config is too small for the number of nodes")
+        self.ip_range = common.ip_range(ip_range[0], n_nodes)
+        if common.ip_range_size(ip_range) < common.ip_range_size(self.ip_range):
+            logger.error_and_exit("The supplied ip_range config is too small for the number of nodes")
 
-        dynamic_ip_range = common.ip_range(self.cluster_ip_range[1], common.ip_range_size(ip_range) - n_nodes)
-        self.local_bridge_config = BridgeConfig(ip=self.cluster_ip_range[0], mask=cluster_ip_mask, dynamic_ip_range=dynamic_ip_range)
-        self.remote_bridge_config = BridgeConfig(ip=ip_range[1], mask=cluster_ip_mask)
+        dynamic_ip_range = common.ip_range(self.ip_range[1], common.ip_range_size(ip_range) - n_nodes)
+        self.local_bridge_config = BridgeConfig(ip=self.ip_range[0], mask=ip_mask, dynamic_ip_range=dynamic_ip_range)
+        self.remote_bridge_config = BridgeConfig(ip=ip_range[1], mask=ip_mask)
 
         # creates hosts entries for each referenced node name
         node_names = {x["name"] for x in cc["hosts"]}
@@ -270,14 +269,15 @@ class ClustersConfig:
         if self.external_port == "auto":
             self.autodetect_external_port()
 
-    def validate_node_ips(self) -> bool:
+    def validate_node_ips(self) -> None:
         def validate_node_ip(n: NodeConfig) -> bool:
-            if n.ip is not None and not common.ip_range_contains(self.cluster_ip_range, n.ip):
-                logger.error(f"Node ({n.name} IP ({n.ip}) not in cluster subnet range: {self.cluster_ip_range[0]} - {self.cluster_ip_range[1]}.")
+            if n.ip is not None and not common.ip_range_contains(self.ip_range, n.ip):
+                logger.error(f"Node ({n.name} IP ({n.ip}) not in cluster subnet range: {self.ip_range[0]} - {self.ip_range[1]}.")
                 return False
             return True
 
-        return functools.reduce(lambda v, n: validate_node_ip(n) and v, self.masters + self.configured_workers, True)
+        if not all(validate_node_ip(n) for n in self.masters + self.configured_workers):
+            logger.error(f"Not all master/worker IPs are in the reserved cluster IP range ({self.ip_range}).  Other hosts in the network might be offered those IPs via DHCP.")
 
     def validate_external_port(self) -> bool:
         return host.LocalHost().port_exists(self.external_port)
