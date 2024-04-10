@@ -269,14 +269,15 @@ class ClustersConfig:
         if self.external_port == "auto":
             self.autodetect_external_port()
 
-    def validate_node_ips(self) -> bool:
+    def validate_node_ips(self) -> None:
         def validate_node_ip(n: NodeConfig) -> bool:
             if n.ip is not None and not common.ip_range_contains(self.ip_range, n.ip):
                 logger.error(f"Node ({n.name} IP ({n.ip}) not in cluster subnet range: {self.ip_range[0]} - {self.ip_range[1]}.")
                 return False
             return True
 
-        return all(validate_node_ip(n) for n in self.masters + self.configured_workers)
+        if not all(validate_node_ip(n) for n in self.masters + self.configured_workers):
+            logger.error(f"Not all master/worker IPs are in the reserved cluster IP range ({self.ip_range}).  Other hosts in the network might be offered those IPs via DHCP.")
 
     def validate_external_port(self) -> bool:
         return host.LocalHost().port_exists(self.external_port)
