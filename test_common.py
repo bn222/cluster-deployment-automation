@@ -68,3 +68,15 @@ def test_atomic_write(tmp_path: pathlib.Path) -> None:
     with common.atomic_write(filename, owner=user, group=group, mode=0o644) as f:
         f.write("hello3")
     assert _read_file(filename) == "hello3"
+
+
+def test_ip_address() -> None:
+    with pytest.raises(TypeError):
+        common.ipaddr_norm(None)  # type: ignore
+    assert common.ipaddr_norm("") is None
+    assert common.ipaddr_norm(b"\xc8") is None
+    assert common.ipaddr_norm(" 1.2.3.8  ") == "1.2.3.8"
+    assert common.ipaddr_norm(b" 1.2.3.8  ") == "1.2.3.8"
+    assert common.ipaddr_norm(" 1::01  ") == "1::1"
+    assert common.ipaddr_norm(b" 1::01  ") == "1::1"
+    assert common.ipaddr_norm(b" 1::01  ") == "1::1"

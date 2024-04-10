@@ -6,6 +6,7 @@ import host
 import json
 import os
 import glob
+import socket
 import tempfile
 import typing
 
@@ -123,6 +124,36 @@ def ip_range_size(range: tuple[str, str]) -> int:
 
 def ip_in_subnet(addr: str, subnet: str) -> bool:
     return ipaddress.ip_address(addr) in ipaddress.ip_network(subnet)
+
+
+def ipaddr_norm(addr: str | bytes) -> Optional[str]:
+    # Normalize a string that contains an IP address (IPv4 or IPv6). On error,
+    # return None.
+
+    if isinstance(addr, bytes):
+        # For convenience, also accept bytes (we might have read them
+        # from file).
+        try:
+            addr = addr.decode('utf-8', errors='strict')
+        except ValueError:
+            return None
+    elif not isinstance(addr, str):
+        raise TypeError(f"ip address must be str | bytes but is {type(addr)}")
+
+    # For convenience, accept leading/trailing whitespace
+    addr = addr.strip()
+
+    if ':' in addr:
+        family = socket.AF_INET6
+    else:
+        family = socket.AF_INET
+
+    try:
+        a = socket.inet_pton(family, addr)
+    except OSError:
+        return None
+
+    return socket.inet_ntop(family, a)
 
 
 def extract_interfaces(input: str) -> list[str]:
