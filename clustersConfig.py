@@ -1,5 +1,4 @@
 from os import path, getcwd
-import functools
 import os
 import io
 import sys
@@ -277,7 +276,7 @@ class ClustersConfig:
                 return False
             return True
 
-        return functools.reduce(lambda v, n: validate_node_ip(n) and v, self.masters + self.configured_workers, True)
+        return all(validate_node_ip(n) for n in self.masters + self.configured_workers)
 
     def validate_external_port(self) -> bool:
         return host.LocalHost().port_exists(self.external_port)
