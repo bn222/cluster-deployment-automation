@@ -205,3 +205,27 @@ def test_sudo_local() -> None:
         env={"XXXX": "hi", "FOO": "x1"},
         cwd="/tmp",
     ) == (0, "root\nx1\n/tmp\n", "")
+
+
+def test_large_output_remote() -> None:
+    user, rsh = _connect()
+
+    # Write a large amount of data to stderr. See whether we block.
+    mebibytes = 2048
+    ret = rsh.run(
+        """
+        msg="0123456789abcdef"
+        for i in $(seq 1 6) ; do
+            msg="$msg$msg"
+        done
+        for i in $(seq 1 "$MEBIBYTES") ; do
+            printf "%s" "$msg"
+        done 1>&2
+        printf stdout-done
+        """,
+        env={"MEBIBYTES": str(mebibytes)},
+    )
+    assert ret.returncode == 0
+    assert ret.out == "stdout-done"
+    assert ret.err.startswith("0123456789abcdef0123")
+    assert len(ret.err) == mebibytes * 1024

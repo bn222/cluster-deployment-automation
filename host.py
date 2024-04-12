@@ -217,21 +217,56 @@ class Host:
         return self._hostname in ("localhost", socket.gethostname())
 
     @staticmethod
+    def ssh_run_poll_result(stdout: paramiko.ChannelFile, stderr: paramiko.channel.ChannelStderrFile) -> Result:
+        returncode = -1
+        datas = [bytearray(), bytearray()]
+        state = [0, 0]
+        sources = (stdout, stderr)
+
+        while state[0] != 2 and state[1] != 2:
+            any_data = False
+            for i in (0, 1):
+                if state[i] == 2:
+                    continue
+                source = sources[i]
+                channel = source.channel
+                if i == 0:
+                    while channel.recv_ready():
+                        any_data = True
+                        d = channel.recv(32768)
+                        datas[i].extend(d)
+                else:
+                    while channel.recv_stderr_ready():
+                        any_data = True
+                        d = channel.recv_stderr(32768)
+                        datas[i].extend(d)
+                if state[i] == 1:
+                    any_data = True
+                    source.close()
+                    if i == 0:
+                        returncode = source.channel.recv_exit_status()
+                    state[i] = 2
+                elif channel.exit_status_ready():
+                    # We don't finish right away. Try one more time to receive
+                    # data. Note sure this is necessary. It shouldn't hurt.
+                    any_data = True
+                    state[i] = 1
+            if not any_data:
+                # Yes, naive polling with sleep. I guess, we could use
+                # channel's fileno() for not busy looping.
+                time.sleep(0.001)
+
+        b_stdout, b_stderr = datas
+        return Result(
+            b_stdout.decode("utf-8", errors="strict"),
+            b_stderr.decode("utf-8", errors="strict"),
+            returncode,
+        )
+
+    @staticmethod
     def ssh_run(sshclient: paramiko.SSHClient, cmd: str, log_prefix: str, log_level: int = logging.DEBUG) -> Result:
         _, stdout, stderr = sshclient.exec_command(cmd)
-
-        out = []
-        for line in iter(stdout.readline, ""):
-            logger.log(log_level, f"{log_prefix}: stdout: {line.strip()}")
-            out.append(line)
-
-        err = []
-        for line in iter(stderr.readline, ""):
-            logger.log(log_level, f"{log_prefix}: stderr: {line.strip()}")
-            err.append(line)
-
-        exit_code = stdout.channel.recv_exit_status()
-        return Result("".join(out), "".join(err), exit_code)
+        return Host.ssh_run_poll_result(stdout, stderr)
 
     def ssh_connect(self, username: str, password: Optional[str] = None, rsa_path: str = default_id_rsa_path(), ed25519_path: str = default_ed25519_path()) -> None:
         assert not self.is_localhost()
@@ -439,13 +474,14 @@ class Host:
 
         while True:
             try:
-                return self.ssh_run(self._host, cmd, log_prefix=self._hostname, log_level=log_level)
-            except UnicodeDecodeError:
-                raise
+                _, stdout, stderr = self._host.exec_command(cmd)
+                break
             except Exception as e:
                 logger.log(log_level, e)
                 logger.log(log_level, f"Connection lost while running command {cmd}, reconnecting...")
                 self.ssh_connect_looped(self._logins)
+
+        return self.ssh_run_poll_result(stdout, stderr)
 
     def run_or_die(
         self,
