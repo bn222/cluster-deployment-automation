@@ -572,20 +572,24 @@ class Host:
             return False
         return "NO-CARRIER" not in ports[port_name]["flags"]
 
-    def write(self, fn: str, contents: str) -> None:
+    def write(self, fn: str, contents: str | bytes) -> None:
+        if isinstance(contents, str):
+            b_contents = contents.encode('utf-8')
+        else:
+            b_contents = contents
         if self.is_localhost():
-            with open(fn, "w") as f:
-                f.write(contents)
+            with open(fn, "wb") as f:
+                f.write(b_contents)
         else:
             with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
                 tmp_filename = tmp_file.name
-                tmp_file.write(contents.encode('utf-8'))
+                tmp_file.write(b_contents)
             self.copy_to(tmp_filename, fn)
             os.remove(tmp_filename)
 
     def read_file(self, file_name: str) -> str:
         if self.is_localhost():
-            with open(file_name) as f:
+            with open(file_name, newline='') as f:
                 return f.read()
         else:
             ret = self.run(f"cat {file_name}")

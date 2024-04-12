@@ -1,7 +1,9 @@
 import functools
 import os
 import paramiko
+import pathlib
 import pytest
+import random
 from typing import Optional
 from typing import Any
 
@@ -229,3 +231,77 @@ def test_large_output_remote() -> None:
     assert ret.out == "stdout-done"
     assert ret.err.startswith("0123456789abcdef0123")
     assert len(ret.err) == mebibytes * 1024
+
+
+def _test_write_one(tmp_path: pathlib.Path, rsh: host.Host, contents: str | bytes, *, recurse: bool = True) -> None:
+
+    filename = str(tmp_path / "file1")
+
+    # Test randomly to have or not have the file. The write should overwrite or
+    # create the file.
+    if random.randint(0, 1):
+        if os.path.exists(filename):
+            os.remove(filename)
+    else:
+        if not os.path.exists(filename):
+            with open(filename, "wb") as f:
+                f.write(b'')
+
+    is_utf8 = True
+    if isinstance(contents, str):
+        b_contents = contents.encode('utf-8')
+    else:
+        b_contents = contents
+        try:
+            b_contents.decode('utf-8', errors='strict')
+        except ValueError:
+            is_utf8 = False
+
+    rsh.write(filename, contents)
+
+    if is_utf8:
+        out = rsh.read_file(filename)
+
+        assert isinstance(out, str)
+
+        if isinstance(contents, str):
+            assert out == contents
+
+        b_out = out.encode('utf-8')
+        assert b_out == b_contents
+    else:
+        try:
+            out = rsh.read_file(filename)
+        except UnicodeDecodeError:
+            out = None
+        else:
+            pytest.fail("Did not get the expected unicode error writing binary data")
+
+    with open(filename, "rb") as f:
+        b_out2 = f.read()
+    assert b_out2 == b_contents
+
+    if recurse:
+        # Also test whether the same check passes with binary.
+        if isinstance(contents, str):
+            _test_write_one(tmp_path, rsh, contents.encode('utf-8'), recurse=False)
+        if isinstance(contents, bytes) and is_utf8:
+            _test_write_one(tmp_path, rsh, contents.decode('utf-8'), recurse=False)
+
+
+def _test_write(tmp_path: pathlib.Path, rsh: host.Host) -> None:
+    _test_write_one(tmp_path, rsh, "")
+    _test_write_one(tmp_path, rsh, "\n")
+    _test_write_one(tmp_path, rsh, "\r\n")
+    _test_write_one(tmp_path, rsh, "foo\r\n")
+    for i in range(10):
+        _test_write_one(tmp_path, rsh, random.randbytes(int(i % 10)))
+
+
+def test_write_local(tmp_path: pathlib.Path) -> None:
+    _test_write(tmp_path, host.LocalHost())
+
+
+def test_write_remote(tmp_path: pathlib.Path) -> None:
+    user, rsh = _connect()
+    _test_write(tmp_path, rsh)
