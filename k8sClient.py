@@ -2,6 +2,7 @@ import kubernetes
 import yaml
 import time
 import host
+import os
 import sys
 from typing import Optional
 from typing import Callable
@@ -11,7 +12,11 @@ oc_url = "https://mirror.openshift.com/pub/openshift-v4/clients/ocp/latest/"
 
 
 class K8sClient:
-    def __init__(self, kubeconfig: str):
+    def __init__(self, kubeconfig: Optional[str] = None):
+        if kubeconfig is None:
+            kubeconfig = os.environ.get("KUBECONFIG")
+            if kubeconfig is None:
+                raise ValueError("No kubeconfig given and KUBECONFIG environment not set")
         self._kc = kubeconfig
         with open(kubeconfig) as f:
             c = yaml.safe_load(f)
