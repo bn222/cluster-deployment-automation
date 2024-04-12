@@ -141,6 +141,20 @@ def test_cwd_remote() -> None:
     ) == (0, "x1\n/tmp\n", "stderr\n")
 
 
+def _test_binary(rsh: host.Host) -> None:
+    with pytest.raises(UnicodeDecodeError):
+        rsh.run(["bash", "-c", "printf $'\''<\\xff>'\''"])
+
+
+def test_binary_local() -> None:
+    _test_binary(_host_create())
+
+
+def test_binary_remote() -> None:
+    user, rsh = _connect()
+    _test_binary(rsh)
+
+
 def test_sudo_remote() -> None:
     user, rsh = _connect()
 
