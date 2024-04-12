@@ -179,3 +179,24 @@ def iterate_ssh_keys() -> Iterator[tuple[str, str, str]]:
             pub_key_content = f.read().strip()
             priv_key_file = os.path.splitext(pub_file)[0]
             yield pub_file, pub_key_content, priv_key_file
+
+
+def kubeconfig_get_paths(cluster_name: str, kubeconfig_path: Optional[str]) -> tuple[str, str, str, str]:
+    # AssistedClient.download_kubeconfig() downloads the kubeconfig at a
+    # particular place, determined by the @cluster_name and @kubeconfig_path.
+    #
+    # This function calculates the resulting file names where we can find these
+    # files.
+    if kubeconfig_path:
+        kubeconfig_path = os.path.abspath(kubeconfig_path)
+        path = os.path.dirname(kubeconfig_path)
+    else:
+        path = os.path.abspath(os.getcwd())
+
+    downloaded_kubeadminpassword_path = f"{path}/kubeadmin-password.{cluster_name}"
+    downloaded_kubeconfig_path = f"{path}/kubeconfig.{cluster_name}"
+
+    if not kubeconfig_path:
+        kubeconfig_path = downloaded_kubeconfig_path
+
+    return path, kubeconfig_path, downloaded_kubeconfig_path, downloaded_kubeadminpassword_path
