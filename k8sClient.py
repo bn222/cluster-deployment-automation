@@ -154,3 +154,63 @@ class K8sClient:
             time.sleep(60)
         minutes, seconds = divmod(int(time.time() - start), 60)
         logger.info(f"It took {minutes}m {seconds}s for {resource} (attempts: {iteration})")
+
+    def clusterca_get(self, *, retry_timeout: float = 5 * 60) -> str:
+
+        # Get the certificates from an authentication pod.
+        # See https://access.redhat.com/solutions/6088891
+
+        retry_started_at = time.monotonic()
+        while True:
+            try:
+                ret = self.oc("get po -n openshift-authentication -o jsonpath='{.items[0].metadata.name}'")
+                if not ret.success():
+                    raise RuntimeError(f"failure to get name of authentication pod: {ret}")
+                auth_pod = ret.out.strip()
+
+                ret = self.oc(f"rsh -n openshift-authentication {auth_pod} cat /run/secrets/kubernetes.io/serviceaccount/ca.crt")
+                if not ret.success():
+                    raise RuntimeError(f"failure to get certificate from authentication pod {auth_pod}: {ret}")
+            except RuntimeError:
+                if time.monotonic() < retry_started_at + retry_timeout:
+                    time.sleep(2)
+                    continue
+                raise
+
+            return ret.out
+
+    @staticmethod
+    def clusterca_etc_filename(cluster_name: str) -> str:
+        return f"/etc/pki/ca-trust/source/anchors/cda-ingress-ca-{cluster_name}.crt"
+
+    def clusterca_trust(self, cluster_name: str, certificate: Optional[str] = None, rsh: Optional[host.Host] = None) -> str:
+        if certificate is None:
+            certificate = self.clusterca_get()
+        self.clusterca_trust_on_host(cluster_name, certificate, rsh)
+        return certificate
+
+    @classmethod
+    def clusterca_trust_on_host(
+        cls,
+        cluster_name: str,
+        certificate: str,
+        rsh: Optional[host.Host] = None,
+        sudo: Optional[bool] = None,
+    ) -> None:
+        # Install the cluster's certificate authority as trusted.
+        #
+        # Warning: the certificate may not be well protected. Somebody could
+        # get it, and use it to spoof TSL connections. This is not what you
+        # would do on production system.
+        #
+        # https://access.redhat.com/solutions/6088891
+
+        if rsh is None:
+            rsh = host.LocalHost()
+
+        ca_file = cls.clusterca_etc_filename(cluster_name)
+
+        logger.info(f"Trust self signed certificate of cluster {cluster_name} on host {rsh.hostname()} (file {ca_file})")
+
+        rsh.write(ca_file, certificate, sudo=sudo)
+        rsh.run("update-ca-trust", sudo=sudo)
