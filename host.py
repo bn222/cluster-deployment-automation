@@ -10,9 +10,7 @@ import shutil
 import sys
 import logging
 import tempfile
-from typing import Optional
-from typing import Union
-from typing import Any
+from typing import Optional, Dict, Union, Any
 from functools import lru_cache
 from ailib import Redfish
 import paramiko
@@ -40,6 +38,15 @@ class Result:
 
 
 class Login(ABC):
+    def __init__(self, hostname: str, username: str) -> None:
+        self._username = username
+        self._hostname = hostname
+        self.host = paramiko.SSHClient()
+        self.host.set_missing_host_key_policy(paramiko.WarningPolicy())
+
+    def vars(self) -> Dict[str, Any]:
+        return {k: v for k, v in vars(self).items() if k not in ['_key', '_password']}
+
     @abstractmethod
     def login(self) -> paramiko.SSHClient:
         pass
@@ -47,8 +54,7 @@ class Login(ABC):
 
 class KeyLogin(Login):
     def __init__(self, hostname: str, username: str, key_path: str) -> None:
-        self._username = username
-        self._hostname = hostname
+        super().__init__(hostname, username)
         self._key_path = key_path
         with open(key_path, "r") as f:
             self._key = f.read().strip()
@@ -70,24 +76,19 @@ class KeyLogin(Login):
 
     def login(self) -> paramiko.SSHClient:
         logger.info(f"Logging in into {self._hostname} with {self._key_path}")
-        host = paramiko.SSHClient()
-        host.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        host.connect(self._hostname, username=self._username, pkey=self._pkey)
-        return host
+        self.host.connect(self._hostname, username=self._username, pkey=self._pkey, look_for_keys=False)
+        return self.host
 
 
 class PasswordLogin(Login):
     def __init__(self, hostname: str, username: str, password: str) -> None:
-        self._username = username
+        super().__init__(hostname, username)
         self._password = password
-        self._hostname = hostname
 
     def login(self) -> paramiko.SSHClient:
-        logger.info(f"Logging in into {self._hostname} with password")
-        host = paramiko.SSHClient()
-        host.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        host.connect(self._hostname, username=self._username, password=self._password)
-        return host
+        logger.info(f"Logging into {self._hostname} with password")
+        self.host.connect(self._hostname, username=self._username, password=self._password)
+        return self.host
 
 
 class BMC:
@@ -240,18 +241,28 @@ class Host:
 
     def ssh_connect_looped(self, logins: list[Login]) -> None:
         if len(logins) == 0:
-            raise Exception("No usuable logins found")
-        while True:
-            for e in logins:
+            raise Exception("No usable logins found")
+
+        login_details = ", ".join([str(login.vars()) for login in logins])
+        logger.info(f"Attempting SSH connections on {self._hostname} with logins: {login_details}")
+
+        for _ in range(360):
+            for login in logins:
                 try:
-                    self._host = e.login()
+                    self._host = login.login()
+                    logger.info(f"Login successful on {self._hostname}")
                     return
                 except ssh_exception.AuthenticationException as e:
-                    logger.info(type(e))
-                    raise e
-                except Exception as e:
-                    logger.info(type(e))
+                    logger.error(f"{type(e).__name__} - {str(e)} for login {login.vars()} on host {self._hostname}")
                     time.sleep(10)
+                except (ssh_exception.NoValidConnectionsError, ssh_exception.SSHException, socket.error, socket.timeout) as e:
+                    logger.error(f"Connection issue for login {login.vars()} on host {self._hostname}: {type(e).__name__} - {str(e)}")
+                    time.sleep(10)
+                except Exception as e:
+                    logger.exception(f"SSH connect, login {login.vars()} user {login._username} on host {self._host}: {type(e).__name__} - {str(e)}")
+                    raise e
+        else:
+            raise ConnectionError(f"Failed to establish an SSH connection to {self._hostname}")
 
     def _rsa_login(self) -> Optional[KeyLogin]:
         for x in self._logins:
