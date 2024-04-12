@@ -1,8 +1,10 @@
+import common
 import kubernetes
 import yaml
 import time
 import host
 import os
+import shlex
 import sys
 from typing import Optional
 from typing import Callable
@@ -78,6 +80,62 @@ class K8sClient:
 
     def oc_run_or_die(self, cmd: str) -> host.Result:
         return self.oc(cmd, must_succeed=True)
+
+    def kubeadmin_login(self, *, cluster_name: Optional[str] = None, kubeadminpassword: Optional[str] = None) -> str:
+        # The purpose of logging in as kubeadmin (compared to using the
+        # kubeconfig certifiate) is that it allows is to get a login token.
+        #
+        # That token can then for example be used by `podman login` to
+        # authenticate against the internal container registry.
+        #
+        # Here, we call `oc login` for the kubeadmin user. That records the
+        # login session in "~/.kube/config", which we need to get rid with a
+        # subsequent kubeadmin_logout().
+        #
+        # There should be a simpler (stateless) way to create a login token,
+        # where we don't mess with ~/.kube/config and don't need a subsequent
+        # logout (just a invalidation of the token). If you find it, please
+        # contribute it.
+
+        if kubeadminpassword is None:
+            if cluster_name is None:
+                raise ValueError("kubeadmin_login() needs either a \"cluster_name\" or a \"kubeadminpassword\" argument")
+            kubeadminpassword = common.kubeconfig_read_kubeadminpassword(cluster_name, self._kc)
+
+        serverurl = self.show_server()
+
+        ret = self.oc(
+            f"login {shlex.quote(serverurl)} -u kubeadmin -p {shlex.quote(kubeadminpassword)} --insecure-skip-tls-verify=true",
+            with_kubeconfig=False,
+        )
+        if not ret.success():
+            raise RuntimeError("Failure to login as kubeadmin: {ret}")
+
+        ret = self.oc("whoami -t", with_kubeconfig=False)
+        if not ret.success():
+            raise RuntimeError("Failure to get token")
+
+        return ret.out.strip()
+
+    def kubeadmin_logout(self) -> None:
+        # After kubeadmin_login(), logout again.
+        self.oc("logout", with_kubeconfig=False)
+
+        # Hm. This behaves strange. After logout, sometimes kubeconfig no longer
+        # works. But login also may not work, depending on whether TLS is valid.
+        # Hack around by issuing some logins.
+        self.oc("login -u system:admin --insecure-skip-tls-verify=true")
+        self.oc("login -u system:admin --insecure-skip-tls-verify=false")
+
+        ret = self.oc("whoami")
+        if not ret.success() or ret.out.strip() != "system:admin":
+            raise RuntimeError("logout failed to restore login for \"system:admin\" user")
+
+    def show_server(self) -> str:
+        ret = self.oc("whoami --show-server")
+        if not ret.success():
+            raise RuntimeError(f"failure to get the server url: {ret}")
+        return ret.out.strip()
 
     def wait_for_mcp(self, mcp_name: str, resource: str = "resource") -> None:
         time.sleep(60)

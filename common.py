@@ -236,6 +236,18 @@ def kubeconfig_get_paths(cluster_name: str, kubeconfig_path: Optional[str]) -> t
     return path, kubeconfig_path, downloaded_kubeconfig_path, downloaded_kubeadminpassword_path
 
 
+def kubeconfig_read_kubeadminpassword(cluster_name: str, kubeconfig_path: Optional[str]) -> str:
+    path, kubeconfig_path, downloaded_kubeconfig_path, downloaded_kubeadminpassword_path = kubeconfig_get_paths(cluster_name, kubeconfig_path)
+
+    try:
+        with open(downloaded_kubeadminpassword_path) as f:
+            kubeadminpassword = f.read()
+    except Exception:
+        raise RuntimeError(f"Cannot read kubeadmin password from {downloaded_kubeadminpassword_path}")
+
+    return kubeadminpassword
+
+
 # See:
 #  - https://discuss.python.org/t/adding-atomicwrite-in-stdlib/11899
 #  - https://stackoverflow.com/questions/2333872/how-to-make-file-creation-an-atomic-operation
