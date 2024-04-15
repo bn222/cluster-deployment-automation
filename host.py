@@ -10,6 +10,7 @@ import shutil
 import sys
 import logging
 import tempfile
+import uuid
 from typing import Optional
 from typing import Union
 from typing import Any
@@ -331,16 +332,20 @@ class Host:
                 os.remove(source)
         else:
             assert self._host is not None
-            try:
-                sftp = self._host.open_sftp()
-                sftp.remove(source)
-            except FileNotFoundError:
-                pass
+            self.run(["rm", "-f", source])
 
     # Copying local_file to "Host", which can be local or remote
     def copy_to(self, src_file: str, dst_file: str) -> None:
         if not os.path.exists(src_file):
             raise FileNotFoundError(2, f"No such file or dir: {src_file}")
+
+        orig_dst = None
+        if self.sudo_needed:
+            # With sudo, the file may not be writable as normal user.
+            # Copy first to a temp location.
+            orig_dst = dst_file
+            dst_file = "/tmp/cda-" + str(uuid.uuid4()) + ".tmp"
+
         if self.is_localhost():
             shutil.copy(src_file, dst_file)
         else:
@@ -353,6 +358,18 @@ class Host:
                     logger.info(e)
                     logger.info("Disconnected during sftpd, reconnecting...")
                     self.ssh_connect_looped(self._logins)
+
+        if orig_dst is not None:
+            # The file should be owned by whoever is this sudoer. Create another
+            # file, and copy over the owner:group that we got thereby.
+            self.run(
+                f"""
+                rc=0
+                cat {shlex.quote(dst_file)} > {shlex.quote(orig_dst)} || rc=$?
+                rm -rf {shlex.quote(dst_file)}
+                exit $rc
+                """
+            )
 
     def need_sudo(self) -> None:
         self.sudo_needed = True
