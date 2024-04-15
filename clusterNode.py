@@ -13,6 +13,7 @@ import host
 from clustersConfig import NodeConfig
 from host import BMC
 from nfs import NFS
+import k8sClient
 
 
 class ClusterNode:
@@ -65,6 +66,10 @@ class ClusterNode:
         rh = host.RemoteHost(self.ip())
         rh.ssh_connect("core")
         rh.run_or_die(f"echo {user}:{password} | sudo chpasswd")
+
+    def trust_clusterca(self, cluster_name: str, certificate: str) -> None:
+        rh = host.RemoteHost(self.ip())
+        k8sClient.K8sClient.clusterca_trust_on_host(cluster_name, certificate, rh, sudo=True)
 
     def print_logs(self) -> None:
         rh = host.RemoteHost(self.ip())

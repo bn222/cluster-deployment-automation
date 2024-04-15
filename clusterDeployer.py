@@ -365,10 +365,13 @@ class ClusterDeployer:
         for h in hosts_with_masters:
             h.ensure_linked_to_network(self._local_host.bridge)
 
-        logger.info("Setting password to for root to redhat")
+        clusterca_cert = self.client().clusterca_trust(self._cc.name)
+
+        logger.info("Setting password to for root to redhat and trust cluster CA")
         for h in hosts_with_masters:
             for master in h.k8s_master_nodes:
                 master.set_password()
+                master.trust_clusterca(self._cc.name, clusterca_cert)
 
         self.update_dnsmasq()
 
@@ -450,10 +453,13 @@ class ClusterDeployer:
         logger.info("waiting for workers to be ready")
         self.wait_for_workers()
 
-        logger.info("Setting password to for root to redhat")
+        clusterca_cert = self.client().clusterca_get()
+
+        logger.info("Setting password to for root to redhat and trust cluster CA")
         for h in hosts_with_workers:
             for worker in h.k8s_worker_nodes:
                 worker.set_password()
+                worker.trust_clusterca(self._cc.name, clusterca_cert)
 
         # Make sure any submitted tasks have completed.
         for p in futures:
