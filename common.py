@@ -1,10 +1,14 @@
 from dataclasses import dataclass
 import ipaddress
 from typing import Optional, TypeVar, Iterator
+import contextlib
 import host
 import json
 import os
 import glob
+import socket
+import tempfile
+import typing
 
 
 T = TypeVar("T")
@@ -122,6 +126,36 @@ def ip_in_subnet(addr: str, subnet: str) -> bool:
     return ipaddress.ip_address(addr) in ipaddress.ip_network(subnet)
 
 
+def ipaddr_norm(addr: str | bytes) -> Optional[str]:
+    # Normalize a string that contains an IP address (IPv4 or IPv6). On error,
+    # return None.
+
+    if isinstance(addr, bytes):
+        # For convenience, also accept bytes (we might have read them
+        # from file).
+        try:
+            addr = addr.decode('utf-8', errors='strict')
+        except ValueError:
+            return None
+    elif not isinstance(addr, str):
+        raise TypeError(f"ip address must be str | bytes but is {type(addr)}")
+
+    # For convenience, accept leading/trailing whitespace
+    addr = addr.strip()
+
+    if ':' in addr:
+        family = socket.AF_INET6
+    else:
+        family = socket.AF_INET
+
+    try:
+        a = socket.inet_pton(family, addr)
+    except OSError:
+        return None
+
+    return socket.inet_ntop(family, a)
+
+
 def extract_interfaces(input: str) -> list[str]:
     entries = ipa_to_entries(input)
     return [x.ifname for x in entries]
@@ -200,3 +234,64 @@ def kubeconfig_get_paths(cluster_name: str, kubeconfig_path: Optional[str]) -> t
         kubeconfig_path = downloaded_kubeconfig_path
 
     return path, kubeconfig_path, downloaded_kubeconfig_path, downloaded_kubeadminpassword_path
+
+
+# See:
+#  - https://discuss.python.org/t/adding-atomicwrite-in-stdlib/11899
+#  - https://stackoverflow.com/questions/2333872/how-to-make-file-creation-an-atomic-operation
+#  - https://code.activestate.com/recipes/579097-safely-and-atomically-write-to-a-file/
+@contextlib.contextmanager
+def atomic_write(
+    filename: str,
+    *,
+    text: bool = True,
+    keep: bool = False,
+    owner: Optional[int] = None,
+    group: Optional[int] = None,
+    mode: int = 0o644,
+) -> Iterator[typing.IO[typing.Any]]:
+    if owner is None:
+        owner = -1
+    if group is None:
+        group = -1
+
+    path = os.path.dirname(filename)
+    basename = os.path.basename(filename)
+    prefix = basename + "."
+
+    tmp: Optional[str]
+
+    fd_close = True
+    fd, tmp = tempfile.mkstemp(prefix=prefix, dir=path, text=text)
+
+    try:
+        with os.fdopen(fd, 'w' if text else 'wb', closefd=False) as f:
+            yield f
+
+        # We update the owner, group and permission before renaming
+        # the file. Unfortunately, this could result in no longer having
+        # the suitable permissions to rename. Don't set permissions
+        # that cut yourself off.
+        if owner >= 0 or group >= 0:
+            os.fchown(fd, owner, group)
+        os.fchmod(fd, mode)
+
+        fd_close = False
+        try:
+            os.close(fd)
+        except IOError:
+            pass
+
+        os.replace(tmp, filename)
+        tmp = None
+    finally:
+        if fd_close:
+            try:
+                os.close(fd)
+            except IOError:
+                pass
+        if (tmp is not None) and (not keep):
+            try:
+                os.unlink(tmp)
+            except IOError:
+                pass

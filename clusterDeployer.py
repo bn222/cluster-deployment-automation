@@ -22,6 +22,7 @@ from logger import logger
 import microshift
 from extraConfigRunner import ExtraConfigRunner
 from clusterHost import ClusterHost
+import dnsutil
 
 
 def match_to_proper_version_format(version_cluster_config: str) -> str:
@@ -103,6 +104,8 @@ class ClusterDeployer:
         cluster_name = self._cc.name
         logger.info(f"Tearing down {cluster_name}")
         self._ai.ensure_cluster_deleted(self._cc.name)
+
+        self.update_dnsmasq(setup=False)
 
         for h in self._all_hosts:
             h.teardown()
@@ -352,6 +355,8 @@ class ClusterDeployer:
             for master in h.k8s_master_nodes:
                 master.set_password()
 
+        self.update_dnsmasq()
+
     def create_workers(self) -> None:
         logger.info("Setting up workers")
         cluster_name = self._cc.name
@@ -541,6 +546,14 @@ class ClusterDeployer:
         # For that reason, restart libvirtd to re-read the changes.
         lh = host.LocalHost()
         lh.run("systemctl restart libvirtd")
+
+    def update_dnsmasq(self, *, setup: bool = True) -> None:
+        cluster_name = self._cc.name
+        if setup:
+            api_vip = self._ai.get_ai_cluster_info(cluster_name).api_vip
+        else:
+            api_vip = None
+        dnsutil.dnsmasq_update(cluster_name, api_vip)
 
     def wait_for_workers(self) -> None:
         logger.info(f'waiting for {len(self._cc.workers)} workers')
