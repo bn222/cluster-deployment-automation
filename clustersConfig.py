@@ -45,6 +45,10 @@ class ExtraConfigArgs:
     # Get the login token from [1]. Then `podman login registry.ci.openshift.org`
     # or create "$XDG_RUNTIME_DIR/containers/auth.json".
     # [1] https://oauth-openshift.apps.ci.l2s4.p1.openshiftapps.com/oauth/token/request
+    #
+    # If enabled, an existing "/root/sriov-network-operator" directory is not
+    # wiped and you can prepare there the version you want to build and
+    # install.
     sriov_network_operator_local: bool = False
 
 

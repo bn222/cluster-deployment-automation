@@ -152,7 +152,10 @@ def _sno_make_deploy(
 def ExtraConfigSriov(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, Future[Optional[host.Result]]]) -> None:
     [f.result() for (_, f) in futures.items()]
     repo_dir = "/root/sriov-network-operator"
-    _sno_repo_setup(repo_dir)
+    _sno_repo_setup(
+        repo_dir,
+        repo_wipe=not cfg.sriov_network_operator_local,
+    )
     _sno_make_deploy(
         repo_dir,
         kubeconfig=cc.kubeconfig,
