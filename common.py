@@ -119,12 +119,18 @@ class RangeList:
         return [initial[x] for x in sorted(applied) if x < len(initial)]
 
 
+@strict_dataclass
 @dataclass
 class IPRouteAddressInfoEntry:
     family: str
     local: str
 
+    def _post_check(self) -> None:
+        if not isinstance(self.family, str) or self.family not in ("inet", "inet6"):
+            raise ValueError("Invalid address family")
 
+
+@strict_dataclass
 @dataclass
 class IPRouteAddressEntry:
     ifindex: int
@@ -183,6 +189,7 @@ def ipr(host: host.Host) -> str:
     return host.run("ip -json r").out
 
 
+@strict_dataclass
 @dataclass
 class IPRouteRouteEntry:
     dst: str
