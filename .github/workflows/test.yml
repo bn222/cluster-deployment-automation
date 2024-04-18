@@ -29,6 +29,9 @@ jobs:
         python -m pip install types-paramiko
         python -m pip install types-PyYAML
         python -m pip install types-requests
+        python -m pip install pytest
+        python -m pip install aicli
+        python -m pip install paramiko==2.12.0
     - name: black
       run: |
         black --version
@@ -41,3 +44,13 @@ jobs:
       run: |
         mypy --version
         mypy --strict --config-file mypy.ini .
+    - name: pytest
+      # Tests may want to know whether they run under CI in github actions.
+      #
+      # For example, under normal conditions a test may autodetect that it
+      # cannot pass due to some dependency missing and be skipped. If the same
+      # test is known that it must(!) pass under CI, then such a skip must not
+      # happen with CDA_GITHUB_CI=1.
+      run: |
+        pytest --version
+        CDA_GITHUB_CI=1 pytest -v
