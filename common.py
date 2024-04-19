@@ -215,6 +215,51 @@ def iterate_ssh_keys() -> Iterator[tuple[str, str, str]]:
             yield pub_file, pub_key_content, priv_key_file
 
 
+def seconds_to_str(seconds: float) -> str:
+    sign = ""
+    if seconds == 0.0:
+        return "0s"
+    if seconds < 0:
+        seconds = -seconds
+        sign = "-"
+
+    seconds = round(seconds, 3)
+
+    if seconds == 0.0:
+        # This would have been rounded to zero. But it's not really zero.
+        # Break our usual rounding, and return the close to the next non-zero
+        # value.
+        return f"{sign}0.001s"
+
+    i_sec_total = int(seconds)
+    i_min, i_sec = divmod(i_sec_total, 60)
+    i_hour, i_min = divmod(i_min, 60)
+    i_days, i_hour = divmod(i_hour, 24)
+
+    f_sec = i_sec + (seconds - i_sec_total)
+
+    sep = ""
+
+    res = sign
+    if i_days > 0:
+        res += f"{sep}{i_days}d"
+        sep = " "
+    if i_hour > 0 or (sep and (i_min > 0 or f_sec > 0.0)):
+        res += f"{sep}{i_hour}h"
+        sep = " "
+    if i_min > 0 or (sep and (f_sec > 0.0)):
+        res += f"{sep}{i_min}m"
+        sep = " "
+    if f_sec > 0.0:
+        if f_sec == int(f_sec):
+            res += f"{sep}{int(f_sec)}s"
+        else:
+            x = f"{f_sec:.3f}".rstrip("0")
+            res += f"{sep}{x}s"
+
+    return res
+
+
 def kubeconfig_get_paths(cluster_name: str, kubeconfig_path: Optional[str]) -> tuple[str, str, str, str]:
     # AssistedClient.download_kubeconfig() downloads the kubeconfig at a
     # particular place, determined by the @cluster_name and @kubeconfig_path.
