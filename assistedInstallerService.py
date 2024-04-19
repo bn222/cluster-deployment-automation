@@ -7,7 +7,6 @@ import re
 import filecmp
 from typing import Optional
 from typing import Union
-from typing import Any
 from typing import Sequence
 import yaml
 import requests
@@ -228,7 +227,7 @@ class AssistedInstallerService:
     def get_normal_pullspec(self, version: str) -> str:
         return f"quay.io/openshift-release-dev/ocp-release:{version}-multi"
 
-    def find_pod(self, name: str) -> Optional[Any]:
+    def find_pod(self, name: str) -> Optional[dict[str, str]]:
         lh = host.LocalHost()
         result = lh.run("podman pod ps --format json")
         if result.err:
