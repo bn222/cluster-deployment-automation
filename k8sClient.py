@@ -3,6 +3,7 @@ import kubernetes
 import yaml
 import time
 import host
+import json
 import os
 import shlex
 import sys
@@ -214,3 +215,25 @@ class K8sClient:
 
         rsh.write(ca_file, certificate, sudo=sudo)
         rsh.run("update-ca-trust", sudo=sudo)
+
+    def internreg_enable(self, cluster_name: str, registry_name: str) -> None:
+        # We could fetch the CA anew with self.clusterca_get(). However, just rely
+        # on it being already written to /etc and use the file from there. For the
+        # caller this "limitation" is fine.
+        ca_file = self.clusterca_etc_filename(cluster_name)
+        if not os.path.isfile(ca_file):
+            raise RuntimeError(f"internreg_enable() requires that the cluster's CA file is stored to {ca_file}")
+
+        # Enable the internal container registry:
+        # - https://docs.openshift.com/container-platform/4.10/registry/configuring_registry_storage/configuring-registry-storage-baremetal.html#registry-change-management-state_configuring-registry-storage-baremetal
+        # - https://docs.openshift.com/container-platform/4.15/registry/configuring-registry-operator.html#registry-removed_configuring-registry-operator
+        # - https://access.redhat.com/solutions/5391601
+        #
+        # Then, the registry is at https://default-route-openshift-image-registry.apps.{cluster_name}.redhat.com
+        self.oc('patch configs.imageregistry.operator.openshift.io cluster --type merge --patch \'{"spec":{"managementState":"Managed","defaultRoute":true,"storage":{"emptyDir":{}}}}\'')
+
+        # https://docs.openshift.com/container-platform/4.15/cicd/builds/setting-up-trusted-ca.html
+        configmap_name = f"cda-registry-cas-{cluster_name}"
+        self.oc(f"create configmap {configmap_name} -n openshift-config --from-file={registry_name}={ca_file}")
+        data = {"spec": {"additionalTrustedCA": {"name": configmap_name}}}
+        self.oc(f"patch image.config.openshift.io/cluster --patch {shlex.quote(json.dumps(data))} --type=merge")
