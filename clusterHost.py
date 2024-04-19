@@ -1,4 +1,3 @@
-import itertools
 import os
 import time
 from concurrent.futures import Future, ThreadPoolExecutor
@@ -200,25 +199,25 @@ class ClusterHost:
         if not nodes:
             return
 
-        for try_count in itertools.count(0):
+        started_at = time.monotonic()
+        logger.info_once_reset()
+        while True:
             states = {node.config.name: node.has_booted() for node in nodes}
-            node_names = ', '.join(states.keys())
-            logger.info(f"Waiting for nodes ({node_names}) to have booted (try #{try_count})..")
-            logger.info(f"Current boot state: {states}")
             if all(has_booted for has_booted in states.values()):
                 break
+            logger.info_once(f"Waiting for nodes to have booted. Current state: {states}")
             time.sleep(10)
-        logger.info(f"It took {try_count} tries to wait for nodes ({node_names}) to have booted.")
+        logger.info(f"Waited {common.seconds_to_str(time.monotonic() - started_at)} for nodes ({', '.join(states.keys())}) to have booted.")
 
-        for try_count in itertools.count(0):
+        logger.info_once_reset()
+        started_at = time.monotonic()
+        while True:
             states = {node.config.name: node.post_boot(desired_ip_range) for node in nodes}
-            node_names = ', '.join(states.keys())
-            logger.info(f"Waiting for nodes ({node_names}) to have run post_boot (try #{try_count})..")
-            logger.info(f"Current post_boot state: {states}")
             if all(has_post_booted for has_post_booted in states.values()):
                 break
+            logger.info_once(f"Waiting for nodes to have run post_boot. Current state: {states}")
             time.sleep(10)
-        logger.info(f"It took {try_count} tries to wait for nodes ({node_names}) to have run post_boot.")
+        logger.info(f"Waited {common.seconds_to_str(time.monotonic() - started_at)} for nodes ({', '.join(states.keys())}) to have run post_boot.")
 
         for node in nodes:
             node.health_check()
