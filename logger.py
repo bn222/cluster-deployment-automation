@@ -2,6 +2,7 @@ import datetime
 import logging
 import os
 import sys
+import threading
 import typing
 from typing import Optional
 
@@ -40,6 +41,9 @@ class ExtendedLogger(logging.Logger):
         main_handler.setLevel(_eval_level(None))
         main_handler.setFormatter(formatter)
 
+        self._threadlocal = threading.local()
+        self._threadlocal.info_once_last_msg = None
+
         self._formatter = formatter
         self._main_handler = main_handler
         self._file_handler: Optional[logging.FileHandler] = None
@@ -63,6 +67,18 @@ class ExtendedLogger(logging.Logger):
     def error_and_exit(self: 'ExtendedLogger', msg: str, *, exit_code: int = -1) -> typing.NoReturn:
         self.error(msg)
         sys.exit(exit_code)
+
+    def info_once(self, msg: str) -> None:
+        last_msg = self._threadlocal.info_once_last_msg
+        self._threadlocal.info_once_last_msg = msg
+        if last_msg is not None and last_msg == msg:
+            level = logging.DEBUG
+        else:
+            level = logging.INFO
+        self.log(level, msg)
+
+    def info_once_reset(self) -> None:
+        self._threadlocal.info_once_last_msg = None
 
 
 # We want that our logger is of type ExtendedLogger to make typing happy. But
