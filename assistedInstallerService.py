@@ -281,6 +281,7 @@ class AssistedInstallerService:
             self.stop()
 
         if not self.pod_running():
+            logger.info("Starting assisted-installer.")
             shutil.copy(self._config_map_path(), self._last_run_cm())
             shutil.copy(self._pod_persistent_path(), self._last_run_pod())
             self._play_kube(self._last_run_cm(), self._last_run_pod())
@@ -325,13 +326,27 @@ class AssistedInstallerService:
             time.sleep(2)
 
     def stop(self) -> None:
+        if not self.pod_running():
+            return
+
+        name = 'assisted-installer'
+        logger.info(f"Tearing down {name}.")
+
+        pod_yml = self._pod_persistent_path()
+        if os.path.exists(self._last_run_pod()):
+            pod_yml = self._last_run_pod()
+
         lh = host.LocalHost()
-        ret = lh.run("podman pod ps --format json")
-        pod_name = "assisted-installer"
-        target = [x for x in json.loads(ret.out) if x["Name"] == pod_name]
-        if target:
-            logger.info(f"Stopping and removing {pod_name}")
-            lh.run(f"podman pod rm -f {pod_name}")
+
+        ret = lh.run(f"podman kube down --force {pod_yml}")
+        if ret.returncode:
+            # Older podman may not support 'down' or '--force'.
+            if any(x in ret.err for x in ['unrecognized', 'unknown']):
+                logger.warning("podman kube down --force is not supported. Persistent volumes will remain.")
+                ret = lh.run(f"podman pod rm -f {name}")
+
+        if ret.returncode:
+            logger.error(f"Failed to teardown {name}: {ret.err}")
 
     def start(self, force: bool = False) -> None:
         self._configure()
