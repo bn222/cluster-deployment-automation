@@ -2,7 +2,6 @@ import common
 import os
 import argparse
 import sys
-import logging
 import argcomplete
 import difflib
 from logger import logger, configure_logger
@@ -50,7 +49,7 @@ def remove_empty_strings(comma_string: str) -> list[str]:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description='Cluster deployment automation')
     parser.add_argument('config', metavar='config', type=str, help='Yaml file with config').completer = yaml_completer  # type: ignore
-    parser.add_argument('-v', '--verbosity', choices=['debug', 'info', 'warning', 'error', 'critical'], default='info', help='Set the logging level (default: info)')
+    parser.add_argument('-v', '--verbosity', choices=['debug', 'info', 'warning', 'error', 'critical'], default=None, help='Set the logging level (CDA_LOG_LEVEL, default: info)')
     parser.add_argument('--secret', dest='secrets_path', default='', action='store', type=str, help='pull_secret.json path (default is in cwd)')
     parser.add_argument('--assisted-installer-url', dest='url', default='192.168.1.1', action='store', type=str, help='If set to 0.0.0.0 (the default), Assisted Installer will be started locally')
 
@@ -89,7 +88,7 @@ def parse_args() -> argparse.Namespace:
         args.worker_range = common.RangeList(args.workers)
         args.worker_range.exclude(args.skip_workers)
 
-    configure_logger(getattr(logging, args.verbosity.upper()))
+    configure_logger(args.verbosity)
 
     if not args.secrets_path:
         args.secrets_path = os.path.join(os.getcwd(), "pull_secret.json")

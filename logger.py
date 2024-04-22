@@ -23,8 +23,7 @@ class ExtendedLogger(logging.Logger):
         sys.exit(exit_code)
 
 
-def configure_logger(lvl: Optional[int] = None) -> ExtendedLogger:
-    logger = logging.getLogger("CDA")
+def configure_logger(lvl: Optional[int | str] = None) -> ExtendedLogger:
 
     if lvl is None:
         lvl = logging.INFO
@@ -33,7 +32,10 @@ def configure_logger(lvl: Optional[int] = None) -> ExtendedLogger:
             s = s.strip().upper()
             if s in ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"):
                 lvl = typing.cast(int, getattr(logging, s))
+    elif isinstance(lvl, str):
+        lvl = typing.cast(int, getattr(logging, lvl.strip().upper()))
 
+    logger = logging.getLogger("CDA")
     logger.setLevel(lvl)
 
     fmt = "%(asctime)s %(levelname)s: %(message)s"
