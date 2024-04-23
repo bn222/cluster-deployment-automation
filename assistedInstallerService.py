@@ -200,6 +200,15 @@ class AssistedInstallerService:
                 'url': self.get_nightly_pullspec(version),
                 'version': wa_version,
             }
+        elif re.search(r'4\.16\.0-nightly', version):
+            wa_version = "4.16.0-nighty"
+
+            ret = {
+                'openshift_version': '4.16-multi',
+                'cpu_architectures': ['x86_64', 'arm64', 'ppc64le', 's390x'],
+                'url': self.get_nightly_pullspec(version),
+                'version': wa_version,
+            }
         else:
             logger.error(f"Unknown version {version}")
             sys.exit(-1)
