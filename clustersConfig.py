@@ -4,7 +4,7 @@ import io
 import sys
 import re
 import ipaddress
-from typing import Optional
+from typing import Optional, Union
 import xml.etree.ElementTree as et
 import jinja2
 from yaml import safe_load
@@ -172,21 +172,7 @@ class ClustersConfig:
         self._check_deprecated_config()
 
         cc = self.fullConfig
-        # Some config may be left out from the yaml. Try to provide defaults.
-        if "masters" not in cc:
-            cc["masters"] = []
-        if "workers" not in cc:
-            cc["workers"] = []
-        if "kubeconfig" not in cc:
-            cc["kubeconfig"] = path.join(getcwd(), f'kubeconfig.{cc["name"]}')
-        if "preconfig" not in cc:
-            cc["preconfig"] = []
-        if "postconfig" not in cc:
-            cc["postconfig"] = []
-        if "proxy" not in cc:
-            cc["proxy"] = None
-        if "hosts" not in cc:
-            cc["hosts"] = [{"name": "localhost"}]
+        self.set_cc_defaults(cc)
         if "proxy" in cc:
             self.proxy = cc["proxy"]
         if "noproxy" in cc:
@@ -206,10 +192,6 @@ class ClustersConfig:
             self.ntp_source = cc["ntp_source"]
         if "base_dns_domain" in cc:
             self.base_dns_domain = cc["base_dns_domain"]
-        if "ip_range" not in cc:
-            cc["ip_range"] = "192.168.122.1-192.168.122.254"
-        if "ip_mask" not in cc:
-            cc["ip_mask"] = "255.255.0.0"
 
         self.kubeconfig = path.join(getcwd(), f'kubeconfig.{cc["name"]}')
         if "kubeconfig" in cc:
@@ -290,6 +272,27 @@ class ClustersConfig:
             if ipaddress.IPv4Address(e.get('ip', "0.0.0.0")) > ipaddress.IPv4Address(last_ip):
                 last_ip = e.get('ip', "0.0.0.0")
         return last_ip
+
+    def set_cc_defaults(self, cc: dict[str, Union[None, str, list[dict[str, str]]]]) -> None:
+        # Some config may be left out from the yaml. Try to provide defaults.
+        if "masters" not in cc:
+            cc["masters"] = []
+        if "workers" not in cc:
+            cc["workers"] = []
+        if "kubeconfig" not in cc:
+            cc["kubeconfig"] = path.join(getcwd(), f'kubeconfig.{cc["name"]}')
+        if "preconfig" not in cc:
+            cc["preconfig"] = []
+        if "postconfig" not in cc:
+            cc["postconfig"] = []
+        if "proxy" not in cc:
+            cc["proxy"] = None
+        if "hosts" not in cc:
+            cc["hosts"] = [{"name": "localhost"}]
+        if "ip_range" not in cc:
+            cc["ip_range"] = "192.168.122.1-192.168.122.254"
+        if "ip_mask" not in cc:
+            cc["ip_mask"] = "255.255.0.0"
 
     def _load_full_config(self, yaml_path: str) -> None:
         if not path.exists(yaml_path):
