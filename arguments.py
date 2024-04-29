@@ -8,7 +8,11 @@ import difflib
 from logger import logger, configure_logger
 from typing import Optional
 
-VALID_STEPS = ["pre", "masters", "workers", "post"]
+PRE_STEP = "pre"
+MASTERS_STEP = "masters"
+WORKERS_STEP = "workers"
+POST_STEP = "post"
+VALID_STEPS = [PRE_STEP, MASTERS_STEP, WORKERS_STEP, POST_STEP]
 
 
 def fuzzy_match(step: str) -> Optional[str]:

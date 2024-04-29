@@ -12,6 +12,7 @@ from typing import Union
 from typing import Callable
 import re
 import logging
+from pathlib import Path
 from assistedInstaller import AssistedClientAutomation
 import host
 from clustersConfig import ClustersConfig, ExtraConfigArgs
@@ -24,6 +25,7 @@ from extraConfigRunner import ExtraConfigRunner
 from clusterHost import ClusterHost
 import dnsutil
 from virshPool import VirshPool
+from arguments import WORKERS_STEP, MASTERS_STEP, POST_STEP
 
 
 def match_to_proper_version_format(version_cluster_config: str) -> str:
@@ -117,8 +119,8 @@ class ClusterDeployer:
         xml_str = self._local_host.hostconn.run("virsh net-dumpxml default").out
         q = et.fromstring(xml_str)
         removed_macs = []
-        names = [x.name for x in self._cc.all_vms()]
-        ips = [x.ip for x in self._cc.all_vms()]
+        names = [vm.name for vm in self._cc.all_vms()]
+        ips = [vm.ip for vm in self._cc.all_vms()]
         dhcp = None
         ip_tree = q.find('ip')
         if ip_tree:
@@ -134,7 +136,8 @@ class ClusterDeployer:
                 removed_macs.append(mac)
 
         fn = "/var/lib/libvirt/dnsmasq/virbr0.status"
-        with open(fn) as f:
+        p = Path(fn)
+        with p.open() as f:
             contents = f.read()
 
         if contents:
@@ -154,7 +157,7 @@ class ClusterDeployer:
                 filtered.append(entry)
 
             logger.info(self._local_host.hostconn.run("virsh net-destroy default"))
-            with open(fn, "w") as f:
+            with p.open("w") as f:
                 f.write(json.dumps(filtered, indent=4))
             logger.info(self._local_host.hostconn.run("virsh net-start default"))
             logger.info(self._local_host.hostconn.run("systemctl restart libvirtd"))
@@ -189,9 +192,9 @@ class ClusterDeployer:
         vm_bm = [x for x in self._cc.workers if x.kind == "vm" and x.node != "localhost"]
         remote_workers = len(self._cc.workers) - len(self._cc.worker_vms())
         remote_masters = len(self._cc.masters) - len(self._cc.master_vms())
-        if "workers" not in self.steps:
+        if WORKERS_STEP not in self.steps:
             remote_workers = 0
-        if "masters" not in self.steps:
+        if MASTERS_STEP not in self.steps:
             remote_masters = 0
         return remote_masters != 0 or remote_workers != 0 or len(vm_bm) != 0
 
@@ -203,14 +206,14 @@ class ClusterDeployer:
                 logger.info("Skipping pre configuration.")
 
             if self._cc.kind != "microshift":
-                if "masters" in self.steps:
+                if MASTERS_STEP in self.steps:
                     self.teardown()
                     self.create_cluster()
                     self.create_masters()
                 else:
                     logger.info("Skipping master creation.")
 
-                if "workers" in self.steps:
+                if WORKERS_STEP in self.steps:
                     if len(self._cc.workers) != 0:
                         self.create_workers()
                     else:
@@ -225,7 +228,7 @@ class ClusterDeployer:
             else:
                 logger.error_and_exit("Masters must be of length one for deploying microshift")
 
-        if "post" in self.steps:
+        if POST_STEP in self.steps:
             self._postconfig()
         else:
             logger.info("Skipping post configuration.")
