@@ -20,6 +20,16 @@ class ResolvConfData:
     searches: list[str]
 
 
+def resolvconf_dont_touch() -> bool:
+    # The user can disable touching /etc/resolv.conf by
+    #
+    #   $ sudo touch /etc/.resolv.conf.cda-dont-touch
+    #
+    # We will still write our "/etc/resolv.conf.cda*" files, but
+    # it's up to the user to redirect symlinks accordingly.
+    return os.path.exists("/etc/.resolv.conf.cda-dont-touch")
+
+
 def resolvconf_parse_file(rc_file: str) -> ResolvConfData:
     try:
         with open(rc_file, "rb") as f:
@@ -60,7 +70,7 @@ def resolvconf_parse_file(rc_file: str) -> ResolvConfData:
     return ResolvConfData(nameservers, searches)
 
 
-def resolvconf_ensure_orig() -> None:
+def _resolvconf_ensure_orig() -> None:
 
     if os.path.exists(RESOLVCONF_ORIG):
         return
@@ -87,6 +97,15 @@ def resolvconf_ensure_orig() -> None:
             f.write(rc_content_orig)
 
 
+def resolvconf_ensure_orig() -> bool:
+
+    if resolvconf_dont_touch():
+        return False
+
+    _resolvconf_ensure_orig()
+    return True
+
+
 def resolvconf_update(setup: bool = True, searches: Optional[list[str]] = None) -> None:
 
     lh = host.LocalHost()
@@ -97,7 +116,7 @@ def resolvconf_update(setup: bool = True, searches: Optional[list[str]] = None) 
     #
     # We will still write our "/etc/resolv.conf.cda*" files, but
     # it's up to the user to redirect symlinks accordingly.
-    dont_touch = os.path.exists("/etc/.resolv.conf.cda-dont-touch")
+    dont_touch = resolvconf_dont_touch()
 
     if not setup:
         if dont_touch:
@@ -186,7 +205,7 @@ def dnsmasq_update(cluster_name: str, api_vip: Optional[str] = None) -> None:
             with common.atomic_write(dmasqconf_my) as file:
                 file.write(content)
 
-    resolvconf_ensure_orig()
+    _resolvconf_ensure_orig()
     rcdata = resolvconf_parse_file(RESOLVCONF_ORIG)
 
     if api_vip is None:
