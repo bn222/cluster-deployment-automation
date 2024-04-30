@@ -117,6 +117,8 @@ class ClusterHost:
             logger.error_and_exit(f"Host {self.config.name} misses API network interface {self.api_port}")
 
         logger.info(f"Block all DHCP replies on {self.api_port} except the ones coming from the DHCP bridge")
+        # We might run ensure_linked_to_network on a host on which ebtables rules are already installed e.g. adding vms on a host already hosting vms.
+        self.hostconn.run("ebtables -t filter -F FORWARD")
         self.hostconn.run(f"ebtables -t filter -A FORWARD -p IPv4 --in-interface {self.api_port} --src {dhcp_bridge.eth_address()} --ip-proto udp --ip-sport 67 --ip-dport 68 -j ACCEPT")
         self.hostconn.run(f"ebtables -t filter -A FORWARD -p IPv4 --in-interface {self.api_port} --ip-proto udp --ip-sport 67 --ip-dport 68 -j DROP")
 
