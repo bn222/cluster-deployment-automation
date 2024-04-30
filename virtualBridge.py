@@ -212,9 +212,6 @@ class VirBridge:
         needs_reconfigure = False
 
         expected_dhcp_range = bridge_dhcp_range_str(self.config.dynamic_ip_range)
-        if expected_dhcp_range not in ret.out:
-            logger.info("Bridge needs to be reconfigured: missing expected dhcp range")
-            needs_reconfigure = True
 
         if not expected_dhcp_range and "dhcp" in ret.out:
             logger.info("Bridge needs to be reconfigured: unexpected dhcp range present")
@@ -252,6 +249,26 @@ class VirBridge:
             # Not sure why/whether this is needed. But we saw failures w/o it.
             # We need to investigate how to remove the sleep to speed up
             time.sleep(5)
+
+        # Reconfiguring bridge by deleting and recreating it causes existing bridge configuration (dhcp entries, bridge masters...) to get lost.
+        # The dynamic range might change if we add workers. Update dynamic range ... dynamically, without restarting bridge, to avoid
+        # losing existing bridge config.
+
+        # We can't modify the dhcp range, but we can delete/add it back. First delete it.
+        range_elem = None
+        xml_str = ""
+        if expected_dhcp_range not in ret.out:
+            tree = et.fromstring(ret.out)
+            range_elem = next((it for it in tree.iter('range')), et.Element(''))
+            for attr in range_elem.attrib:
+                xml_str = xml_str + f"{attr}='{range_elem.attrib[attr]}' "
+            if range_elem.tag:
+                xml_str = f"\"<range {xml_str}/>\""
+                cmd = f"virsh net-update default delete ip-dhcp-range {xml_str} --live --config"
+                self.hostconn.run_or_die(cmd)
+
+            cmd = f"virsh net-update default add ip-dhcp-range \"{expected_dhcp_range}\" --live --config"
+            self.hostconn.run_or_die(cmd)
 
     def eth_address(self) -> str:
         max_tries = 3
