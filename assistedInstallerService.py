@@ -132,10 +132,17 @@ class AssistedInstallerService:
         return y
 
     def prep_version(self, version: str) -> dict[str, Union[str, Sequence[str]]]:
-        if re.search(r'4\.12\.0-nightly', version):
-            # Note how 4.12.0 has the -multi suffix because AI requires that
-            # for 4.12. CDA hides this and simply expect 4.12.0 from the user
-            # since that follows the same versioning scheme
+        # Note how 4.12.0 has the -multi suffix because AI requires that
+        # for 4.12. CDA hides this and simply expect 4.12.0 from the user
+        # since that follows the same versioning scheme
+        if re.search(r'4\.12\.0-ec.[0-9]+', version):
+            ret = {
+                'openshift_version': '4.12-multi',
+                'cpu_architectures': ['x86_64', 'arm64', 'ppc64le', 's390x'],
+                'url': self.get_normal_pullspec(version),
+                'version': version,
+            }
+        elif re.search(r'4\.12\.0-nightly', version):
             ret = {
                 'openshift_version': '4.12-multi',
                 'cpu_architectures': ['x86_64', 'arm64', 'ppc64le', 's390x'],
@@ -184,30 +191,62 @@ class AssistedInstallerService:
             }
         elif re.search(r'4\.14\.0-nightly', version):
             wa_version = "4.13.0-nighty"
-
             ret = {
                 'openshift_version': '4.13-multi',
                 'cpu_architectures': ['x86_64', 'arm64', 'ppc64le', 's390x'],
                 'url': self.get_nightly_pullspec(version),
                 'version': wa_version,
             }
+        elif re.search(r'4\.14\.[0-9]+', version):
+            ret = {
+                'openshift_version': '4.13-multi',
+                'cpu_architectures': ['x86_64', 'arm64', 'ppc64le', 's390x'],
+                'url': self.get_normal_pullspec(version),
+                'version': version,
+            }
+        elif re.search(r'4\.15\.0-ec.[0-9]+', version):
+            ret = {
+                'openshift_version': '4.15-multi',
+                'cpu_architectures': ['x86_64', 'arm64', 'ppc64le', 's390x'],
+                'url': self.get_normal_pullspec(version),
+                'version': version,
+            }
         elif re.search(r'4\.15\.0-nightly', version):
             wa_version = "4.15.0-nighty"
-
             ret = {
                 'openshift_version': '4.15-multi',
                 'cpu_architectures': ['x86_64', 'arm64', 'ppc64le', 's390x'],
                 'url': self.get_nightly_pullspec(version),
                 'version': wa_version,
             }
+        elif re.search(r'4\.15\.[0-9]+', version):
+            ret = {
+                'openshift_version': '4.15-multi',
+                'cpu_architectures': ['x86_64', 'arm64', 'ppc64le', 's390x'],
+                'url': self.get_normal_pullspec(version),
+                'version': version,
+            }
+        elif re.search(r'4\.16\.0-ec.[0-9]+', version):
+            ret = {
+                'openshift_version': '4.16-multi',
+                'cpu_architectures': ['x86_64', 'arm64', 'ppc64le', 's390x'],
+                'url': self.get_normal_pullspec(version),
+                'version': version,
+            }
         elif re.search(r'4\.16\.0-nightly', version):
             wa_version = "4.16.0-nighty"
-
             ret = {
                 'openshift_version': '4.16-multi',
                 'cpu_architectures': ['x86_64', 'arm64', 'ppc64le', 's390x'],
                 'url': self.get_nightly_pullspec(version),
                 'version': wa_version,
+            }
+        elif re.search(r'4\.16\.[0-9]+', version):
+            ret = {
+                'openshift_version': '4.16-multi',
+                'cpu_architectures': ['x86_64', 'arm64', 'ppc64le', 's390x'],
+                'url': self.get_normal_pullspec(version),
+                'version': version,
             }
         else:
             logger.error(f"Unknown version {version}")
