@@ -172,7 +172,7 @@ class VirBridge:
         if bridge_ip_address_str(self.config.ip, self.config.mask) not in ret.out:
             needs_reconfigure = True
 
-        if use_resolvconf_orig != (f"\"resolv-file={dnsutil.RESOLVCONF_ORIG}\"" in ret.out):
+        if use_resolvconf_orig != (f"resolv-file={dnsutil.RESOLVCONF_ORIG}" in ret.out):
             needs_reconfigure = True
 
         if needs_reconfigure:
