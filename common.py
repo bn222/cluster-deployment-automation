@@ -346,21 +346,30 @@ def port_to_ip(host: host.Host, port_name: str) -> Optional[str]:
     return None
 
 
-def carrier_no_addr(host: host.Host) -> list[IPRouteAddressEntry]:
-    def carrier_no_addr(intf: IPRouteAddressEntry) -> bool:
-        return len(intf.addr_info) == 0 and "NO-CARRIER" not in intf.flags
-
-    entries = ip_addrs(host)
-
-    return [x for x in entries if carrier_no_addr(x)]
-
-
 def get_auto_port(host: host.Host) -> str:
-    interfaces = carrier_no_addr(host)
+    def ipa_is_candidate(ipa: IPRouteAddressEntry) -> bool:
+        if not ipa.has_carrier():
+            # No carrier, this interface is not a candidate.
+            return False
+        if any(ai.family == 'inet' or (ai.family == 'inet6' and not ai.local.startswith("fe80:")) for ai in ipa.addr_info):
+            # We expect that there is no IP address. However, Ipv6 link local
+            # addresses may be configured (for example, if NetworkManager in
+            # the background tries to autoactivate a ipv6.method=auto profile).
+            return False
+        return True
+
+    interfaces = {ipa.ifname for ipa in ip_addrs(host) if ipa_is_candidate(ipa)}
     if len(interfaces) == 0:
         raise ValueError("No interfaces found for auto port")
-    else:
-        return interfaces[0].ifname
+
+    if len(interfaces) > 1:
+        # We hardcore a preference of commonly used interfaces by their
+        # name.
+        for ifname in ("ens12399", "ens12409"):
+            if ifname in interfaces:
+                return ifname
+
+    return next(iter(sorted(interfaces)))
 
 
 def iterate_ssh_keys() -> Iterator[tuple[str, str, str]]:
