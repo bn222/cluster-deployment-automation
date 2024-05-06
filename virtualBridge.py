@@ -159,20 +159,25 @@ class VirBridge:
 
         expected_dhcp_range = bridge_dhcp_range_str(self.config.dynamic_ip_range)
         if expected_dhcp_range not in ret.out:
+            logger.info("Bridge needs to be reconfigured: missing expected dhcp range")
             needs_reconfigure = True
 
         if not expected_dhcp_range and "dhcp" in ret.out:
+            logger.info("Bridge needs to be reconfigured: unexpected dhcp range present")
             needs_reconfigure = True
 
         # Make sure STP is off on the virtual bridge.
         if "stp='off'" not in ret.out:
+            logger.info("Bridge needs to be reconfigured: stp enabled")
             needs_reconfigure = True
 
         # Make sure the correct bridge IP is configured.
         if bridge_ip_address_str(self.config.ip, self.config.mask) not in ret.out:
+            logger.info("Bridge needs to be reconfigured: unexpected bridge IP")
             needs_reconfigure = True
 
-        if use_resolvconf_orig != (f"\"resolv-file={dnsutil.RESOLVCONF_ORIG}\"" in ret.out):
+        if use_resolvconf_orig != (f"resolv-file={dnsutil.RESOLVCONF_ORIG}" in ret.out):
+            logger.info("Bridge needs to be reconfigured: missing resolv-file")
             needs_reconfigure = True
 
         if needs_reconfigure:
