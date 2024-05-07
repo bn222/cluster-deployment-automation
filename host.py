@@ -404,6 +404,7 @@ class Host:
         log_prefix: str = "",
         log_level_result: Optional[int] = None,
         log_level_fail: Optional[int] = None,
+        die_on_error: bool = False,
     ) -> Result:
         if sudo is None:
             sudo = self.sudo_needed
@@ -411,19 +412,27 @@ class Host:
         cmd = self._cmd_to_script(cmd)
 
         logger.log(log_level, f"{log_prefix}running command {repr(cmd)} on {self._hostname}")
+
         if self.is_localhost():
             ret_val = self._run_local(cmd, env=env, cwd=cwd, sudo=sudo)
         else:
             ret_val = self._run_remote(cmd, log_level, env=env, cwd=cwd, sudo=sudo)
 
-        if ret_val.returncode != 0 and log_level_fail is not None:
+        status1 = ""
+        if die_on_error and not ret_val.success():
+            level = logging.ERROR
+            status1 = "CRITICALLY "
+        elif not ret_val.success() and log_level_fail is not None:
             level = log_level_fail
         elif log_level_result is not None:
             level = log_level_result
         else:
             level = log_level
-        status = f"failed (rc={ret_val.returncode})" if ret_val.returncode != 0 else "succeeded"
+        status = "succeeded" if ret_val.success() else f"{status1}failed (rc={ret_val.returncode})"
         logger.log(level, f"{log_prefix}command {repr(cmd)} on {self._hostname} {status}{':' if ret_val.out or ret_val.err else ''}{f' out={repr(ret_val.out)};' if ret_val.out else ''}{f' err={repr(ret_val.err)};' if ret_val.err else ''}")
+
+        if die_on_error and not ret_val.success():
+            sys.exit(-1)
 
         return ret_val
 
@@ -516,13 +525,7 @@ class Host:
         cwd: Optional[str] = None,
         sudo: Optional[bool] = None,
     ) -> Result:
-        ret = self.run(cmd, env=env, cwd=cwd, sudo=sudo)
-        if ret.returncode:
-            logger.error(f"{self._cmd_to_script(cmd)} failed: {ret.err}")
-            sys.exit(-1)
-        else:
-            logger.debug(ret.out.strip())
-        return ret
+        return self.run(cmd, env=env, cwd=cwd, sudo=sudo, die_on_error=True)
 
     def close(self) -> None:
         assert self._host is not None
