@@ -119,8 +119,12 @@ class ClusterDeployer:
         removed_macs = []
         names = [x.name for x in self._cc.all_vms()]
         ips = [x.ip for x in self._cc.all_vms()]
-        for e in q[-1][0][1:]:
-            if e.attrib["name"] in names or e.attrib["ip"] in ips:
+        dhcp = None
+        ip_tree = q.find('ip')
+        if ip_tree:
+            dhcp = ip_tree.find('dhcp')
+        for e in dhcp or []:
+            if e.get('name') in names or e.get('ip') in ips:
                 mac = e.attrib["mac"]
                 name = e.attrib["name"]
                 ip = e.attrib["ip"]
