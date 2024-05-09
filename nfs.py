@@ -40,7 +40,7 @@ class NFS:
 
     def _export_fs(self) -> None:
         self._host.run("systemctl enable nfs-server")
-        self._host.run("systemctl restart nfs-server")
+        self._host.run_or_die("systemctl restart nfs-server")
 
     def _ip(self) -> Optional[str]:
         return common.port_to_ip(self._host, self._port)
