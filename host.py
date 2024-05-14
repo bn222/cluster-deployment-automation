@@ -10,6 +10,7 @@ import shutil
 import sys
 import logging
 import tempfile
+from threading import Lock
 from typing import Optional
 from typing import Union
 from typing import Any
@@ -209,6 +210,7 @@ class Host:
         self._bmc = bmc
         self._logins: list[Login] = []
         self.sudo_needed = False
+        self._host_mutex = Lock()
 
     @lru_cache(maxsize=None)
     def is_localhost(self) -> bool:
@@ -263,48 +265,51 @@ class Host:
         return None
 
     def remove(self, source: str) -> None:
-        if self.is_localhost():
-            if os.path.exists(source):
-                os.remove(source)
-        else:
-            assert self._host is not None
-            try:
-                sftp = self._host.open_sftp()
-                sftp.remove(source)
-            except FileNotFoundError:
-                pass
+        with self._host_mutex:
+            if self.is_localhost():
+                if os.path.exists(source):
+                    os.remove(source)
+            else:
+                assert self._host is not None
+                try:
+                    sftp = self._host.open_sftp()
+                    sftp.remove(source)
+                except FileNotFoundError:
+                    pass
 
     # Copying local_file to "Host", which can be local or remote
     def copy_to(self, src_file: str, dst_file: str) -> None:
-        if not os.path.exists(src_file):
-            raise FileNotFoundError(2, f"No such file or dir: {src_file}")
-        if self.is_localhost():
-            shutil.copy(src_file, dst_file)
-        else:
-            while True:
-                try:
-                    sftp = self._host.open_sftp()
-                    sftp.put(src_file, dst_file)
-                    break
-                except Exception as e:
-                    logger.info(e)
-                    logger.info("Disconnected during sftpd, reconnecting...")
-                    self.ssh_connect_looped(self._logins)
+        with self._host_mutex:
+            if not os.path.exists(src_file):
+                raise FileNotFoundError(2, f"No such file or dir: {src_file}")
+            if self.is_localhost():
+                shutil.copy(src_file, dst_file)
+            else:
+                while True:
+                    try:
+                        sftp = self._host.open_sftp()
+                        sftp.put(src_file, dst_file)
+                        break
+                    except Exception as e:
+                        logger.info(e)
+                        logger.info("Disconnected during sftpd, reconnecting...")
+                        self.ssh_connect_looped(self._logins)
 
     def need_sudo(self) -> None:
         self.sudo_needed = True
 
     def run(self, cmd: str, log_level: int = logging.DEBUG, env: dict[str, str] = os.environ.copy()) -> Result:
-        if self.sudo_needed:
-            cmd = "sudo " + cmd
+        with self._host_mutex:
+            if self.sudo_needed:
+                cmd = "sudo " + cmd
 
-        logger.log(log_level, f"running command {cmd} on {self._hostname}")
-        if self.is_localhost():
-            ret_val = self._run_local(cmd, env)
-        else:
-            ret_val = self._run_remote(cmd, log_level)
+            logger.log(log_level, f"running command {cmd} on {self._hostname}")
+            if self.is_localhost():
+                ret_val = self._run_local(cmd, env)
+            else:
+                ret_val = self._run_remote(cmd, log_level)
 
-        logger.log(log_level, ret_val)
+            logger.log(log_level, ret_val)
         return ret_val
 
     def _run_local(self, cmd: str, env: dict[str, str]) -> Result:
@@ -435,40 +440,45 @@ class Host:
         return "NO-CARRIER" not in ports[port_name]["flags"]
 
     def write(self, fn: str, contents: str) -> None:
-        if self.is_localhost():
-            with open(fn, "w") as f:
-                f.write(contents)
-        else:
-            with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
-                tmp_filename = tmp_file.name
-                tmp_file.write(contents.encode('utf-8'))
-            self.copy_to(tmp_filename, fn)
-            os.remove(tmp_filename)
+        with self._host_mutex:
+            if self.is_localhost():
+                with open(fn, "w") as f:
+                    f.write(contents)
+            else:
+                with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
+                    tmp_filename = tmp_file.name
+                    tmp_file.write(contents.encode('utf-8'))
+                self.copy_to(tmp_filename, fn)
+                os.remove(tmp_filename)
 
     def read_file(self, file_name: str) -> str:
-        if self.is_localhost():
-            with open(file_name) as f:
-                return f.read()
-        else:
-            ret = self.run(f"cat {file_name}")
-            if ret.returncode == 0:
-                return ret.out
-            raise Exception(f"Error reading {file_name}")
+        with self._host_mutex:
+            if self.is_localhost():
+                with open(file_name) as f:
+                    return f.read()
+            else:
+                ret = self.run(f"cat {file_name}")
+                if ret.returncode == 0:
+                    return ret.out
+                raise Exception(f"Error reading {file_name}")
 
     def listdir(self, path: Optional[str] = None) -> list[str]:
-        if self.is_localhost():
-            return os.listdir(path)
-        path = path if path is not None else ""
-        ret = self.run(f"ls {path}")
-        if ret.returncode == 0:
-            return ret.out.strip().split("\n")
-        raise Exception(f"Error listing dir {path}")
+        with self._host_mutex:
+            if self.is_localhost():
+                return os.listdir(path)
+            path = path if path is not None else ""
+            ret = self.run(f"ls {path}")
+            if ret.returncode == 0:
+                return ret.out.strip().split("\n")
+            raise Exception(f"Error listing dir {path}")
 
     def hostname(self) -> str:
         return self._hostname
 
     def exists(self, path: str) -> bool:
-        return self.run(f"stat {path}", logging.DEBUG).returncode == 0
+        with self._host_mutex:
+            ret = self.run(f"stat {path}", logging.DEBUG).returncode == 0
+        return ret
 
 
 class HostWithCX(Host):
