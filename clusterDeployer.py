@@ -227,7 +227,7 @@ class ClusterDeployer:
 
         if "post" in self.steps:
             self._postconfig()
-            cmd = "apply -f monitoring-config.yaml"
+            cmd = "apply -f manifests/monitoring-config.yaml"
             self.client().oc_run_or_die(cmd)
         else:
             logger.info("Skipping post configuration.")
