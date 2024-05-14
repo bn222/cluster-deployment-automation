@@ -1,9 +1,9 @@
 import dataclasses
 import os
+import threading
 
 import common
 import host
-import logging
 
 from logger import logger
 from typing import Optional
@@ -13,11 +13,9 @@ RESOLVCONF = "/etc/resolv.conf"
 RESOLVCONF_ORIG = "/etc/resolv.conf.cda-orig"
 RESOLVCONF_LOCAL = "/etc/resolv.conf.cda-local"
 
+DNSMASQ_SERVERS_FILE = "/etc/dnsmasq.d/servers/cda-servers.conf"
 
-@dataclasses.dataclass
-class ResolvConfData:
-    nameservers: list[str]
-    searches: list[str]
+_lock = threading.Lock()
 
 
 def resolvconf_dont_touch() -> bool:
@@ -30,7 +28,13 @@ def resolvconf_dont_touch() -> bool:
     return os.path.exists("/etc/.resolv.conf.cda-dont-touch")
 
 
-def resolvconf_parse_file(rc_file: str) -> ResolvConfData:
+@dataclasses.dataclass
+class ResolvConfData:
+    nameservers: list[str]
+    searches: list[str]
+
+
+def _resolvconf_parse_file(rc_file: str) -> ResolvConfData:
     try:
         with open(rc_file, "rb") as f:
             rc_content = f.read()
@@ -102,11 +106,12 @@ def resolvconf_ensure_orig() -> bool:
     if resolvconf_dont_touch():
         return False
 
-    _resolvconf_ensure_orig()
+    with _lock:
+        _resolvconf_ensure_orig()
     return True
 
 
-def resolvconf_update(setup: bool = True, searches: Optional[list[str]] = None) -> None:
+def _resolvconf_update(setup: bool = True, searches: Optional[list[str]] = None) -> None:
 
     lh = host.LocalHost()
 
@@ -169,67 +174,119 @@ def resolvconf_update(setup: bool = True, searches: Optional[list[str]] = None) 
 
 def dnsmasq_update(cluster_name: str, api_vip: Optional[str] = None) -> None:
 
+    # Cleanup old files that we wrote (but no longer).
+    try:
+        os.remove(f"/etc/dnsmasq.d/cda-cluster-{cluster_name}.conf")
+    except FileNotFoundError:
+        pass
+    try:
+        os.remove("/etc/dnsmasq.d/cda-orig.conf")
+    except FileNotFoundError:
+        pass
+
     lh = host.LocalHost()
 
-    service_running = lh.run("systemctl is-active --quiet dnsmasq.service").success()
+    dmasqconf_cda = "/etc/dnsmasq.d/cda.conf"
 
-    service_restart = True
+    with _lock:
+        _resolvconf_ensure_orig()
 
-    dmasqconf_my = f"/etc/dnsmasq.d/cda-cluster-{cluster_name}.conf"
-    dmasqconf_orig = "/etc/dnsmasq.d/cda-orig.conf"
+        servers_changed = _dnsmasq_servers_update(cluster_name, api_vip)
 
-    if api_vip is None:
-        loglevel = logging.INFO
-        try:
-            os.remove(dmasqconf_my)
-        except FileNotFoundError:
-            loglevel = logging.DEBUG
-            service_restart = False
-        except OSError:
-            service_restart = service_running
-        logger.log(loglevel, f"dnsmasq: reset local dnsmasq by deleting {dmasqconf_my}")
-    else:
-        content = f"# Written by cluster-deployment-automation for \"{cluster_name}\"\nserver=/{cluster_name}.redhat.com/{api_vip}\n"
+        rcdata = _resolvconf_parse_file(RESOLVCONF_ORIG)
 
-        try:
-            with open(dmasqconf_my) as file:
-                old_content = file.read()
-        except IOError:
-            old_content = ""
-
-        if content == old_content:
-            logger.debug(f"dnsmasq: updating file {dmasqconf_my} (nameserver: {api_vip})")
-            service_restart = not service_running
+        if api_vip is None:
+            # We don't reset. That's because we might have multiple clusters. If
+            # you want to reset /etc/resolv.conf, see comments in
+            # "/etc/resolv.conf.cda-local".
+            pass
         else:
-            logger.info(f"dnsmasq: updating file {dmasqconf_my} (nameserver: {api_vip})")
-            with common.atomic_write(dmasqconf_my) as file:
-                file.write(content)
+            _resolvconf_update(searches=rcdata.searches)
 
-    _resolvconf_ensure_orig()
-    rcdata = resolvconf_parse_file(RESOLVCONF_ORIG)
+        with common.atomic_write(dmasqconf_cda) as file:
+            content = "# Written by cluster-deployment-automation.\n"
+            content += "listen-address=127.0.0.1\n"
+            content += "bind-interfaces\n"
+            content += f"resolv-file={RESOLVCONF_ORIG}\n"
+            content += f"servers-file={DNSMASQ_SERVERS_FILE}\n"
+            file.write(content)
 
-    if api_vip is None:
-        # We don't reset. That's because we might have multiple clusters. If
-        # you want to reset /etc/resolv.conf, see comments in
-        # "/etc/resolv.conf.cda-local".
+        if servers_changed or not lh.run("systemctl is-active --quiet dnsmasq.service").success():
+            ret = lh.run("systemctl unmask dnsmasq.service")
+            ret = lh.run("systemctl restart dnsmasq.service")
+            if not ret.success():
+                logger.warning(f"dnsmasq: failure to start dnsmasq service: {ret}")
+            else:
+                logger.debug("dnsmasq: service was restarted")
+        else:
+            logger.debug("dnsmasq: service was not restarted")
+
+
+def _dnsmasq_servers_content_parse(content: bytes) -> list[bytes]:
+    result: list[bytes] = []
+    if content:
+        for line in content.split(b'\n'):
+            line = line.strip()
+            if line.startswith(b"server=/"):
+                result.append(line)
+    return result
+
+
+def _dnsmasq_servers_content_update(old_content: bytes, cluster_name: Optional[str], api_vip: Optional[str] = None) -> tuple[bytes, list[bytes]]:
+
+    old_entries = _dnsmasq_servers_content_parse(old_content)
+
+    new_entries = list(old_entries)
+
+    if cluster_name is None:
         pass
     else:
-        resolvconf_update(searches=rcdata.searches)
+        prefix1 = f"server=/*.api.{cluster_name}.redhat.com/*.api-int.{cluster_name}.redhat.com/#".encode()
+        prefix2 = f"server=/apps.{cluster_name}.redhat.com/api.{cluster_name}.redhat.com/api-int.{cluster_name}.redhat.com/".encode()
 
-    with common.atomic_write(dmasqconf_orig) as file:
-        content = "# Written by cluster-deployment-automation.\n"
-        content += "# Contains the nameserves from \"/etc/resolv.conf.cda-orig\".\n"
-        content += ''.join(f"server={n}\n" for n in rcdata.nameservers)
-        content += "listen-address=127.0.0.1\n"
-        content += "bind-interfaces\n"
-        file.write(content)
+        # Remove all entires for our cluster name.
+        for entry in list(new_entries):
+            if entry == prefix1 or entry.startswith(prefix2):
+                new_entries.remove(entry)
+        if api_vip is not None:
+            new_entries.append(prefix1)
+            new_entries.append(prefix2 + f"{api_vip}".encode())
 
-    if service_restart:
-        ret = lh.run("systemctl unmask dnsmasq.service")
-        ret = lh.run("systemctl restart dnsmasq.service")
-        if not ret.success():
-            logger.warning(f"dnsmasq: failure to start dnsmasq service: {ret}")
-        else:
-            logger.debug("dnsmasq: service was restarted")
-    else:
-        logger.debug("dnsmasq: service was not restarted")
+    new_entries.sort()
+
+    new_content = (
+        b"""# Written by cluster-deployment-automation for resolving cluster names.
+# This file is passed to dnsmasq via the --servers-file= option
+#
+# You can reload after changes with
+#   systemctl restart dnsmasq.service
+#   systemctl kill -s SIGHUP dnsmasq.service
+"""
+        + b"\n".join(new_entries)
+        + b"\n"
+    )
+
+    return new_content, new_entries
+
+
+def _dnsmasq_servers_update(cluster_name: Optional[str], api_vip: Optional[str] = None) -> bool:
+
+    try:
+        with open(DNSMASQ_SERVERS_FILE, "rb") as f:
+            old_content = f.read()
+    except Exception:
+        old_content = b""
+
+    new_content, new_entries = _dnsmasq_servers_content_update(old_content, cluster_name, api_vip)
+
+    if new_content == old_content:
+        return False
+
+    logger.debug(f"dnsmasq: update {DNSMASQ_SERVERS_FILE} (content: {[s.decode('utf-8', errors='replace') for s in new_entries]})")
+
+    os.makedirs(os.path.dirname(DNSMASQ_SERVERS_FILE), exist_ok=True)
+
+    with common.atomic_write(DNSMASQ_SERVERS_FILE, text=False) as f:
+        f.write(new_content)
+
+    return True
