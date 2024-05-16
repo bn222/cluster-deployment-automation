@@ -36,7 +36,7 @@ def configure_logger(lvl: Optional[int] = None) -> ExtendedLogger:
 
     logger.setLevel(lvl)
 
-    fmt = "%(asctime)s %(levelname)s: %(message)s"
+    fmt = "%(asctime)s %(levelname)s [th:%(thread)s]: %(message)s"
     datefmt = "%Y-%m-%d %H:%M:%S"
     formatter = logging.Formatter(fmt, datefmt)
 
