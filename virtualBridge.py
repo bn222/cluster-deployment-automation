@@ -7,7 +7,6 @@ from typing import Optional
 
 import common
 import host
-import dnsutil
 from clustersConfig import BridgeConfig, NodeConfig
 
 
@@ -97,7 +96,7 @@ class VirBridge:
         if api_port is not None:
             self.hostconn.run(f"ip link set {api_port} up")
 
-    def _network_xml(self, use_resolvconf_orig: bool = False) -> str:
+    def _network_xml(self) -> str:
         if self.config.dynamic_ip_range is None:
             dhcp_part = ""
         else:
@@ -105,20 +104,14 @@ class VirBridge:
                 {bridge_dhcp_range_str(self.config.dynamic_ip_range)}
                 </dhcp>"""
 
-        if use_resolvconf_orig:
-            dnsmasq_options = f"<dnsmasq:option value=\"resolv-file={dnsutil.RESOLVCONF_ORIG}\" />"
-        else:
-            dnsmasq_options = ""
-
         return f"""
-                <network xmlns:dnsmasq='http://libvirt.org/schemas/network/dnsmasq/1.0'>
+                <network>
                 <name>default</name>
                 <forward mode='nat'/>
                 <bridge name='virbr0' stp='off' delay='0'/>
                 {bridge_ip_address_str(self.config.ip, self.config.mask)}
                 {dhcp_part}
                 </ip>
-                <dnsmasq:options>{dnsmasq_options}</dnsmasq:options>
                 </network>"""
 
     def _restart(self) -> None:
@@ -132,17 +125,6 @@ class VirBridge:
         self._restart()
 
     def configure(self, api_port: Optional[str]) -> None:
-
-        # We may redirect /etc/resolv.conf to 127.0.0.1. See dnsmasq.dnsmasq_update().
-        # Note that libvirt's dnsmasq also reads /etc/resolv.conf, but that works badly,
-        # if that points to our local dnsmasq (which in turn might point to a DNS server
-        # inside a libvirt VM).
-        #
-        # Instead, we have the original nameservers in /etc/resolv.conf.cda-orig.
-        # Use that for the "--resolv-file=" option of libvirt's dnsmasq.
-        # https://libvirt.org/formatnetwork.html#network-namespaces
-        use_resolvconf_orig = dnsutil.resolvconf_ensure_orig()
-
         hostname = self.hostconn.hostname()
         cmd = "systemctl enable libvirtd --now"
         self.hostconn.run_or_die(cmd)
@@ -176,14 +158,10 @@ class VirBridge:
             logger.info("Bridge needs to be reconfigured: unexpected bridge IP")
             needs_reconfigure = True
 
-        if use_resolvconf_orig != (f"resolv-file={dnsutil.RESOLVCONF_ORIG}" in ret.out):
-            logger.info("Bridge needs to be reconfigured: missing resolv-file")
-            needs_reconfigure = True
-
         if needs_reconfigure:
             logger.info("Destoying and recreating bridge")
             logger.info(f"creating default-net.xml on {hostname}")
-            contents = self._network_xml(use_resolvconf_orig)
+            contents = self._network_xml()
 
             bridge_xml = os.path.join("/tmp", 'vir_bridge.xml')
             self.hostconn.write(bridge_xml, contents)
