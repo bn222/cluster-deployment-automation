@@ -147,6 +147,7 @@ class IPRouteAddressEntry:
     def has_carrier(self) -> bool:
         return "NO-CARRIER" not in self.flags
 
+
 class HttpServerManager:
     def __init__(self, path: str, port: int = 8000):
         self.path = path
@@ -188,7 +189,6 @@ class HttpServerManager:
             logger.debug(f"port {self.port} in use, trying port + 1")
             port += 1
         return port
-
 
 
 def _parse_json_list(jstr: str, *, strict_parsing: bool = False) -> list[typing.Any]:
