@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import dataclasses
 import ipaddress
 from typing import Optional, TypeVar, Iterator
 import contextlib
@@ -12,6 +13,67 @@ import typing
 
 
 T = TypeVar("T")
+
+
+def check_type(value: typing.Any, type_hint: type[typing.Any]) -> bool:
+
+    # Some naive type checking. This is used for ensuring that data classes
+    # contain the expected types (via @strict_dataclass.
+    #
+    # That is most interesting, when we initialize the data class with
+    # data from an untrusted source (like elements from a JSON parser).
+
+    actual_type = typing.get_origin(type_hint)
+    if actual_type is None:
+        return isinstance(value, type_hint)
+
+    if actual_type is typing.Union:
+        args = typing.get_args(type_hint)
+        return any(check_type(value, a) for a in args)
+
+    if actual_type is list:
+        args = typing.get_args(type_hint)
+        (arg,) = args
+        return isinstance(value, list) and all(check_type(v, arg) for v in value)
+
+    if actual_type is dict:
+        args = typing.get_args(type_hint)
+        (arg_key, arg_val) = args
+        return isinstance(value, dict) and all(check_type(k, arg_key) and check_type(v, arg_val) for k, v in value.items())
+
+    if actual_type is tuple:
+        # tuple[int, ...] is not supported (yet).
+        args = typing.get_args(type_hint)
+        return isinstance(value, tuple) and len(value) == len(args) and all(check_type(value[i], args[i]) for i in range(len(value)))
+
+    return False
+
+
+TCallable = typing.TypeVar("TCallable", bound=typing.Callable[..., typing.Any])
+
+
+def strict_dataclass(cls: TCallable) -> TCallable:
+
+    init = getattr(cls, '__init__')
+
+    def wrapped_init(self, *args, **argv):  # type: ignore
+        init(self, *args, **argv)
+        for field in dataclasses.fields(self):
+            name = field.name
+            value = getattr(self, name)
+            type_hint = field.type
+            if not check_type(value, type_hint):
+                raise TypeError(f"Expected type '{type_hint}' for attribute '{name}' but received type '{type(value)}')")
+
+        # Normally, data classes support __post_init__(), which is called by __init__()
+        # already. Add a way for a @strict_dataclass to add additional validation *after*
+        # the original check.
+        _post_check = getattr(type(self), "_post_check", None)
+        if _post_check is not None:
+            _post_check(self)
+
+    setattr(cls, '__init__', wrapped_init)
+    return cls
 
 
 def str_to_list(input_str: str) -> list[int]:
@@ -57,12 +119,18 @@ class RangeList:
         return [initial[x] for x in sorted(applied) if x < len(initial)]
 
 
+@strict_dataclass
 @dataclass
 class IPRouteAddressInfoEntry:
     family: str
     local: str
 
+    def _post_check(self) -> None:
+        if not isinstance(self.family, str) or self.family not in ("inet", "inet6"):
+            raise ValueError("Invalid address family")
 
+
+@strict_dataclass
 @dataclass
 class IPRouteAddressEntry:
     ifindex: int
@@ -72,41 +140,135 @@ class IPRouteAddressEntry:
     address: str  # Ethernet address.
     addr_info: list[IPRouteAddressInfoEntry]
 
+    def has_carrier(self) -> bool:
+        return "NO-CARRIER" not in self.flags
 
-def ipa(host: host.Host) -> str:
-    return host.run("ip -json a").out
+
+def _parse_json_list(jstr: str, *, strict_parsing: bool = False) -> list[typing.Any]:
+    try:
+        lst = json.loads(jstr)
+    except ValueError:
+        if strict_parsing:
+            raise
+        return []
+
+    if not isinstance(lst, list):
+        try:
+            lst = list(lst)
+        except Exception:
+            if strict_parsing:
+                raise
+            return []
+
+    return typing.cast(list[typing.Any], lst)
 
 
-def ipa_to_entries(input: str) -> list[IPRouteAddressEntry]:
-    j = json.loads(input)
+def ip_addrs_parse(jstr: str, *, strict_parsing: bool = False, ifname: Optional[str] = None) -> list[IPRouteAddressEntry]:
     ret: list[IPRouteAddressEntry] = []
-    for e in j:
-        addr_infos = []
-        for addr in e["addr_info"]:
-            addr_infos.append(IPRouteAddressInfoEntry(addr["family"], addr["local"]))
+    for e in _parse_json_list(jstr, strict_parsing=strict_parsing):
+        try:
+            entry = IPRouteAddressEntry(
+                e["ifindex"],
+                e["ifname"],
+                e["flags"],
+                e["master"] if "master" in e else None,
+                e["address"],
+                [IPRouteAddressInfoEntry(addr["family"], addr["local"]) for addr in e["addr_info"]],
+            )
+        except (KeyError, ValueError, TypeError):
+            if strict_parsing:
+                raise
+            continue
 
-        master = e["master"] if "master" in e else None
-
-        ret.append(IPRouteAddressEntry(e["ifindex"], e["ifname"], e["flags"], master, e["address"], addr_infos))
+        if ifname is not None and entry.ifname != ifname:
+            continue
+        ret.append(entry)
     return ret
 
 
-def ipr(host: host.Host) -> str:
-    return host.run("ip -json r").out
+def ip_addrs(rsh: host.Host, *, strict_parsing: bool = False, ifname: Optional[str] = None) -> list[IPRouteAddressEntry]:
+    ret = rsh.run("ip -json addr")
+    if ret.returncode != 0:
+        if strict_parsing:
+            raise RuntimeError(f"calling ip-route on {rsh.hostname()} failed ({ret})")
+        return []
+
+    return ip_addrs_parse(ret.out, strict_parsing=strict_parsing, ifname=ifname)
 
 
+@strict_dataclass
+@dataclass
+class IPRouteLinkEntry:
+    ifindex: int
+    ifname: str
+
+
+def ip_links_parse(jstr: str, *, strict_parsing: bool = False, ifname: Optional[str] = None) -> list[IPRouteLinkEntry]:
+    ret: list[IPRouteLinkEntry] = []
+    for e in _parse_json_list(jstr, strict_parsing=strict_parsing):
+        try:
+            entry = IPRouteLinkEntry(
+                e["ifindex"],
+                e["ifname"],
+            )
+        except (KeyError, ValueError, TypeError):
+            if strict_parsing:
+                raise
+            continue
+
+        if ifname is not None and ifname != entry.ifname:
+            continue
+        ret.append(entry)
+    return ret
+
+
+def ip_links(rsh: host.Host, *, strict_parsing: bool = False, ifname: Optional[str] = None) -> list[IPRouteLinkEntry]:
+    # If @ifname is requested, we could issue a `ip -json link show $IFNAME`. However,
+    # that means we do different things for requesting one link vs. all links. That
+    # seems undesirable. Instead, in all cases fetch all links. Any filtering then happens
+    # in code that we control. Performance should not make a difference, since the JSON data
+    # is probably small anyway (compared to the overhead of invoking a shell command).
+    ret = rsh.run("ip -json link")
+    if ret.returncode != 0:
+        if strict_parsing:
+            raise RuntimeError(f"calling ip-link on {rsh.hostname()} failed ({ret})")
+        return []
+
+    return ip_links_parse(ret.out, strict_parsing=strict_parsing, ifname=ifname)
+
+
+@strict_dataclass
 @dataclass
 class IPRouteRouteEntry:
     dst: str
     dev: str
 
 
-def ipr_to_entries(input: str) -> list[IPRouteRouteEntry]:
-    j = json.loads(input)
+def ip_routes_parse(jstr: str, *, strict_parsing: bool = False) -> list[IPRouteRouteEntry]:
     ret: list[IPRouteRouteEntry] = []
-    for e in j:
-        ret.append(IPRouteRouteEntry(e["dst"], e["dev"]))
+    for e in _parse_json_list(jstr, strict_parsing=strict_parsing):
+        try:
+            entry = IPRouteRouteEntry(
+                e["dst"],
+                e["dev"],
+            )
+        except (KeyError, ValueError, TypeError):
+            if strict_parsing:
+                raise
+            continue
+
+        ret.append(entry)
     return ret
+
+
+def ip_routes(rsh: host.Host, *, strict_parsing: bool = False) -> list[IPRouteRouteEntry]:
+    ret = rsh.run("ip -json route")
+    if ret.returncode != 0:
+        if strict_parsing:
+            raise RuntimeError(f"calling ip-route on {rsh.hostname()} failed ({ret})")
+        return []
+
+    return ip_routes_parse(ret.out, strict_parsing=strict_parsing)
 
 
 def ip_range(start_addr: str, n_addrs: int) -> tuple[str, str]:
@@ -156,13 +318,8 @@ def ipaddr_norm(addr: str | bytes) -> Optional[str]:
     return socket.inet_ntop(family, a)
 
 
-def extract_interfaces(input: str) -> list[str]:
-    entries = ipa_to_entries(input)
-    return [x.ifname for x in entries]
-
-
 def find_port(host: host.Host, port_name: str) -> Optional[IPRouteAddressEntry]:
-    entries = ipa_to_entries(ipa(host))
+    entries = ip_addrs(host)
     for entry in entries:
         if entry.ifname == port_name:
             return entry
@@ -170,8 +327,7 @@ def find_port(host: host.Host, port_name: str) -> Optional[IPRouteAddressEntry]:
 
 
 def route_to_port(host: host.Host, route: str) -> Optional[str]:
-    entries = ipr_to_entries(ipr(host))
-    for e in entries:
+    for e in ip_routes(host):
         if e.dst == route:
             return e.dev
     return None
@@ -181,7 +337,7 @@ def port_to_ip(host: host.Host, port_name: str) -> Optional[str]:
     if port_name == "auto":
         port_name = get_auto_port(host)
 
-    entries = ipa_to_entries(ipa(host))
+    entries = ip_addrs(host)
     for entry in entries:
         if entry.ifname == port_name:
             for addr in entry.addr_info:
@@ -190,21 +346,30 @@ def port_to_ip(host: host.Host, port_name: str) -> Optional[str]:
     return None
 
 
-def carrier_no_addr(host: host.Host) -> list[IPRouteAddressEntry]:
-    def carrier_no_addr(intf: IPRouteAddressEntry) -> bool:
-        return len(intf.addr_info) == 0 and "NO-CARRIER" not in intf.flags
-
-    entries = ipa_to_entries(ipa(host))
-
-    return [x for x in entries if carrier_no_addr(x)]
-
-
 def get_auto_port(host: host.Host) -> str:
-    interfaces = carrier_no_addr(host)
+    def ipa_is_candidate(ipa: IPRouteAddressEntry) -> bool:
+        if not ipa.has_carrier():
+            # No carrier, this interface is not a candidate.
+            return False
+        if any(ai.family == 'inet' or (ai.family == 'inet6' and not ai.local.startswith("fe80:")) for ai in ipa.addr_info):
+            # We expect that there is no IP address. However, Ipv6 link local
+            # addresses may be configured (for example, if NetworkManager in
+            # the background tries to autoactivate a ipv6.method=auto profile).
+            return False
+        return True
+
+    interfaces = {ipa.ifname for ipa in ip_addrs(host) if ipa_is_candidate(ipa)}
     if len(interfaces) == 0:
         raise ValueError("No interfaces found for auto port")
-    else:
-        return interfaces[0].ifname
+
+    if len(interfaces) > 1:
+        # We hardcore a preference of commonly used interfaces by their
+        # name.
+        for ifname in ("ens12399", "ens12409"):
+            if ifname in interfaces:
+                return ifname
+
+    return next(iter(sorted(interfaces)))
 
 
 def iterate_ssh_keys() -> Iterator[tuple[str, str, str]]:

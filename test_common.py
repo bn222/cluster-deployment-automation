@@ -1,8 +1,12 @@
+import dataclasses
+import os
 import pathlib
 import pytest
-import os
+import typing
+
 
 import common
+import host
 
 
 def _read_file(filename: str) -> str:
@@ -80,3 +84,126 @@ def test_ip_address() -> None:
     assert common.ipaddr_norm(" 1::01  ") == "1::1"
     assert common.ipaddr_norm(b" 1::01  ") == "1::1"
     assert common.ipaddr_norm(b" 1::01  ") == "1::1"
+
+
+def test_strict_dataclass() -> None:
+    @common.strict_dataclass
+    @dataclasses.dataclass
+    class C2:
+        a: str
+        b: int
+        c: typing.Optional[str] = None
+
+    C2("a", 5)
+    C2("a", 5, None)
+    C2("a", 5, "")
+    with pytest.raises(TypeError):
+        C2("a", "5")  # type: ignore
+    with pytest.raises(TypeError):
+        C2(3, 5)  # type: ignore
+    with pytest.raises(TypeError):
+        C2("a", 5, [])  # type: ignore
+
+    @common.strict_dataclass
+    @dataclasses.dataclass
+    class C3:
+        a: typing.List[str]
+
+    C3([])
+    C3([""])
+    with pytest.raises(TypeError):
+        C3(1)  # type: ignore
+    with pytest.raises(TypeError):
+        C3([1])  # type: ignore
+    with pytest.raises(TypeError):
+        C3(None)  # type: ignore
+
+    @common.strict_dataclass
+    @dataclasses.dataclass
+    class C4:
+        a: typing.Optional[typing.List[str]]
+
+    C4(None)
+
+    @common.strict_dataclass
+    @dataclasses.dataclass
+    class C5:
+        a: typing.Optional[typing.List[typing.Dict[str, str]]] = None
+
+    C5(None)
+    C5([])
+    with pytest.raises(TypeError):
+        C5([1])  # type: ignore
+    C5([{}])
+    C5([{"a": "b"}])
+    C5([{"a": "b"}, {}])
+    C5([{"a": "b"}, {"c": "", "d": "x"}])
+    with pytest.raises(TypeError):
+        C5([{"a": None}])  # type: ignore
+
+    @common.strict_dataclass
+    @dataclasses.dataclass
+    class C6:
+        a: typing.Optional[typing.Tuple[str, str]] = None
+
+    C6()
+    C6(None)
+    C6(("a", "b"))
+    with pytest.raises(TypeError):
+        C6(1)  # type: ignore
+    with pytest.raises(TypeError):
+        C6(("a",))  # type: ignore
+    with pytest.raises(TypeError):
+        C6(("a", "b", "c"))  # type: ignore
+    with pytest.raises(TypeError):
+        C6(("a", 1))  # type: ignore
+
+    @common.strict_dataclass
+    @dataclasses.dataclass
+    class C7:
+        addr_info: typing.List[common.IPRouteAddressInfoEntry]
+
+        def _post_check(self) -> None:
+            pass
+
+    with pytest.raises(TypeError):
+        C7(None)  # type: ignore
+    C7([])
+    C7([common.IPRouteAddressInfoEntry('inet', '169.254.2.115')])
+    with pytest.raises(TypeError):
+        C7([common.IPRouteAddressInfoEntry('inet', '169.254.2.115'), None])  # type: ignore
+
+    @common.strict_dataclass
+    @dataclasses.dataclass
+    class C8:
+        a: str
+
+        def _post_check(self) -> None:
+            if self.a == "invalid":
+                raise ValueError("_post_check() failed")
+
+    with pytest.raises(TypeError):
+        C8(None)  # type: ignore
+    C8("hi")
+    with pytest.raises(ValueError):
+        C8("invalid")
+
+
+def test_ip_addrs() -> None:
+    # We expect to have at least one address configured on the system and that
+    # `ip -json addr` works. The unit test requires that.
+    assert common.ip_addrs(host.LocalHost())
+
+
+def test_ip_links() -> None:
+    links = common.ip_links(host.LocalHost())
+    assert links
+    assert [link.ifindex for link in links if link.ifname == "lo"] == [1]
+
+    assert [link.ifindex for link in common.ip_links(host.LocalHost(), ifname="lo")] == [1]
+
+
+def test_ip_routes() -> None:
+    # We expect to have at least one route configured on the system and that
+    # `ip -json route` works. The unit test requires that.
+    assert common.ip_routes(host.LocalHost())

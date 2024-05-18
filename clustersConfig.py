@@ -307,7 +307,7 @@ class ClustersConfig:
             logger.error(f"Not all master/worker IPs are in the reserved cluster IP range ({self.ip_range}).  Other hosts in the network might be offered those IPs via DHCP.")
 
     def validate_external_port(self) -> bool:
-        return host.LocalHost().port_exists(self.external_port)
+        return bool(common.ip_links(host.LocalHost(), ifname=self.external_port))
 
     def _apply_jinja(self, contents: str, cluster_name: str) -> str:
         def worker_number(a: int) -> str:

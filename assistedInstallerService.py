@@ -13,6 +13,7 @@ import requests
 from requests import get as get_url
 from logger import logger
 import host
+import common
 
 
 def load_url_or_file(url_or_file: str) -> str:
@@ -333,7 +334,7 @@ class AssistedInstallerService:
 
     def _ensure_libvirt_running(self) -> None:
         lh = host.LocalHost()
-        if all(x["ifname"] != "virbr0" for x in lh.all_ports()):
+        if not common.ip_links(lh, ifname="virbr0"):
             logger.info("Can't find virbr0. Trying to restart libvirt.")
             cmd = "systemctl start libvirtd"
             lh.run(cmd)
@@ -344,9 +345,8 @@ class AssistedInstallerService:
             # Need to find out if/how we can remove this to speed up.
             time.sleep(5)
 
-        if all(x["ifname"] != "virbr0" for x in lh.all_ports()):
-            logger.error("Can't find virbr0. Make sure that libvirtd is running.")
-            sys.exit(-1)
+        if not common.ip_links(lh, ifname="virbr0"):
+            logger.error_and_exit("Can't find virbr0. Make sure that libvirtd is running.")
 
     def wait_for_api(self) -> None:
         self._ensure_libvirt_running()
