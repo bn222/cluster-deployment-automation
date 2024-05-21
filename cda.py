@@ -4,7 +4,7 @@
 from assistedInstaller import AssistedClientAutomation
 from assistedInstallerService import AssistedInstallerService
 from clustersConfig import ClustersConfig
-from clusterDeployer import ClusterDeployer
+from clusterDeployer import ClusterDeployer, IsoDeployer
 from arguments import parse_args
 import argparse
 import host
@@ -13,15 +13,13 @@ from clusterSnapshotter import ClusterSnapshotter
 from virtualBridge import VirBridge
 
 
-def main_deploy(args: argparse.Namespace) -> None:
-    cc = ClustersConfig(args.config, args.worker_range)
-
+def main_deploy_openshift(cc: ClustersConfig, args: argparse.Namespace) -> None:
     # Make sure the local virtual bridge base configuration is correct.
     local_bridge = VirBridge(host.LocalHost(), cc.local_bridge_config)
     local_bridge.configure(api_port=None)
 
     # microshift does not use assisted installer so we don't need this check
-    if args.url == cc.ip_range[0] and not cc.kind == "microshift":
+    if args.url == cc.ip_range[0]:
         ais = AssistedInstallerService(cc.version, args.url, cc.proxy, cc.noproxy)
         ais.start()
     else:
@@ -45,6 +43,20 @@ def main_deploy(args: argparse.Namespace) -> None:
 
     if args.teardown_full and ais:
         ais.stop()
+
+
+def main_deploy_iso(cc: ClustersConfig, args: argparse.Namespace) -> None:
+    id = IsoDeployer(cc, args.steps)
+    id.deploy()
+
+
+def main_deploy(args: argparse.Namespace) -> None:
+    cc = ClustersConfig(args.config, args.worker_range)
+
+    if cc.kind == "openshift":
+        main_deploy_openshift(cc, args)
+    else:
+        main_deploy_iso(cc, args)
 
 
 def main_snapshot(args: argparse.Namespace) -> None:

@@ -1,9 +1,13 @@
 from dataclasses import dataclass
 import dataclasses
 import ipaddress
-from typing import Optional, TypeVar, Iterator
+from typing import Optional, TypeVar, Iterator, Type
 import contextlib
+from types import TracebackType
+import http.server
+from multiprocessing import Process
 import host
+from logger import logger
 import json
 import os
 import glob
@@ -142,6 +146,49 @@ class IPRouteAddressEntry:
 
     def has_carrier(self) -> bool:
         return "NO-CARRIER" not in self.flags
+
+class HttpServerManager:
+    def __init__(self, path: str, port: int = 8000):
+        self.path = path
+        self.port = port
+        self.process: Optional[Process] = None
+
+    def __enter__(self) -> 'HttpServerManager':
+        self.start_server()
+        return self
+
+    def __exit__(self, exc_type: Optional[Type[BaseException]], exc_value: Optional[BaseException], traceback: Optional[TracebackType]) -> None:
+        self.stop_server()
+
+    def start_server(self) -> None:
+        def target() -> None:
+            os.chdir(self.path)
+            server_address = ('', self.port)
+            httpd = http.server.HTTPServer(server_address, http.server.SimpleHTTPRequestHandler)
+            httpd.serve_forever()
+
+        self.port = self.find_open_port()
+        self.process = Process(target=target)
+        self.process.start()
+        logger.info(f"Http Server started on port {self.port}")
+
+    def stop_server(self) -> None:
+        if self.process:
+            self.process.terminate()
+            self.process.join()
+            logger.info("Http Server stopped")
+
+    def port_is_in_use(self, port: int) -> bool:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            return s.connect_ex(('localhost', port)) == 0
+
+    def find_open_port(self) -> int:
+        port = self.port
+        while self.port_is_in_use(port):
+            logger.debug(f"port {self.port} in use, trying port + 1")
+            port += 1
+        return port
+
 
 
 def _parse_json_list(jstr: str, *, strict_parsing: bool = False) -> list[typing.Any]:

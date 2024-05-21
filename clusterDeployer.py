@@ -23,7 +23,8 @@ from extraConfigRunner import ExtraConfigRunner
 from clusterHost import ClusterHost
 import dnsutil
 from virshPool import VirshPool
-from arguments import WORKERS_STEP, MASTERS_STEP, POST_STEP
+from arguments import PRE_STEP, WORKERS_STEP, MASTERS_STEP, POST_STEP
+import isoCluster
 
 
 def match_to_proper_version_format(version_cluster_config: str) -> str:
@@ -196,7 +197,7 @@ class ClusterDeployer:
 
     def deploy(self) -> None:
         if self._cc.masters:
-            if "pre" in self.steps:
+            if PRE_STEP in self.steps:
                 self._preconfig()
             else:
                 logger.info("Skipping pre configuration.")
@@ -225,7 +226,6 @@ class ClusterDeployer:
                 microshift.deploy(self._cc.fullConfig["name"], self._cc.masters[0], self._cc.external_port, version)
             else:
                 logger.error_and_exit("Masters must be of length one for deploying microshift")
-
         if POST_STEP in self.steps:
             self._postconfig()
             cmd = "apply -f manifests/monitoring-config.yaml"
@@ -622,3 +622,27 @@ class ClusterDeployer:
                     logger.info(e)
 
             time.sleep(30)
+
+
+class IsoDeployer:
+    def __init__(self, cc: ClustersConfig, steps: list[str]):
+        self.steps = steps
+        self._cc = cc
+        self._extra_config = ExtraConfigRunner(cc)
+
+        if len(self._cc.masters) != 1:
+            logger.error("Masters must be of length one for deploying from iso")
+            sys.exit(-1)
+
+        self._master = self._cc.masters[0]
+        if self._master.mac is None:
+            logger.error_and_exit(f"No MAC address provided for cluster {self._cc.name}, exiting")
+        if self._master.ip is None:
+            logger.error_and_exit(f"No IP address provided for cluster {self._cc.name}, exiting")
+        if self._master.name is None:
+            logger.error_and_exit(f"No name provided for cluster {self._cc.name}, exiting")
+        if not self._cc.network_api_port or self._cc.network_api_port == "auto":
+            logger.error_and_exit(f"Network API port with connection to {self._cc.name} must be specified, exiting")
+
+    def deploy(self) -> None:
+        isoCluster.IPUIsoBoot(self._cc, self._master, self._cc.install_iso)

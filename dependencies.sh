@@ -28,6 +28,7 @@ dnf install -y \
         cockpit-composer \
         composer-cli \
         coreos-installer \
+        dhcp-server \
         dnsmasq \
         firewalld \
         git \
