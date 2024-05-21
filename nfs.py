@@ -5,6 +5,7 @@ from logger import logger
 from typing import Optional
 import sys
 import threading
+import time
 
 
 """
@@ -44,7 +45,14 @@ class NFS:
 
     def _export_fs(self) -> None:
         self._host.run("systemctl enable nfs-server")
-        self._host.run_or_die("systemctl restart nfs-server")
+        started_at = time.monotonic()
+        while True:
+            ret = self._host.run("systemctl restart nfs-server")
+            if ret.success():
+                break
+            if time.monotonic() > started_at + 60:
+                logger.error_and_exit(f"failed to `systemctl restart nfs-server`: {ret}")
+            time.sleep(1)
 
     def _ip(self) -> Optional[str]:
         return common.port_to_ip(self._host, self._port)
