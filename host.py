@@ -278,7 +278,7 @@ class Host:
                         logger.debug(f"{type(e).__name__} - {str(e)} for login {login.debug_details()} on host {self._hostname}")
                     time.sleep(10)
                 except Exception as e:
-                    logger.exception(f"SSH connect, login {login.debug_details()} user {login._username} on host {self._host}: {type(e).__name__} - {str(e)}")
+                    logger.exception(f"SSH connect, login {login.debug_details()} user {login._username} on host {self._hostname}: {type(e).__name__} - {str(e)}")
                     raise e
 
         raise ConnectionError(f"Failed to establish an SSH connection to {self._hostname}")

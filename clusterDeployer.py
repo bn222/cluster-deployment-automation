@@ -4,7 +4,7 @@ import sys
 import time
 import json
 import shutil
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Optional
 from typing import Generator
 from typing import Union
@@ -624,7 +624,7 @@ class ClusterDeployer:
             time.sleep(30)
 
 
-class IsoDeployer:
+class IsoDeployer(ClusterDeployer):
     def __init__(self, cc: ClustersConfig, steps: list[str]):
         self.steps = steps
         self._cc = cc
@@ -633,8 +633,17 @@ class IsoDeployer:
         if len(self._cc.masters) != 1:
             logger.error("Masters must be of length one for deploying from iso")
             sys.exit(-1)
-
         self._master = self._cc.masters[0]
+
+        def empty() -> Future[Optional[host.Result]]:
+            f: Future[Optional[host.Result]] = Future()
+            f.set_result(None)
+            return f
+
+        self._futures = {self._master.name: empty()}
+        self._validate()
+
+    def _validate(self) -> None:
         if self._master.mac is None:
             logger.error_and_exit(f"No MAC address provided for cluster {self._cc.name}, exiting")
         if self._master.ip is None:
@@ -645,4 +654,18 @@ class IsoDeployer:
             logger.error_and_exit(f"Network API port with connection to {self._cc.name} must be specified, exiting")
 
     def deploy(self) -> None:
-        isoCluster.IPUIsoBoot(self._cc, self._master, self._cc.install_iso)
+        if self._cc.masters:
+            if PRE_STEP in self.steps:
+                self._preconfig()
+            else:
+                logger.info("Skipping pre configuration.")
+
+            if MASTERS_STEP in self.steps:
+                isoCluster.IPUIsoBoot(self._cc, self._master, self._cc.install_iso)
+            else:
+                logger.info("Skipping master creation.")
+
+        if POST_STEP in self.steps:
+            self._postconfig()
+        else:
+            logger.info("Skipping post configuration.")
