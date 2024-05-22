@@ -4,12 +4,15 @@ import common
 from logger import logger
 from typing import Optional
 import sys
+import threading
 
 
 """
 NFS is needed in many cases to network mount the folder that contains
 ISO files such that Red Fish Virtual Media managers can load the image.
 """
+
+_lock = threading.Lock()
 
 
 class NFS:
@@ -19,16 +22,17 @@ class NFS:
         pass
 
     def host_file(self, file: str) -> str:
-        dir_name = os.path.dirname(file)
-        if not self._exists(dir_name):
-            self._add(dir_name)
-        self._export_fs()
-        ip = self._ip()
-        if ip is None:
-            logger.error(f"Failed to get ip when hosting file {file} on nfs")
-            sys.exit(-1)
-        ret = f"{self._ip()}:{file}"
-        return ret
+        with _lock:
+            dir_name = os.path.dirname(file)
+            if not self._exists(dir_name):
+                self._add(dir_name)
+            self._export_fs()
+            ip = self._ip()
+            if ip is None:
+                logger.error(f"Failed to get ip when hosting file {file} on nfs")
+                sys.exit(-1)
+            ret = f"{self._ip()}:{file}"
+            return ret
 
     def _exists(self, dir_name: str) -> bool:
         exports = self._host.read_file("/etc/exports")
