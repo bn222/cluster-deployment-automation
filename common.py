@@ -460,3 +460,20 @@ def atomic_write(
                 os.unlink(tmp)
             except IOError:
                 pass
+
+
+def build_sriov_network_operator_check_permissions() -> bool:
+    # To build sriov_network_operator, we must be able to pull build images
+    # from registry.ci.ipenshift.org. See [1].
+    #
+    # For that, you must get a token from [2] and issue `podman login
+    # registry.ci.openshift.org`.
+    #
+    # This function tries to fetch such an image, to determine whether we have
+    # permissions.
+    #
+    # [1] https://github.com/openshift/sriov-network-operator/blob/34f3e5f934ca72eae57667d7a9185f5af47aea3a/Dockerfile.rhel7#L1
+    # [2] https://oauth-openshift.apps.ci.l2s4.p1.openshiftapps.com/oauth/token/request
+    rsh = host.LocalHost()
+    ret = rsh.run("podman pull registry.ci.openshift.org/ocp/builder:rhel-9-golang-1.21-openshift-4.16")
+    return ret.success()

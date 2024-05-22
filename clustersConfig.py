@@ -51,6 +51,13 @@ class ExtraConfigArgs:
     # install.
     sriov_network_operator_local: bool = False
 
+    def pre_check(self) -> None:
+        if self.sriov_network_operator_local:
+            if self.name != "sriov_network_operator":
+                raise ValueError("\"sriov_network_operator_local\" can only be set to TRUE for name=\"sriov_network_operator\"")
+            if not common.build_sriov_network_operator_check_permissions():
+                raise ValueError("Building sriov_network_operator requires permissions to fetch. Get a token from https://oauth-openshift.apps.ci.l2s4.p1.openshiftapps.com/oauth/token/request and issue `podman login registry.ci.openshift.org`")
+
 
 @dataclass
 class NodeConfig:
@@ -258,6 +265,11 @@ class ClustersConfig:
             self.preconfig.append(ExtraConfigArgs(**c))
         for c in cc["postconfig"]:
             self.postconfig.append(ExtraConfigArgs(**c))
+
+        for c in self.preconfig:
+            c.pre_check()
+        for c in self.postconfig:
+            c.pre_check()
 
     def get_last_ip(self) -> str:
         hostconn = host.LocalHost()
