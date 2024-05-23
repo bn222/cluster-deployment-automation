@@ -24,13 +24,6 @@ def main_deploy(args: argparse.Namespace) -> None:
     if args.url == cc.ip_range[0] and not cc.kind == "microshift":
         ais = AssistedInstallerService(cc.version, args.url, cc.proxy, cc.noproxy)
         ais.start()
-        # workaround, this will still install 4.14, but AI will think
-        # it is 4.13 (see also workaround when setting up versions)
-        if cc.version[: len("4.14")] == "4.14":
-            logger.warning("Applying workaround for assisted installer issue")
-            logger.warning("Will pretend to install 4.13, but using 4.14 pullsec")
-            logger.warning("Ignore all output from Assisted that mentions 4.13")
-            cc.version = "4.13.0-nightly"
     else:
         logger.info(f"Will use Assisted Installer running at {args.url}")
         ais = None
@@ -45,7 +38,8 @@ def main_deploy(args: argparse.Namespace) -> None:
     cd = ClusterDeployer(cc, ai, args.steps, args.secrets_path)
 
     if args.teardown or args.teardown_full:
-        cd.teardown()
+        cd.teardown_workers()
+        cd.teardown_masters()
     else:
         cd.deploy()
 

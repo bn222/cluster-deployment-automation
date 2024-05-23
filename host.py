@@ -4,7 +4,6 @@ import io
 import os
 import re
 import time
-import json
 import shlex
 import shutil
 import sys
@@ -35,6 +34,9 @@ class Result:
 
     def __str__(self) -> str:
         return f"(returncode: {self.returncode}, error: {self.err})"
+
+    def success(self) -> bool:
+        return self.returncode == 0
 
 
 class Login(ABC):
@@ -441,24 +443,6 @@ class Host:
         ret = self.run(f"virsh dominfo {name}", logging.DEBUG)
         return not ret.returncode and state_running(ret.out)
 
-    def ipa(self) -> Any:
-        return json.loads(self.run("ip -json a", logging.DEBUG).out)
-
-    def ipr(self) -> Any:
-        return json.loads(self.run("ip -json r", logging.DEBUG).out)
-
-    def all_ports(self) -> Any:
-        return json.loads(self.run("ip -json link", logging.DEBUG).out)
-
-    def port_exists(self, port_name: str) -> bool:
-        return self.run(f"ip link show {port_name}").returncode == 0
-
-    def port_has_carrier(self, port_name: str) -> bool:
-        ports = {x["ifname"]: x for x in self.ipa()}
-        if port_name not in ports:
-            return False
-        return "NO-CARRIER" not in ports[port_name]["flags"]
-
     def write(self, fn: str, contents: str) -> None:
         if self.is_localhost():
             with open(fn, "w") as f:
@@ -491,6 +475,15 @@ class Host:
 
     def hostname(self) -> str:
         return self._hostname
+
+    def home_dir(self, *path_components: str) -> str:
+        ret = self.run("bash -c 'echo -n ~'")
+        path = ret.out
+        if not ret.success() or not path or path[0] != "/":
+            raise RuntimeError("Failure getting home directory")
+        if path_components:
+            path = os.path.join(path, *path_components)
+        return path
 
     def exists(self, path: str) -> bool:
         return self.run(f"stat {path}", logging.DEBUG).returncode == 0

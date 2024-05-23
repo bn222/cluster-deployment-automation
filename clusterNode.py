@@ -78,7 +78,7 @@ class ClusterNode:
 
     def health_check(self) -> None:
         # Check that the boot stage completed correctly.
-        if self.future.done():
+        if self.get_future_done():
             result = self.future.result()
             if result is not None and result.returncode != 0:
                 logger.error_and_exit(f"Failed to provision node {self.config.name}: {result.err}")
@@ -90,6 +90,15 @@ class ClusterNode:
             logger.error(f"Required rpm '{p}' is not installed")
         if any(missing_packages):
             sys.exit(-1)
+
+    def get_future_done(self) -> bool:
+        state = self.future.done()
+        if state is True:
+            exception = self.future.exception()
+            if exception is not None:
+                raise Exception(f"Got exception from future {exception}")
+
+        return state
 
 
 class VmClusterNode(ClusterNode):
@@ -161,10 +170,10 @@ class VmClusterNode(ClusterNode):
             # If the future is done an error probably happened.  Declare
             # successful "boot".  The real status is checked in the
             # health_check stage.
-            if self.future.done():
+            if self.get_future_done():
                 return True
             return self.hostconn.vm_is_running(self.config.name)
-        return self.future.done()
+        return self.get_future_done()
 
     def post_boot(self, desired_ip_range: tuple[str, str]) -> bool:
         if not self.install_wait:
@@ -211,14 +220,13 @@ class X86ClusterNode(ClusterNode):
         self.future = executor.submit(self._boot_iso_x86, iso_or_image_path)
 
     def has_booted(self) -> bool:
-        return self.future.done()
+        return self.get_future_done()
 
     def post_boot(self, desired_ip_range: tuple[str, str]) -> bool:
         rh = host.RemoteHost(self.config.node)
         rh.ssh_connect("core")
-        ipr_entries = common.ipa_to_entries(rh.run("ip -json a").out)
         ips = []
-        for ipr in ipr_entries:
+        for ipr in common.ip_addrs(rh):
             for addr_info in ipr.addr_info:
                 if addr_info.family != "inet":
                     continue
@@ -283,8 +291,11 @@ class BFClusterNode(ClusterNode):
         ip = None
         tries = 0
         while True:
-            ipa = h.run_on_bf("ip -json a").out
-            detected = common.ipa_to_entries(ipa)
+            # FIXME: instead of calling h.run_on_bf(), we should be able to
+            # have a host.Host instace where h.run() does the right thing. With
+            # such abstraction, we could call common.ip_addrs(h).
+            ipa = h.run_on_bf("ip -json addr").out
+            detected = common.ip_addrs_parse(ipa)
             found = [e for e in detected if e.ifname in bf_interfaces]
             if len(found) != 1:
                 logger.error(f"Failed to find expected number of interfaces on bf {self.config.node}")
@@ -313,7 +324,7 @@ class BFClusterNode(ClusterNode):
         self.future = executor.submit(self._boot_iso_bf, iso_or_image_path)
 
     def has_booted(self) -> bool:
-        return self.future.done()
+        return self.get_future_done()
 
     def post_boot(self, desired_ip_range: tuple[str, str]) -> bool:
         result: Optional[host.Result] = self.future.result()

@@ -7,13 +7,13 @@ import re
 import filecmp
 from typing import Optional
 from typing import Union
-from typing import Any
 from typing import Sequence
 import yaml
 import requests
 from requests import get as get_url
 from logger import logger
 import host
+import common
 
 
 def load_url_or_file(url_or_file: str) -> str:
@@ -133,14 +133,14 @@ class AssistedInstallerService:
         return y
 
     def prep_version(self, version: str) -> dict[str, Union[str, Sequence[str]]]:
-        if re.search(r'4\.12\.[0-9]+', version):
-            # Note how 4.12.0 has the -multi suffix because AI requires that
-            # for 4.12. CDA hides this and simply expect 4.12.0 from the user
-            # since that follows the same versioning scheme
+        # Note how 4.12.0 has the -multi suffix because AI requires that
+        # for 4.12. CDA hides this and simply expect 4.12.0 from the user
+        # since that follows the same versioning scheme
+        if re.search(r'4\.12\.0-ec.[0-9]+', version):
             ret = {
-                'openshift_version': f'{version}',
+                'openshift_version': '4.12-multi',
                 'cpu_architectures': ['x86_64', 'arm64', 'ppc64le', 's390x'],
-                'url': self.get_normal_pullspec(version.rstrip("-multi")),
+                'url': self.get_normal_pullspec(version),
                 'version': version,
             }
         elif re.search(r'4\.12\.0-nightly', version):
@@ -148,6 +148,13 @@ class AssistedInstallerService:
                 'openshift_version': '4.12-multi',
                 'cpu_architectures': ['x86_64', 'arm64', 'ppc64le', 's390x'],
                 'url': self.get_nightly_pullspec(version),
+                'version': version,
+            }
+        elif re.search(r'4\.12\.[0-9]+', version):
+            ret = {
+                'openshift_version': f'{version}',
+                'cpu_architectures': ['x86_64', 'arm64', 'ppc64le', 's390x'],
+                'url': self.get_normal_pullspec(version.rstrip("-multi")),
                 'version': version,
             }
         elif re.search(r'4\.13\.0-ec.[0-9]+', version):
@@ -172,34 +179,67 @@ class AssistedInstallerService:
                 'version': version,
             }
         elif re.search(r'4\.14\.0-ec.[0-9]+', version):
-            # workaround: if openshift_version == 4.14-multi, and
-            # version == "4.14.0" nightly, it errors out. Instead
-            # pretend that we are installing 4.13, but use the 4.14
-            # pullspec
-            wa_version = version.replace("4.14", "4.13")
             ret = {
-                'openshift_version': '4.13-multi',
+                'openshift_version': '4.14-multi',
                 'cpu_architectures': ['x86_64', 'arm64', 'ppc64le', 's390x'],
                 'url': self.get_normal_pullspec(version),
-                'version': wa_version,
+                'version': version,
             }
         elif re.search(r'4\.14\.0-nightly', version):
-            wa_version = "4.13.0-nighty"
-
             ret = {
-                'openshift_version': '4.13-multi',
+                'openshift_version': '4.14-multi',
                 'cpu_architectures': ['x86_64', 'arm64', 'ppc64le', 's390x'],
                 'url': self.get_nightly_pullspec(version),
-                'version': wa_version,
+                'version': version,
+            }
+        elif re.search(r'4\.14\.[0-9]+', version):
+            ret = {
+                'openshift_version': '4.14-multi',
+                'cpu_architectures': ['x86_64', 'arm64', 'ppc64le', 's390x'],
+                'url': self.get_normal_pullspec(version),
+                'version': version,
+            }
+        elif re.search(r'4\.15\.0-ec.[0-9]+', version):
+            ret = {
+                'openshift_version': '4.15-multi',
+                'cpu_architectures': ['x86_64', 'arm64', 'ppc64le', 's390x'],
+                'url': self.get_normal_pullspec(version),
+                'version': version,
             }
         elif re.search(r'4\.15\.0-nightly', version):
-            wa_version = "4.15.0-nighty"
-
             ret = {
                 'openshift_version': '4.15-multi',
                 'cpu_architectures': ['x86_64', 'arm64', 'ppc64le', 's390x'],
                 'url': self.get_nightly_pullspec(version),
-                'version': wa_version,
+                'version': version,
+            }
+        elif re.search(r'4\.15\.[0-9]+', version):
+            ret = {
+                'openshift_version': '4.15-multi',
+                'cpu_architectures': ['x86_64', 'arm64', 'ppc64le', 's390x'],
+                'url': self.get_normal_pullspec(version),
+                'version': version,
+            }
+        elif re.search(r'4\.16\.0-ec.[0-9]+', version):
+            ret = {
+                'openshift_version': '4.16-multi',
+                'cpu_architectures': ['x86_64', 'arm64', 'ppc64le', 's390x'],
+                'url': self.get_normal_pullspec(version),
+                'version': version,
+            }
+        elif re.search(r'4\.16\.0-nightly', version):
+            ret = {
+                'openshift_version': '4.16-multi',
+                'cpu_architectures': ['x86_64', 'arm64', 'ppc64le', 's390x'],
+                'url': self.get_nightly_pullspec(version),
+                'version': version,
+            }
+        elif re.search(r'4\.16\.[0-9]+', version):
+            ret = {
+                'openshift_version': '4.16-multi',
+                'cpu_architectures': ['x86_64', 'arm64', 'ppc64le', 's390x'],
+                'url': self.get_normal_pullspec(version),
+                'version': version,
             }
         else:
             logger.error(f"Unknown version {version}")
@@ -228,7 +268,7 @@ class AssistedInstallerService:
     def get_normal_pullspec(self, version: str) -> str:
         return f"quay.io/openshift-release-dev/ocp-release:{version}-multi"
 
-    def find_pod(self, name: str) -> Optional[Any]:
+    def find_pod(self, name: str) -> Optional[dict[str, str]]:
         lh = host.LocalHost()
         result = lh.run("podman pod ps --format json")
         if result.err:
@@ -282,6 +322,7 @@ class AssistedInstallerService:
             self.stop()
 
         if not self.pod_running():
+            logger.info("Starting assisted-installer.")
             shutil.copy(self._config_map_path(), self._last_run_cm())
             shutil.copy(self._pod_persistent_path(), self._last_run_pod())
             self._play_kube(self._last_run_cm(), self._last_run_pod())
@@ -293,7 +334,7 @@ class AssistedInstallerService:
 
     def _ensure_libvirt_running(self) -> None:
         lh = host.LocalHost()
-        if all(x["ifname"] != "virbr0" for x in lh.all_ports()):
+        if not common.ip_links(lh, ifname="virbr0"):
             logger.info("Can't find virbr0. Trying to restart libvirt.")
             cmd = "systemctl start libvirtd"
             lh.run(cmd)
@@ -304,9 +345,8 @@ class AssistedInstallerService:
             # Need to find out if/how we can remove this to speed up.
             time.sleep(5)
 
-        if all(x["ifname"] != "virbr0" for x in lh.all_ports()):
-            logger.error("Can't find virbr0. Make sure that libvirtd is running.")
-            sys.exit(-1)
+        if not common.ip_links(lh, ifname="virbr0"):
+            logger.error_and_exit("Can't find virbr0. Make sure that libvirtd is running.")
 
     def wait_for_api(self) -> None:
         self._ensure_libvirt_running()
@@ -326,13 +366,27 @@ class AssistedInstallerService:
             time.sleep(2)
 
     def stop(self) -> None:
+        if not self.pod_running():
+            return
+
+        name = 'assisted-installer'
+        logger.info(f"Tearing down {name}.")
+
+        pod_yml = self._pod_persistent_path()
+        if os.path.exists(self._last_run_pod()):
+            pod_yml = self._last_run_pod()
+
         lh = host.LocalHost()
-        ret = lh.run("podman pod ps --format json")
-        pod_name = "assisted-installer"
-        target = [x for x in json.loads(ret.out) if x["Name"] == pod_name]
-        if target:
-            logger.info(f"Stopping and removing {pod_name}")
-            lh.run(f"podman pod rm -f {pod_name}")
+
+        ret = lh.run(f"podman kube down --force {pod_yml}")
+        if ret.returncode:
+            # Older podman may not support 'down' or '--force'.
+            if any(x in ret.err for x in ['unrecognized', 'unknown']):
+                logger.warning("podman kube down --force is not supported. Persistent volumes will remain.")
+                ret = lh.run(f"podman pod rm -f {name}")
+
+        if ret.returncode:
+            logger.error(f"Failed to teardown {name}: {ret.err}")
 
     def start(self, force: bool = False) -> None:
         self._configure()

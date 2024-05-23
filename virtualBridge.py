@@ -1,9 +1,12 @@
 import os
 import re
-import sys
 import time
-from logger import logger
+import json
+
 from typing import Optional
+import xml.etree.ElementTree as et
+from pathlib import Path
+from logger import logger
 
 import common
 import host
@@ -34,40 +37,71 @@ class VirBridge:
         self.hostconn = h
         self.config = config
 
-    def setup_dhcp_entry(self, cfg: NodeConfig) -> None:
-        if cfg.ip is None:
-            logger.error_and_exit(f"Missing IP for node {cfg.name}")
-        ip = cfg.ip
-        mac = cfg.mac
-        name = cfg.name
-        # If adding a worker node fails, one might want to retry w/o tearing down
-        # the whole cluster. In that case, the DHCP entry might already be present,
-        # with wrong mac -> remove it
+    def setup_dhcp_entries(self, vms: list[NodeConfig]) -> None:
+        # DHCP entries should have been removed during teardown.
+        # However, leases sometimes came back.
+        self.remove_dhcp_entries(vms)
+        for cfg in vms:
+            if cfg.ip is None:
+                logger.error_and_exit(f"Missing IP for node {cfg.name}")
+            ip = cfg.ip
+            mac = cfg.mac
+            name = cfg.name
 
-        cmd = "virsh net-dumpxml default"
-        ret = self.hostconn.run_or_die(cmd)
-        if f"'{name}'" in ret.out:
-            logger.info(f"{name} already configured as static DHCP entry - removing before adding back with proper configuration")
-            host_xml = f"<host name='{name}'/>"
-            cmd = f"virsh net-update default delete ip-dhcp-host \"{host_xml}\" --live --config"
+            host_xml = f"<host mac='{mac}' name='{name}' ip='{ip}'/>"
+            logger.info(f"Creating static DHCP entry for VM {name}, ip {ip} mac {mac}")
+            cmd = f"virsh net-update default add ip-dhcp-host \"{host_xml}\" --live --config"
             self.hostconn.run_or_die(cmd)
 
-        cmd = "virsh net-dhcp-leases default"
-        ret = self.hostconn.run(cmd)
-        # Look for "{name} " in the output. The space is intended to differentiate between "bm-worker-2 " and e.g. "bm-worker-20"
-        if f"{name} " in ret.out:
-            logger.error(f"Error: {name} found in dhcp leases")
-            logger.error("To fix this, run")
-            logger.error("\tvirsh net-destroy default")
-            logger.error("\tRemove wrong entries from /var/lib/libvirt/dnsmasq/virbr0.status")
-            logger.error("\tvirsh net-start default")
-            logger.error("\tsystemctl restart libvirt")
-            sys.exit(-1)
+    def remove_dhcp_entries(self, vms: list[NodeConfig]) -> None:
+        def filter_dhcp_leases(j: list[dict[str, str]], removed_macs: list[str], names: list[str]) -> list[dict[str, str]]:
+            filtered = []
+            for entry in j:
+                if entry["mac-address"] in removed_macs:
+                    logger.info(f'Removed host with mac {entry["mac-address"]}')
+                    continue
+                if "hostname" in entry and entry["hostname"] in names:
+                    logger.info(f'Removed host with name {entry["hostname"]}')
+                    continue
+                logger.info(f'Kept entry {entry}')
+                filtered.append(entry)
+            return filtered
 
-        host_xml = f"<host mac='{mac}' name='{name}' ip='{ip}'/>"
-        logger.info(f"Creating static DHCP entry for VM {name}, ip {ip} mac {mac}")
-        cmd = f"virsh net-update default add ip-dhcp-host \"{host_xml}\" --live --config"
-        self.hostconn.run_or_die(cmd)
+        xml_str = self.hostconn.run("virsh net-dumpxml default").out
+        q = et.fromstring(xml_str)
+        removed_macs = []  # type: list[str]
+        names = [vm.name for vm in vms]
+        ips = [vm.ip for vm in vms]
+        ip_tree = next((it for it in q.iter("ip")), et.Element(''))
+        dhcp = next((it for it in ip_tree.iter("dhcp")), et.Element(''))
+        for e in dhcp:
+            if e.get('name') in names or e.get('ip') in ips:
+                # For all dhcp entries, check whether the name or the ip has been assigned to one of our "vms", and remove it if it's the case.
+                mac = e.attrib["mac"]
+                name = e.attrib["name"]
+                ip = e.attrib["ip"]
+                pre = "virsh net-update default delete ip-dhcp-host"
+                cmd = f"{pre} \"<host mac='{mac}' name='{name}' ip='{ip}'/>\" --live --config"
+                logger.info(self.hostconn.run(cmd))
+                removed_macs.append(mac)
+
+        fn = "/var/lib/libvirt/dnsmasq/virbr0.status"
+        p = Path(fn)
+        with p.open() as f:
+            contents = f.read()
+
+        if contents:
+            j = json.loads(contents)
+            names = [vm.name for vm in vms]
+            logger.info(f'Cleaning up {fn}')
+            logger.info(f'removing hosts with mac in {removed_macs} or name in {names}')
+            filtered = filter_dhcp_leases(j, removed_macs, names)
+            logger.info(self.hostconn.run("virsh net-destroy default"))
+
+            with p.open("w") as f:
+                f.write(json.dumps(filtered, indent=4))
+            logger.info(self.hostconn.run("virsh net-start default"))
+            self._restart()
 
     def _ensure_started(self, bridge_xml: str, api_port: Optional[str]) -> None:
         cmd = "virsh net-destroy default"
@@ -140,18 +174,19 @@ class VirBridge:
         needs_reconfigure = False
 
         expected_dhcp_range = bridge_dhcp_range_str(self.config.dynamic_ip_range)
-        if expected_dhcp_range not in ret.out:
-            needs_reconfigure = True
 
         if not expected_dhcp_range and "dhcp" in ret.out:
+            logger.info("Bridge needs to be reconfigured: unexpected dhcp range present")
             needs_reconfigure = True
 
         # Make sure STP is off on the virtual bridge.
         if "stp='off'" not in ret.out:
+            logger.info("Bridge needs to be reconfigured: stp enabled")
             needs_reconfigure = True
 
         # Make sure the correct bridge IP is configured.
         if bridge_ip_address_str(self.config.ip, self.config.mask) not in ret.out:
+            logger.info("Bridge needs to be reconfigured: unexpected bridge IP")
             needs_reconfigure = True
 
         if needs_reconfigure:
@@ -172,6 +207,26 @@ class VirBridge:
             # Not sure why/whether this is needed. But we saw failures w/o it.
             # We need to investigate how to remove the sleep to speed up
             time.sleep(5)
+
+        # Reconfiguring bridge by deleting and recreating it causes existing bridge configuration (dhcp entries, bridge masters...) to get lost.
+        # The dynamic range might change if we add workers. Update dynamic range ... dynamically, without restarting bridge, to avoid
+        # losing existing bridge config.
+
+        # We can't modify the dhcp range, but we can delete/add it back. First delete it.
+        range_elem = None
+        xml_str = ""
+        if expected_dhcp_range not in ret.out:
+            tree = et.fromstring(ret.out)
+            range_elem = next((it for it in tree.iter('range')), et.Element(''))
+            for attr in range_elem.attrib:
+                xml_str = xml_str + f"{attr}='{range_elem.attrib[attr]}' "
+            if range_elem.tag:
+                xml_str = f"\"<range {xml_str}/>\""
+                cmd = f"virsh net-update default delete ip-dhcp-range {xml_str} --live --config"
+                self.hostconn.run_or_die(cmd)
+
+            cmd = f"virsh net-update default add ip-dhcp-range \"{expected_dhcp_range}\" --live --config"
+            self.hostconn.run_or_die(cmd)
 
     def eth_address(self) -> str:
         max_tries = 3

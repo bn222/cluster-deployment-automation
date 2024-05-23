@@ -3,7 +3,9 @@ import os
 import io
 import sys
 import re
+import ipaddress
 from typing import Optional
+import xml.etree.ElementTree as et
 import jinja2
 from yaml import safe_load
 import host
@@ -35,6 +37,26 @@ class ExtraConfigArgs:
     # Custom OVN build extra configs:
     # Time to wait for the builders to roll out.
     custom_ovn_build_timeout: str = "20m"
+
+    # With "sriov_network_operator", if true build the container images locally
+    # and push them to the internal container registry of openshift.
+    #
+    # You will need authentication for fetching build containers.
+    # Get the login token from [1]. Then `podman login registry.ci.openshift.org`
+    # or create "$XDG_RUNTIME_DIR/containers/auth.json".
+    # [1] https://oauth-openshift.apps.ci.l2s4.p1.openshiftapps.com/oauth/token/request
+    #
+    # If enabled, an existing "/root/sriov-network-operator" directory is not
+    # wiped and you can prepare there the version you want to build and
+    # install.
+    sriov_network_operator_local: bool = False
+
+    def pre_check(self) -> None:
+        if self.sriov_network_operator_local:
+            if self.name != "sriov_network_operator":
+                raise ValueError("\"sriov_network_operator_local\" can only be set to TRUE for name=\"sriov_network_operator\"")
+            if not common.build_sriov_network_operator_check_permissions():
+                raise ValueError("Building sriov_network_operator requires permissions to fetch. Get a token from https://oauth-openshift.apps.ci.l2s4.p1.openshiftapps.com/oauth/token/request and issue `podman login registry.ci.openshift.org`")
 
 
 @dataclass
@@ -182,7 +204,7 @@ class ClustersConfig:
         if "base_dns_domain" in cc:
             self.base_dns_domain = cc["base_dns_domain"]
         if "ip_range" not in cc:
-            cc["ip_range"] = "192.168.1.1-192.168.255.254"
+            cc["ip_range"] = "192.168.122.1-192.168.122.254"
         if "ip_mask" not in cc:
             cc["ip_mask"] = "255.255.0.0"
 
@@ -204,11 +226,24 @@ class ClustersConfig:
 
         self.full_ip_range = (ip_range[0], ip_range[1])
         n_nodes = len(cc["masters"]) + len(cc["workers"]) + 1
-        self.ip_range = common.ip_range(ip_range[0], n_nodes)
+
+        # Get the last IP used in the running cluster.
+        last_ip = self.get_last_ip()
+
+        # Update the last IP based on the config.
+        for node in self.all_nodes():
+            if node.ip and ipaddress.IPv4Address(node.ip) > ipaddress.IPv4Address(last_ip):
+                last_ip = node.ip
+
+        if last_ip and ipaddress.IPv4Address(last_ip) > ipaddress.IPv4Address(ip_range[0]) + n_nodes:
+            self.ip_range = ip_range[0], str(ipaddress.ip_address(last_ip) + 1)
+        else:
+            self.ip_range = common.ip_range(ip_range[0], n_nodes)
+        logger.info(f"range = {self.ip_range}")
         if common.ip_range_size(ip_range) < common.ip_range_size(self.ip_range):
             logger.error_and_exit("The supplied ip_range config is too small for the number of nodes")
 
-        dynamic_ip_range = common.ip_range(self.ip_range[1], common.ip_range_size(ip_range) - n_nodes)
+        dynamic_ip_range = common.ip_range(self.ip_range[1], common.ip_range_size(ip_range) - common.ip_range_size(self.ip_range))
         self.local_bridge_config = BridgeConfig(ip=self.ip_range[0], mask=ip_mask, dynamic_ip_range=dynamic_ip_range)
         self.remote_bridge_config = BridgeConfig(ip=ip_range[1], mask=ip_mask)
 
@@ -230,6 +265,23 @@ class ClustersConfig:
             self.preconfig.append(ExtraConfigArgs(**c))
         for c in cc["postconfig"]:
             self.postconfig.append(ExtraConfigArgs(**c))
+
+        for c in self.preconfig:
+            c.pre_check()
+        for c in self.postconfig:
+            c.pre_check()
+
+    def get_last_ip(self) -> str:
+        hostconn = host.LocalHost()
+        last_ip = "0.0.0.0"
+        xml_str = hostconn.run("virsh net-dumpxml default").out
+        tree = et.fromstring(xml_str)
+        ip_tree = next((it for it in tree.iter("ip")), et.Element(''))
+        dhcp = next((it for it in ip_tree.iter("dhcp")), et.Element(''))
+        for e in dhcp:
+            if ipaddress.IPv4Address(e.get('ip', "0.0.0.0")) > ipaddress.IPv4Address(last_ip):
+                last_ip = e.get('ip', "0.0.0.0")
+        return last_ip
 
     def _load_full_config(self, yaml_path: str) -> None:
         if not path.exists(yaml_path):
@@ -280,7 +332,7 @@ class ClustersConfig:
             logger.error(f"Not all master/worker IPs are in the reserved cluster IP range ({self.ip_range}).  Other hosts in the network might be offered those IPs via DHCP.")
 
     def validate_external_port(self) -> bool:
-        return host.LocalHost().port_exists(self.external_port)
+        return bool(common.ip_links(host.LocalHost(), ifname=self.external_port))
 
     def _apply_jinja(self, contents: str, cluster_name: str) -> str:
         def worker_number(a: int) -> str:
@@ -360,7 +412,7 @@ class ClustersConfig:
         return [x for x in self.worker_vms() if x.node == "localhost"]
 
     def is_sno(self) -> bool:
-        return len(self.masters) == 1 and len(self.workers) == 0
+        return len(self.masters) == 1
 
 
 def main() -> None:

@@ -11,6 +11,7 @@ import host
 from clustersConfig import BridgeConfig, ClustersConfig, HostConfig, NodeConfig
 from clusterNode import ClusterNode, X86ClusterNode, VmClusterNode, BFClusterNode
 from virtualBridge import VirBridge
+from virshPool import VirshPool
 
 
 class ClusterHost:
@@ -89,11 +90,38 @@ class ClusterHost:
             self.hostconn.copy_to(local_iso_path, iso_path)
             logger.debug(f"iso_path is now {iso_path} for {self.hostconn.hostname()}")
 
+        # Create the storage pools. virt-install would create them, however, if two
+        # concurrent instances of virt-install try to create the same pool, there
+        # is a failure (a bug in virt-install?).
+        for image_path in image_paths:
+            vp = VirshPool(
+                name=os.path.basename(image_path),
+                rsh=self.hostconn,
+                image_path=image_path,
+            )
+            vp.ensure_initialized()
+
     def configure_bridge(self) -> None:
         if not self.hosts_vms:
             return
 
         self.bridge.configure(self.api_port)
+
+    def setup_dhcp_entries(self, vms: list[NodeConfig]) -> None:
+        if not self.hosts_vms:
+            return
+
+        self.bridge.setup_dhcp_entries(vms)
+        # bridge.remove_dhcp_entries might remove the master of the bridge (through virsh net-destroy/net-start). Add it back.
+        self.ensure_linked_to_network(self.bridge)
+
+    def remove_dhcp_entries(self, vms: list[NodeConfig]) -> None:
+        if not self.hosts_vms:
+            return
+
+        self.bridge.remove_dhcp_entries(vms)
+        # bridge.remove_dhcp_entries might remove the master of the bridge (through virsh net-destroy/net-start). Add it back.
+        self.ensure_linked_to_network(self.bridge)
 
     def ensure_linked_to_network(self, dhcp_bridge: VirBridge) -> None:
         if not self.needs_api_network:
@@ -105,6 +133,8 @@ class ClusterHost:
             logger.error_and_exit(f"Host {self.config.name} misses API network interface {self.api_port}")
 
         logger.info(f"Block all DHCP replies on {self.api_port} except the ones coming from the DHCP bridge")
+        # We might run ensure_linked_to_network on a host on which ebtables rules are already installed e.g. adding vms on a host already hosting vms.
+        self.hostconn.run("ebtables -t filter -F FORWARD")
         self.hostconn.run(f"ebtables -t filter -A FORWARD -p IPv4 --in-interface {self.api_port} --src {dhcp_bridge.eth_address()} --ip-proto udp --ip-sport 67 --ip-dport 68 -j ACCEPT")
         self.hostconn.run(f"ebtables -t filter -A FORWARD -p IPv4 --in-interface {self.api_port} --ip-proto udp --ip-sport 67 --ip-dport 68 -j DROP")
 
@@ -126,10 +156,10 @@ class ClusterHost:
         assert self.api_port is not None
 
         logger.info(f'Validating API network port {self.api_port}')
-        if not self.hostconn.port_exists(self.api_port):
+        if not common.ip_links(self.hostconn, ifname=self.api_port):
             logger.error(f"Can't find API network port {self.api_port}")
             return
-        if not self.hostconn.port_has_carrier(self.api_port):
+        if not any(a.has_carrier() for a in common.ip_addrs(self.hostconn, ifname=self.api_port)):
             logger.error(f"API network port {self.api_port} doesn't have a carrier")
             return
 
@@ -139,19 +169,6 @@ class ClusterHost:
 
         logger.info(f"Removing DHCP reply drop rules on {self.api_port}")
         self.hostconn.run("ebtables -t filter -F FORWARD")
-
-    def _configure_dhcp_entries(self, dhcp_bridge: VirBridge, nodes: list[ClusterNode]) -> None:
-        if not self.hosts_vms:
-            return
-
-        for node in nodes:
-            dhcp_bridge.setup_dhcp_entry(node.config)
-
-    def configure_master_dhcp_entries(self, dhcp_bridge: VirBridge) -> None:
-        return self._configure_dhcp_entries(dhcp_bridge, self.k8s_master_nodes)
-
-    def configure_worker_dhcp_entries(self, dhcp_bridge: VirBridge) -> None:
-        return self._configure_dhcp_entries(dhcp_bridge, self.k8s_worker_nodes)
 
     def preinstall(self, external_port: str, executor: ThreadPoolExecutor) -> Future[None]:
         def _preinstall() -> None:
@@ -217,6 +234,6 @@ class ClusterHost:
     def wait_for_workers_boot(self, desired_ip_range: tuple[str, str]) -> None:
         return self._wait_for_boot(self.k8s_worker_nodes, desired_ip_range)
 
-    def teardown(self) -> None:
-        for node in self._k8s_nodes():
+    def teardown_nodes(self, nodes: list[ClusterNode]) -> None:
+        for node in nodes:
             node.teardown()

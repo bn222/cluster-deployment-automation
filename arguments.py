@@ -8,7 +8,11 @@ import difflib
 from logger import logger, configure_logger
 from typing import Optional
 
-VALID_STEPS = ["pre", "masters", "workers", "post"]
+PRE_STEP = "pre"
+MASTERS_STEP = "masters"
+WORKERS_STEP = "workers"
+POST_STEP = "post"
+VALID_STEPS = [PRE_STEP, MASTERS_STEP, WORKERS_STEP, POST_STEP]
 
 
 def fuzzy_match(step: str) -> Optional[str]:
@@ -52,7 +56,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('config', metavar='config', type=str, help='Yaml file with config').completer = yaml_completer  # type: ignore
     parser.add_argument('-v', '--verbosity', choices=['debug', 'info', 'warning', 'error', 'critical'], default='info', help='Set the logging level (default: info)')
     parser.add_argument('--secret', dest='secrets_path', default='', action='store', type=str, help='pull_secret.json path (default is in cwd)')
-    parser.add_argument('--assisted-installer-url', dest='url', default='192.168.1.1', action='store', type=str, help='If set to 0.0.0.0 (the default), Assisted Installer will be started locally')
+    parser.add_argument('--assisted-installer-url', dest='url', default='192.168.122.1', action='store', type=str, help='If set to 0.0.0.0 (the default), Assisted Installer will be started locally')
 
     subparsers = parser.add_subparsers(title='subcommands', dest='subcommand')
     deploy_parser = subparsers.add_parser('deploy', help='Deploy clusters')

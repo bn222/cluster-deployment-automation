@@ -40,6 +40,10 @@ class K8sClient:
                 cb()
             self.approve_csr()
 
+    def delete_node(self, node: str) -> None:
+        logger.info(f"Deleting node {node}")
+        self.oc(f"delete node {node}")
+
     def approve_csr(self) -> None:
         certs_api = kubernetes.client.CertificatesV1Api(self._api_client)
         for e in certs_api.list_certificate_signing_request().items:

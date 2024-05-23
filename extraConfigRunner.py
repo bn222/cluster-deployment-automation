@@ -4,6 +4,7 @@ from extraConfigDpuTenant import ExtraConfigDpuTenantMC, ExtraConfigDpuTenant, E
 from extraConfigDpuInfra import ExtraConfigDpuInfra, ExtraConfigDpuInfra_NewAPI
 from extraConfigOvnK import ExtraConfigOvnK
 from extraConfigCustomOvn import ExtraConfigCustomOvn
+from extraConfigImageRegistry import ExtraConfigImageRegistry
 from extraConfigCNO import ExtraConfigCNO
 from extraConfigRT import ExtraConfigRT
 from extraConfigDualStack import ExtraConfigDualStack
@@ -34,6 +35,7 @@ class ExtraConfigRunner:
             "dpu_tenant_new_api": ExtraConfigDpuTenant_NewAPI,
             "ovnk8s": ExtraConfigOvnK,
             "ovn_custom": ExtraConfigCustomOvn,
+            "image_registry": ExtraConfigImageRegistry,
             "cno": ExtraConfigCNO,
             "rt": ExtraConfigRT,
             "dualstack": ExtraConfigDualStack,

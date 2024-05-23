@@ -3,7 +3,6 @@ import os
 import sys
 import time
 import json
-import xml.etree.ElementTree as et
 import shutil
 from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
@@ -22,6 +21,9 @@ from logger import logger
 import microshift
 from extraConfigRunner import ExtraConfigRunner
 from clusterHost import ClusterHost
+import dnsutil
+from virshPool import VirshPool
+from arguments import WORKERS_STEP, MASTERS_STEP, POST_STEP
 
 
 def match_to_proper_version_format(version_cluster_config: str) -> str:
@@ -70,6 +72,9 @@ class ClusterDeployer:
     def _all_hosts_with_workers(self) -> set[ClusterHost]:
         return {ch for ch in self._all_hosts if len(ch.k8s_worker_nodes) > 0}
 
+    def _all_hosts_with_only_workers(self) -> set[ClusterHost]:
+        return {ch for ch in self._all_hosts if len(ch.k8s_worker_nodes) > 0 and not ch.k8s_master_nodes}
+
     """
     Using Aicli, we will find all the clusters installed on our host included in our configuration file.
       E.g: aicli -U 0.0.0.0:8090 list cluster
@@ -99,62 +104,72 @@ class ClusterDeployer:
     is hardcoded to be the network hosting the API network.
     """
 
-    def teardown(self) -> None:
+    def teardown_masters(self) -> None:
         cluster_name = self._cc.name
+        if MASTERS_STEP not in self.steps:
+            logger.info(f"Not tearing down {cluster_name}")
+            return
+
         logger.info(f"Tearing down {cluster_name}")
         self._ai.ensure_cluster_deleted(self._cc.name)
 
-        for h in self._all_hosts:
-            h.teardown()
+        self.update_dnsmasq(setup=False)
+
+        for h in self._all_hosts_with_masters():
+            h.teardown_nodes(h.k8s_master_nodes)
 
         self._ai.ensure_infraenv_deleted(f"{cluster_name}-x86_64")
         self._ai.ensure_infraenv_deleted(f"{cluster_name}-arm64")
 
-        xml_str = self._local_host.hostconn.run("virsh net-dumpxml default").out
-        q = et.fromstring(xml_str)
-        removed_macs = []
-        names = [x.name for x in self._cc.all_vms()]
-        ips = [x.ip for x in self._cc.all_vms()]
-        for e in q[-1][0][1:]:
-            if e.attrib["name"] in names or e.attrib["ip"] in ips:
-                mac = e.attrib["mac"]
-                name = e.attrib["name"]
-                ip = e.attrib["ip"]
-                pre = "virsh net-update default delete ip-dhcp-host"
-                cmd = f"{pre} \"<host mac='{mac}' name='{name}' ip='{ip}'/>\" --live --config"
-                logger.info(self._local_host.hostconn.run(cmd))
-                removed_macs.append(mac)
+        self._local_host.bridge.remove_dhcp_entries(self._cc.master_vms())
 
-        fn = "/var/lib/libvirt/dnsmasq/virbr0.status"
-        with open(fn) as f:
-            contents = f.read()
+        image_paths = {os.path.dirname(n.image_path) for n in self._cc.local_vms()}
+        for image_path in image_paths:
+            vp = VirshPool(
+                name=os.path.basename(image_path),
+                rsh=self._local_host.hostconn,
+            )
+            vp.ensure_removed()
 
-        if contents:
-            j = json.loads(contents)
-            names = [x.name for x in self._cc.all_vms()]
-            logger.info(f'Cleaning up {fn}')
-            logger.info(f'removing hosts with mac in {removed_macs} or name in {names}')
-            filtered = []
-            for entry in j:
-                if entry["mac-address"] in removed_macs:
-                    logger.info(f'Removed host with mac {entry["mac-address"]}')
-                    continue
-                if "hostname" in entry and entry["hostname"] in names:
-                    logger.info(f'Removed host with name {entry["hostname"]}')
-                    continue
-                logger.info(f'Kept entry {entry}')
-                filtered.append(entry)
-
-            logger.info(self._local_host.hostconn.run("virsh net-destroy default"))
-            with open(fn, "w") as f:
-                f.write(json.dumps(filtered, indent=4))
-            logger.info(self._local_host.hostconn.run("virsh net-start default"))
-            logger.info(self._local_host.hostconn.run("systemctl restart libvirtd"))
-
-        for h in self._all_hosts:
+        for h in self._all_hosts_with_masters():
             h.ensure_not_linked_to_network()
 
         AssistedClientAutomation.delete_kubeconfig_and_secrets(self._cc.name, self._cc.kubeconfig)
+
+    def teardown_workers(self) -> None:
+        cluster_name = self._cc.name
+
+        # If workers not in steps (and masters set), teardown the workers to avoid dangling vms.
+        if WORKERS_STEP in self.steps and MASTERS_STEP not in self.steps:
+            logger.info(f"Tearing down (some) workers on {cluster_name}")
+        elif MASTERS_STEP in self.steps:
+            logger.info(f"Tearing down (some) workers on {cluster_name} before tearing down masters")
+        else:
+            return
+
+        for h in self._all_hosts_with_workers():
+            h.teardown_nodes(h.k8s_worker_nodes)
+
+        self._local_host.remove_dhcp_entries(self._cc.worker_vms())
+
+        # Find whether the host will still hosts some vms after tearing down what's configured.
+        for h in self._all_hosts_with_only_workers():
+            installed_vms = []
+            if h.hosts_vms:
+                installed_vms = h.hostconn.run("virsh list --all --name").out.strip().split()
+            if not installed_vms:
+                h.ensure_not_linked_to_network()
+            else:
+                logger.debug(f"bridge not unlinked as {installed_vms} remaining on {h.config.name}")
+
+        # if masters in steps, following steps are not needed as tearing down masters take care of this.
+        if MASTERS_STEP in self.steps:
+            return
+
+        for w in self._cc.workers:
+            logger.info(f"Deleting worker {w.name}")
+            self.client().delete_node(w.name)
+            self._ai.delete_host(w.name)
 
     def _preconfig(self) -> None:
         for e in self._cc.preconfig:
@@ -173,9 +188,9 @@ class ClusterDeployer:
         vm_bm = [x for x in self._cc.workers if x.kind == "vm" and x.node != "localhost"]
         remote_workers = len(self._cc.workers) - len(self._cc.worker_vms())
         remote_masters = len(self._cc.masters) - len(self._cc.master_vms())
-        if "workers" not in self.steps:
+        if WORKERS_STEP not in self.steps:
             remote_workers = 0
-        if "masters" not in self.steps:
+        if MASTERS_STEP not in self.steps:
             remote_masters = 0
         return remote_masters != 0 or remote_workers != 0 or len(vm_bm) != 0
 
@@ -187,18 +202,22 @@ class ClusterDeployer:
                 logger.info("Skipping pre configuration.")
 
             if self._cc.kind != "microshift":
-                if "masters" in self.steps:
-                    self.teardown()
+                if WORKERS_STEP in self.steps or MASTERS_STEP in self.steps:
+                    self.teardown_workers()
+                if MASTERS_STEP in self.steps:
+                    self.teardown_masters()
                     self.create_cluster()
                     self.create_masters()
                 else:
                     logger.info("Skipping master creation.")
 
-                if "workers" in self.steps:
+                if WORKERS_STEP in self.steps:
                     if len(self._cc.workers) != 0:
                         self.create_workers()
                     else:
-                        logger.info("Skipping worker creation.")
+                        logger.info("No worker to setup. Skip")
+                else:
+                    logger.info("Skipping worker creation.")
         if self._cc.kind == "microshift":
             version = match_to_proper_version_format(self._cc.version)
 
@@ -207,8 +226,10 @@ class ClusterDeployer:
             else:
                 logger.error_and_exit("Masters must be of length one for deploying microshift")
 
-        if "post" in self.steps:
+        if POST_STEP in self.steps:
             self._postconfig()
+            cmd = "apply -f manifests/monitoring-config.yaml"
+            self.client().oc_run_or_die(cmd)
         else:
             logger.info("Skipping post configuration.")
 
@@ -303,7 +324,7 @@ class ClusterDeployer:
         # configure DHCP entries for all masters on the local virbr.
         for h in hosts_with_masters:
             h.configure_bridge()
-            h.configure_master_dhcp_entries(self._local_host.bridge)
+        self._local_host.bridge.setup_dhcp_entries(self._cc.master_vms())
 
         # Start all masters on all hosts.
         executor = ThreadPoolExecutor(max_workers=len(self._cc.masters))
@@ -352,6 +373,8 @@ class ClusterDeployer:
             for master in h.k8s_master_nodes:
                 master.set_password()
 
+        self.update_dnsmasq()
+
     def create_workers(self) -> None:
         logger.info("Setting up workers")
         cluster_name = self._cc.name
@@ -381,7 +404,9 @@ class ClusterDeployer:
         # provisioning node.
         for h in hosts_with_workers:
             h.configure_bridge()
-            h.configure_worker_dhcp_entries(self._local_host.bridge)
+
+        self._local_host.setup_dhcp_entries(self._cc.worker_vms())
+        for h in hosts_with_workers:
             h.ensure_linked_to_network(self._local_host.bridge)
 
         executor = ThreadPoolExecutor(max_workers=len(self._cc.workers))
@@ -453,22 +478,19 @@ class ClusterDeployer:
         ip_range = self._cc.full_ip_range
         logger.info(f"Connectivity established to all workers; checking that they have an IP in range: {ip_range}")
 
-        def addresses(h: host.Host) -> list[str]:
-            ret = []
-            for e in h.ipa():
-                if "addr_info" not in e:
-                    continue
-                for k in e["addr_info"]:
-                    if k["family"] == "inet":
-                        ret.append(k["local"])
-            return ret
-
-        def addr_ok(a: str) -> bool:
-            return common.ip_range_contains(ip_range, a)
+        def any_address_in_range(h: host.Host, ip_range: tuple[str, str]) -> bool:
+            for ipaddr in common.ip_addrs(h):
+                for ainfo in ipaddr.addr_info:
+                    if ainfo.family != "inet":
+                        continue
+                    if not common.ip_range_contains(ip_range, ainfo.local):
+                        continue
+                    return True
+            return False
 
         any_worker_bad = False
         for w, h in zip(workers, hosts):
-            if all(not addr_ok(a) for a in addresses(h)):
+            if not any_address_in_range(h, ip_range):
                 logger.error(f"Worker {w.config.name} doesn't have an IP in range {ip_range}.")
                 any_worker_bad = True
 
@@ -541,6 +563,14 @@ class ClusterDeployer:
         # For that reason, restart libvirtd to re-read the changes.
         lh = host.LocalHost()
         lh.run("systemctl restart libvirtd")
+
+    def update_dnsmasq(self, *, setup: bool = True) -> None:
+        cluster_name = self._cc.name
+        if setup:
+            api_vip = self._ai.get_ai_cluster_info(cluster_name).api_vip
+        else:
+            api_vip = None
+        dnsutil.dnsmasq_update(cluster_name, api_vip)
 
     def wait_for_workers(self) -> None:
         logger.info(f'waiting for {len(self._cc.workers)} workers')
