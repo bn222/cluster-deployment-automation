@@ -38,6 +38,26 @@ class ExtraConfigArgs:
     # Time to wait for the builders to roll out.
     custom_ovn_build_timeout: str = "20m"
 
+    # With "sriov_network_operator", if true build the container images locally
+    # and push them to the internal container registry of openshift.
+    #
+    # You will need authentication for fetching build containers.
+    # Get the login token from [1]. Then `podman login registry.ci.openshift.org`
+    # or create "$XDG_RUNTIME_DIR/containers/auth.json".
+    # [1] https://oauth-openshift.apps.ci.l2s4.p1.openshiftapps.com/oauth/token/request
+    #
+    # If enabled, an existing "/root/sriov-network-operator" directory is not
+    # wiped and you can prepare there the version you want to build and
+    # install.
+    sriov_network_operator_local: bool = False
+
+    def pre_check(self) -> None:
+        if self.sriov_network_operator_local:
+            if self.name != "sriov_network_operator":
+                raise ValueError("\"sriov_network_operator_local\" can only be set to TRUE for name=\"sriov_network_operator\"")
+            if not common.build_sriov_network_operator_check_permissions():
+                raise ValueError("Building sriov_network_operator requires permissions to fetch. Get a token from https://oauth-openshift.apps.ci.l2s4.p1.openshiftapps.com/oauth/token/request and issue `podman login registry.ci.openshift.org`")
+
 
 @dataclass
 class NodeConfig:
@@ -245,6 +265,11 @@ class ClustersConfig:
             self.preconfig.append(ExtraConfigArgs(**c))
         for c in cc["postconfig"]:
             self.postconfig.append(ExtraConfigArgs(**c))
+
+        for c in self.preconfig:
+            c.pre_check()
+        for c in self.postconfig:
+            c.pre_check()
 
     def get_last_ip(self) -> str:
         hostconn = host.LocalHost()

@@ -5,53 +5,164 @@ import os
 from git.repo import Repo
 import time
 from concurrent.futures import Future
+import dataclasses
 import shutil
 import jinja2
+import shlex
 import sys
+import reglocal
 from typing import Optional
 from logger import logger
 from clustersConfig import ExtraConfigArgs
 
 
-def ExtraConfigSriov(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, Future[Optional[host.Result]]]) -> None:
-    [f.result() for (_, f) in futures.items()]
-    client = K8sClient(cc.kubeconfig)
-    lh = host.LocalHost()
-    repo_dir = "/root/sriov-network-operator"
-    url = "https://github.com/openshift/sriov-network-operator.git"
+def _sno_repo_setup(repo_dir: str, *, repo_wipe: bool = True) -> None:
+    exists = os.path.exists(repo_dir)
+    if exists and not repo_wipe:
+        return
 
-    if os.path.exists(repo_dir):
+    if exists:
         shutil.rmtree(repo_dir)
 
-    logger.info(f"Cloning repo to {repo_dir}")
+    url = "https://github.com/openshift/sriov-network-operator.git"
+    logger.info(f"Cloning repo {url} to {repo_dir}")
     Repo.clone_from(url, repo_dir, branch='master')
 
-    cur_dir = os.getcwd()
-    os.chdir(repo_dir)
-    env = os.environ.copy()
-    env["KUBECONFIG"] = client._kc
 
-    if cfg.image is not None:
-        image = cfg.image
-        logger.info(f"Image {image} provided to load custom sriov-network-operator")
-        env["SRIOV_NETWORK_OPERATOR_IMAGE"] = image
+def _sno_build_local(rsh: host.Host, repo_dir: str, client: K8sClient) -> dict[str, str]:
+
+    project = "openshift-sriov-network-operator"
+
+    reglocal_dir_name, reglocal_hostname, reglocal_listen_port, reglocal_id = reglocal.ensure_running(rsh)
+
+    reglocal.ocp_trust(client, reglocal_dir_name, reglocal_hostname, reglocal_listen_port)
+
+    registry = f"{reglocal_hostname}:{reglocal_listen_port}"
+
+    @dataclasses.dataclass
+    class ContainerInfo:
+        name: str
+        envvar: str
+        containerfile: str
+        full_tag: str = dataclasses.field(init=False)
+
+        def __post_init__(self) -> None:
+            self.full_tag = f"{registry}/{project}/{self.name}:latest"
+
+    container_infos = (
+        ContainerInfo(
+            "cda-sriov-network-operator-operator",
+            "SRIOV_NETWORK_OPERATOR_IMAGE",
+            "Dockerfile.rhel7",
+        ),
+        ContainerInfo(
+            "cda-sriov-network-operator-config-daemon",
+            "SRIOV_NETWORK_CONFIG_DAEMON_IMAGE",
+            "Dockerfile.sriov-network-config-daemon.rhel7",
+        ),
+        ContainerInfo(
+            "cda-sriov-network-operator-webhook",
+            "SRIOV_NETWORK_WEBHOOK_IMAGE",
+            "Dockerfile.webhook.rhel7",
+        ),
+    )
+
+    for ci in container_infos:
+        if os.environ.get("CDA_SRIOV_NETWORK_OPERATOR_REBUILD") == "0" and rsh.run(shlex.join(["podman", "images", "-q", ci.full_tag])).out:
+            logger.info(f"build container: {ci.full_tag} already exists. Skip")
+            continue
+        cmd = f"podman build -t {shlex.quote(ci.full_tag)} -f {shlex.quote(ci.containerfile)}"
+        logger.info(f"build container: {cmd}")
+        # FIXME: os.chdir() cannot be used in a multithreded application.
+        cur_dir = os.getcwd()
+        os.chdir(repo_dir)
+        ret = rsh.run(cmd)
+        os.chdir(cur_dir)
+        if not ret.success():
+            logger.warning(f"Command failed: {ret}")
+            logger.info("Maybe you lack authentication? Issue a `podman login registry.ci.openshift.org` first or create \"$XDG_RUNTIME_DIR/containers/auth.json\". See https://oauth-openshift.apps.ci.l2s4.p1.openshiftapps.com/oauth/token/request")
+            logger.error_and_exit(f"{cmd} failed with returncode {ret.returncode}: output: {ret.out}")
+
+    for ci in container_infos:
+        rsh.run_or_die(
+            shlex.join(
+                [
+                    "podman",
+                    "push",
+                    "--cert-dir",
+                    os.path.join(reglocal_dir_name, "certs"),
+                    ci.full_tag,
+                ]
+            )
+        )
+
+    return {ci.envvar: ci.full_tag for ci in container_infos}
+
+
+def _sno_make_deploy(
+    repo_dir: str,
+    kubeconfig: str,
+    *,
+    image: Optional[str] = None,
+    build_local: bool = False,
+) -> None:
+    rsh = host.LocalHost()
+
+    env = os.environ.copy()
+    env["KUBECONFIG"] = kubeconfig
 
     # cleanup first, to make this script idempotent
     logger.info("running make undeploy")
-    logger.info(lh.run("make undeploy", env=env))
-    client.oc("delete namespace openshift-sriov-network-operator --ignore-not-found")
+    logger.info(rsh.run(shlex.join(["make", "-C", repo_dir, "undeploy"]), env=env))
+
+    client = K8sClient(kubeconfig)
+
+    deploy_env = env.copy()
 
     # Workaround PSA issues. https://issues.redhat.com/browse/OCPBUGS-1005
     client.oc("create namespace openshift-sriov-network-operator")
     client.oc("label ns --overwrite openshift-sriov-network-operator " "pod-security.kubernetes.io/enforce=privileged " "pod-security.kubernetes.io/enforce-version=v1.24 " "security.openshift.io/scc.podSecurityLabelSync=false")
 
-    logger.info("running make deploy-setup")
-    logger.info(lh.run("make deploy-setup", env=env))
+    if image is not None:
+        logger.info(f"Image {image} provided to load custom sriov-network-operator")
+        deploy_env["SRIOV_NETWORK_OPERATOR_IMAGE"] = image
+    elif build_local:
+        envs = _sno_build_local(rsh, repo_dir, client)
+        deploy_env.update(envs)
+
+    retry_started_at = time.monotonic()
+    while True:
+        logger.info(f"running make deploy-setup (env: {deploy_env})")
+        ret = rsh.run(shlex.join(["make", "-C", repo_dir, "deploy-setup"]), env=deploy_env)
+        if ret.success():
+            logger.info(f"completed with success: {ret}")
+            break
+        if time.monotonic() < retry_started_at + 5 * 60:
+            logger.info("Error to deploy. Retry")
+            time.sleep(5)
+            continue
+
+        logger.error(f"completed with error: {ret}")
+        break
 
     # Future proof for when sriov moves to new switchdev implementation: https://github.com/k8snetworkplumbingwg/sriov-network-operator/blob/master/doc/design/switchdev-refactoring.md
-    time.sleep(60)
-    os.chdir(cur_dir)
     client.oc("apply -f manifests/nicmode/sriov-operator-config.yaml")
+
+
+def ExtraConfigSriov(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, Future[Optional[host.Result]]]) -> None:
+    [f.result() for (_, f) in futures.items()]
+    repo_dir = "/root/sriov-network-operator"
+    _sno_repo_setup(
+        repo_dir,
+        repo_wipe=not cfg.sriov_network_operator_local,
+    )
+    _sno_make_deploy(
+        repo_dir,
+        kubeconfig=cc.kubeconfig,
+        image=cfg.image,
+        build_local=cfg.sriov_network_operator_local,
+    )
+    time.sleep(60)
 
 
 def ExtraConfigSriovSubscription(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, Future[Optional[host.Result]]]) -> None:
