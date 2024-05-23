@@ -321,20 +321,21 @@ class Host:
     def need_sudo(self) -> None:
         self.sudo_needed = True
 
-    def run(self, cmd: str, log_level: int = logging.DEBUG, env: dict[str, str] = os.environ.copy()) -> Result:
+    def run(self, cmd: str, log_level: int = logging.DEBUG, env: dict[str, str] = os.environ.copy(), quiet: bool = False) -> Result:
         if self.sudo_needed:
             cmd = "sudo " + cmd
 
-        logger.log(log_level, f"running command {cmd} on {self._hostname}")
+        if not quiet:
+            logger.log(log_level, f"running command {cmd} on {self._hostname}")
         if self.is_localhost():
-            ret_val = self._run_local(cmd, env)
+            ret_val = self._run_local(cmd, env, quiet)
         else:
-            ret_val = self._run_remote(cmd, log_level)
+            ret_val = self._run_remote(cmd, log_level, quiet)
 
         logger.log(log_level, ret_val)
         return ret_val
 
-    def _run_local(self, cmd: str, env: dict[str, str]) -> Result:
+    def _run_local(self, cmd: str, env: dict[str, str], quiet: bool = False) -> Result:
         args = shlex.split(cmd)
         pipe = subprocess.PIPE
         with subprocess.Popen(args, stdout=pipe, stderr=pipe, env=env) as proc:
@@ -350,7 +351,7 @@ class Host:
             ret = proc.returncode
         return Result(out, err, ret)
 
-    def _run_remote(self, cmd: str, log_level: int) -> Result:
+    def _run_remote(self, cmd: str, log_level: int, quiet: bool = False) -> Result:
         def read_output(cmd: str, log_level: int) -> Result:
             assert self._host is not None
             _, stdout, stderr = self._host.exec_command(cmd)
@@ -375,7 +376,10 @@ class Host:
                 return read_output(cmd, log_level)
             except Exception as e:
                 logger.log(log_level, e)
-                logger.log(log_level, f"Connection lost while running command {cmd}, reconnecting...")
+                cmd_str = ""
+                if not quiet:
+                    cmd_str = cmd
+                logger.log(log_level, f"Connection lost while running command {cmd_str}, reconnecting...")
                 self.ssh_connect_looped(self._logins)
 
     def run_or_die(self, cmd: str) -> Result:

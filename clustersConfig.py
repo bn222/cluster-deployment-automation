@@ -53,6 +53,10 @@ class ExtraConfigArgs:
 
     # Custom config to the scheduler whether the masters are allowed to run workloads.
     schedulable: bool = True
+    # https://console.redhat.com/insights/connector/activation-keys
+    organization_id: Optional[str] = None
+
+    activation_key: Optional[str] = None
 
     def pre_check(self) -> None:
         if self.sriov_network_operator_local:
