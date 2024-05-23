@@ -9,7 +9,8 @@ import shutil
 import sys
 import logging
 import tempfile
-from typing import Optional, Union, Any
+from typing import Optional
+from typing import Union
 from functools import lru_cache
 from ailib import Redfish
 import paramiko
