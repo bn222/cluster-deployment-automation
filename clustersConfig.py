@@ -4,7 +4,7 @@ import io
 import sys
 import re
 import ipaddress
-from typing import Optional
+from typing import Optional, Union
 import xml.etree.ElementTree as et
 import jinja2
 from yaml import safe_load
@@ -114,12 +114,6 @@ class HostConfig:
     password: Optional[str] = None
     pre_installed: str = "true"
 
-    def __init__(self, network_api_port: str, **kwargs: str):
-        if "network_api_port" not in kwargs:
-            kwargs["network_api_port"] = network_api_port
-        for k, v in kwargs.items():
-            setattr(self, k, v)
-
     def is_preinstalled(self) -> bool:
         return self.pre_installed == "true"
 
@@ -172,21 +166,7 @@ class ClustersConfig:
         self._check_deprecated_config()
 
         cc = self.fullConfig
-        # Some config may be left out from the yaml. Try to provide defaults.
-        if "masters" not in cc:
-            cc["masters"] = []
-        if "workers" not in cc:
-            cc["workers"] = []
-        if "kubeconfig" not in cc:
-            cc["kubeconfig"] = path.join(getcwd(), f'kubeconfig.{cc["name"]}')
-        if "preconfig" not in cc:
-            cc["preconfig"] = []
-        if "postconfig" not in cc:
-            cc["postconfig"] = []
-        if "proxy" not in cc:
-            cc["proxy"] = None
-        if "hosts" not in cc:
-            cc["hosts"] = [{"name": "localhost"}]
+        self.set_cc_defaults(cc)
         if "proxy" in cc:
             self.proxy = cc["proxy"]
         if "noproxy" in cc:
@@ -206,10 +186,6 @@ class ClustersConfig:
             self.ntp_source = cc["ntp_source"]
         if "base_dns_domain" in cc:
             self.base_dns_domain = cc["base_dns_domain"]
-        if "ip_range" not in cc:
-            cc["ip_range"] = "192.168.122.1-192.168.122.254"
-        if "ip_mask" not in cc:
-            cc["ip_mask"] = "255.255.0.0"
 
         self.kubeconfig = path.join(getcwd(), f'kubeconfig.{cc["name"]}')
         if "kubeconfig" in cc:
@@ -224,19 +200,13 @@ class ClustersConfig:
         if self.kind == "openshift":
             self.configure_ip_range()
 
-        # creates hosts entries for each referenced node name
-        node_names = {x["name"] for x in cc["hosts"]}
-        for node in self.all_nodes():
-            if node.node not in node_names:
-                cc["hosts"].append({"name": node.node})
-                node_names.add(node.node)
-
+        self.set_cc_hosts_defaults(cc)
         if not self.is_sno():
             self.api_vip = {'ip': cc["api_vip"]}
             self.ingress_vip = {'ip': cc["ingress_vip"]}
 
         for e in cc["hosts"]:
-            self.hosts.append(HostConfig(self.network_api_port, **e))
+            self.hosts.append(HostConfig(**e))
 
         for c in cc["preconfig"]:
             self.preconfig.append(ExtraConfigArgs(**c))
@@ -290,6 +260,39 @@ class ClustersConfig:
             if ipaddress.IPv4Address(e.get('ip', "0.0.0.0")) > ipaddress.IPv4Address(last_ip):
                 last_ip = e.get('ip', "0.0.0.0")
         return last_ip
+
+    def set_cc_defaults(self, cc: dict[str, Union[None, str, list[dict[str, str]]]]) -> None:
+        # Some config may be left out from the yaml. Try to provide defaults.
+        if "masters" not in cc:
+            cc["masters"] = []
+        if "workers" not in cc:
+            cc["workers"] = []
+        if "kubeconfig" not in cc:
+            cc["kubeconfig"] = path.join(getcwd(), f'kubeconfig.{cc["name"]}')
+        if "preconfig" not in cc:
+            cc["preconfig"] = []
+        if "postconfig" not in cc:
+            cc["postconfig"] = []
+        if "proxy" not in cc:
+            cc["proxy"] = None
+        if "hosts" not in cc:
+            cc["hosts"] = [{"name": "localhost"}]
+        if "ip_range" not in cc:
+            cc["ip_range"] = "192.168.122.1-192.168.122.254"
+        if "ip_mask" not in cc:
+            cc["ip_mask"] = "255.255.0.0"
+
+    def set_cc_hosts_defaults(self, cc: dict[str, list[dict[str, str]]]) -> None:
+        # creates hosts entries for each referenced node name
+        node_names = {x["name"] for x in cc["hosts"]}
+        for node in self.all_nodes():
+            if node.node not in node_names:
+                cc["hosts"].append({"name": node.node})
+                node_names.add(node.node)
+
+        for e in cc["hosts"]:
+            if "network_api_port" not in e:
+                e["network_api_port"] = self.network_api_port
 
     def _load_full_config(self, yaml_path: str) -> None:
         if not path.exists(yaml_path):
