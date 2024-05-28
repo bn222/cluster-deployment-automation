@@ -6,8 +6,13 @@ import contextlib
 from types import TracebackType
 import http.server
 from multiprocessing import Process
+from git.repo import Repo
+import shutil
+import shlex
 import host
+from k8sClient import K8sClient
 from logger import logger
+import reglocal
 import json
 import os
 import glob
@@ -524,3 +529,71 @@ def build_sriov_network_operator_check_permissions() -> bool:
     rsh = host.LocalHost()
     ret = rsh.run("podman pull registry.ci.openshift.org/ocp/builder:rhel-9-golang-1.21-openshift-4.16")
     return ret.success()
+
+
+def git_repo_setup(repo_dir: str, *, repo_wipe: bool = True, url: str, branch: str = "master") -> None:
+    exists = os.path.exists(repo_dir)
+    if exists and not repo_wipe:
+        return
+
+    if exists:
+        shutil.rmtree(repo_dir)
+
+    logger.info(f"Cloning repo {url} to {repo_dir}")
+    Repo.clone_from(url, repo_dir, branch=branch)
+
+
+@dataclasses.dataclass
+class ContainerInfo:
+    name: str
+    envvar: str
+    containerfile: str
+    registry: str
+    project: str
+    full_tag: str = dataclasses.field(init=False)
+
+    def __post_init__(self) -> None:
+        self.full_tag = f"{self.registry}/{self.project}/{self.name}:latest"
+
+
+def start_image_registry(rsh: host.Host, client: K8sClient) -> str:
+    reglocal_dir_name, reglocal_hostname, reglocal_listen_port, reglocal_id = reglocal.ensure_running(rsh)
+
+    reglocal.ocp_trust(client, reglocal_dir_name, reglocal_hostname, reglocal_listen_port)
+
+    registry = f"{reglocal_hostname}:{reglocal_listen_port}"
+
+    return registry
+
+
+def git_build_local(rsh: host.Host, repo_dir: str, registry: str, project: str, container_infos: list[ContainerInfo]) -> dict[str, str]:
+    for ci in container_infos:
+        if os.environ.get("CDA_LOCAL_IMAGE_REBUILD") == "0" and rsh.run(shlex.join(["podman", "images", "-q", ci.full_tag])).out:
+            logger.info(f"build container: {ci.full_tag} already exists. Skip")
+            continue
+        cmd = f"podman build -t {shlex.quote(ci.full_tag)} -f {shlex.quote(ci.containerfile)}"
+        logger.info(f"build container: {cmd}")
+        # FIXME: os.chdir() cannot be used in a multithreded application
+        cur_dir = os.getcwd()
+        os.chdir(repo_dir)
+        ret = rsh.run(cmd)
+        os.chdir(cur_dir)
+        if not ret.success():
+            logger.warning(f"Command failed: {ret}")
+            logger.info("Maybe you lack authentication? Issue a `podman login registry.ci.openshift.org` first or create \"$XDG_RUNTIME_DIR/containers/auth.json\". See https://oauth-openshift.apps.ci.l2s4.p1.openshiftapps.com/oauth/token/request")
+            logger.error_and_exit(f"{cmd} failed with returncode {ret.returncode}: output: {ret.out}")
+
+    for ci in container_infos:
+        rsh.run_or_die(
+            shlex.join(
+                [
+                    "podman",
+                    "push",
+                    "--cert-dir",
+                    os.path.join(reglocal._dir_name(rsh), "certs"),
+                    ci.full_tag,
+                ]
+            )
+        )
+
+    return {ci.envvar: ci.full_tag for ci in container_infos}
