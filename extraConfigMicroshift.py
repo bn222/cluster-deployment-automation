@@ -10,9 +10,9 @@ import host
 def wait_for_microshift(acc: host.Host, kubeconfig: str) -> None:
     logger.info("Waiting for microshift service to start")
     for attempt in range(1, 21):
-        ret = acc.run(f"oc get no --kubeconfig {kubeconfig}")
+        ret = acc.run(f"""oc get nodes --kubeconfig {kubeconfig} -o jsonpath="{{.items[*].status.conditions[?(@.type=='Ready')].status}}" """)
         if ret.returncode == 0:
-            if "Ready" in ret.out:
+            if "False" not in ret.out:
                 logger.info("Verified microshift node is ready")
                 break
         else:

@@ -58,6 +58,10 @@ class ExtraConfigArgs:
 
     activation_key: Optional[str] = None
 
+    rebuild_dpu_operators_images: bool = True
+
+    dpu_net_interface: Optional[str] = "ens2f0"
+
     def pre_check(self) -> None:
         if self.sriov_network_operator_local:
             if self.name != "sriov_network_operator":

@@ -231,6 +231,11 @@ class Host:
         logger.info(f"{self._hostname} up, connecting with {username}")
 
         self._logins = []
+
+        if password is not None:
+            pw = PasswordLogin(self._hostname, username, password)
+            self._logins.append(pw)
+
         if os.path.exists(rsa_path):
             try:
                 id_rsa = KeyLogin(self._hostname, username, rsa_path)
@@ -244,10 +249,6 @@ class Host:
                 self._logins.append(id_ed25519)
             except Exception:
                 pass
-
-        if password is not None:
-            pw = PasswordLogin(self._hostname, username, password)
-            self._logins.append(pw)
 
         if discover_auth:
             auto = AutoLogin(self._hostname, username)

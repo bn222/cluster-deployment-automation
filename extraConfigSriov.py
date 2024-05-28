@@ -10,7 +10,8 @@ import sys
 from typing import Optional
 from logger import logger
 from clustersConfig import ExtraConfigArgs
-from common import git_repo_setup, git_build_local, start_image_registry, ContainerInfo
+from reglocal import start_image_registry, git_build_local, GitBuildLocalContainerInfo
+from common import git_repo_setup
 
 
 def _sno_make_deploy(
@@ -44,21 +45,21 @@ def _sno_make_deploy(
         registry = start_image_registry(rsh, client)
         project = "openshift-sriov-network-operator"
         container_infos = [
-            ContainerInfo(
+            GitBuildLocalContainerInfo(
                 name="cda-sriov-network-operator-operator",
                 envvar="SRIOV_NETWORK_OPERATOR_IMAGE",
                 containerfile="Dockerfile.rhel7",
                 registry=registry,
                 project=project,
             ),
-            ContainerInfo(
+            GitBuildLocalContainerInfo(
                 name="cda-sriov-network-operator-config-daemon",
                 envvar="SRIOV_NETWORK_CONFIG_DAEMON_IMAGE",
                 containerfile="Dockerfile.sriov-network-config-daemon.rhel7",
                 registry=registry,
                 project=project,
             ),
-            ContainerInfo(
+            GitBuildLocalContainerInfo(
                 name="cda-sriov-network-operator-webhook",
                 envvar="SRIOV_NETWORK_WEBHOOK_IMAGE",
                 containerfile="Dockerfile.webhook.rhel7",
