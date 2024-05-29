@@ -51,6 +51,9 @@ class ExtraConfigArgs:
     # install.
     sriov_network_operator_local: bool = False
 
+    # Custom config to the scheduler whether the masters are allowed to run workloads.
+    schedulable: bool = True
+
     def pre_check(self) -> None:
         if self.sriov_network_operator_local:
             if self.name != "sriov_network_operator":

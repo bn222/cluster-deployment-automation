@@ -5,6 +5,7 @@ from extraConfigDpuInfra import ExtraConfigDpuInfra, ExtraConfigDpuInfra_NewAPI
 from extraConfigOvnK import ExtraConfigOvnK
 from extraConfigCustomOvn import ExtraConfigCustomOvn
 from extraConfigImageRegistry import ExtraConfigImageRegistry
+from extraConfigMastersSchedulable import ExtraConfigMastersSchedulable
 from extraConfigCNO import ExtraConfigCNO
 from extraConfigRT import ExtraConfigRT
 from extraConfigDualStack import ExtraConfigDualStack
@@ -42,6 +43,7 @@ class ExtraConfigRunner:
             "dualstack": ExtraConfigDualStack,
             "cx_firmware": ExtraConfigCX,
             "microshift": ExtraConfigMicroshift,
+            "masters_schedulable": ExtraConfigMastersSchedulable,
         }
 
     def run(self, to_run: ExtraConfigArgs, futures: dict[str, Future[Optional[host.Result]]]) -> None:
