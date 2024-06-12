@@ -12,9 +12,9 @@ from logger import logger
 from clustersConfig import ExtraConfigArgs
 import reglocal
 from common import git_repo_setup
+from dpuVendor import init_vendor_plugin, IpuPlugin
 
 DPU_OPERATOR_REPO = "https://github.com/openshift/dpu-operator.git"
-IPU_OPI_PLUGIN_REPO = "https://github.com/intel/ipu-opi-plugins.git"
 MICROSHIFT_KUBECONFIG = "/var/lib/microshift/resources/kubeadmin/kubeconfig"
 OSE_DOCKERFILE = "https://pkgs.devel.redhat.com/cgit/containers/dpu-operator/tree/Dockerfile?h=rhaos-4.17-rhel-9"
 REPO_DIR = "/root/dpu-operator"
@@ -64,15 +64,6 @@ def _ensure_local_registry_running(rsh: host.Host, delete_all: bool = False) -> 
     reglocal.local_trust(rsh)
     registry = f"{reglocal_hostname}:{reglocal_listen_port}"
     return registry
-
-
-def extractContainerImage(dockerfile: str) -> str:
-    match = re.search(r'FROM\s+([^\s]+)(?:\s+as\s+\w+)?', dockerfile, re.IGNORECASE)
-    if match:
-        first_image = match.group(1)
-        return first_image
-    else:
-        logger.error_and_exit("Failed to find a Docker image in provided output")
 
 
 def go_is_installed(host: host.Host) -> bool:
@@ -168,36 +159,6 @@ def build_dpu_operator_images() -> str:
     return registry
 
 
-def build_and_start_vsp(host: host.Host, client: K8sClient, registry: str) -> None:
-    logger.info("Building ipu-opi-plugin")
-    host.run("rm -rf /root/ipu-opi-plugins")
-    host.run_or_die(f"git clone {IPU_OPI_PLUGIN_REPO} /root/ipu-opi-plugins")
-    ret = host.run_or_die("cat /root/ipu-opi-plugins/ipu-plugin/images/Dockerfile")
-    golang_img = extractContainerImage(ret.out)
-    host.run_or_die(f"podman pull docker.io/library/{golang_img}")
-    if host.is_localhost():
-        cur_dir = os.getcwd()
-        os.chdir("/root/ipu-opi-plugins/ipu-plugin")
-        env = os.environ.copy()
-        env["IMGTOOL"] = "podman"
-        ret = host.run("make -C /root/ipu-opi-plugins/ipu-plugin image", env=env)
-        if not ret.success():
-            logger.error_and_exit("Failed to build vsp images")
-        os.chdir(cur_dir)
-    else:
-        host.run_or_die("cd /root/ipu-opi-plugins/ipu-plugin && export IMGTOOL=podman && make image")
-    vsp_image = f"{registry}/ipu-plugin:dpu"
-    host.run_or_die(f"podman tag intel-ipuplugin:latest {vsp_image}")
-
-    render_dpu_vsp_ds(vsp_image, "/tmp/vsp-ds.yaml")
-    if host.is_localhost():
-        host.run_or_die(f"podman push {vsp_image}")
-    else:
-        host.copy_to("/tmp/vsp-ds.yaml", "/tmp/vsp-ds.yaml")
-    client.oc("delete -f /tmp/vsp-ds.yaml")
-    client.oc_run_or_die("create -f /tmp/vsp-ds.yaml")
-
-
 def start_dpu_operator(host: host.Host, client: K8sClient, operator_image: str, daemon_image: str, repo_wipe: bool = False) -> None:
     logger.info(f"Deploying dpu operator containers on {host.hostname()}")
     if repo_wipe:
@@ -234,23 +195,13 @@ def render_local_images_yaml(operator_image: str, daemon_image: str, outfilename
         outFile.write(rendered)
 
 
-def render_dpu_vsp_ds(ipu_plugin_image: str, outfilename: str) -> None:
-    with open('./manifests/dpu/dpu_vsp_ds.yaml.j2') as f:
-        j2_template = jinja2.Template(f.read())
-        rendered = j2_template.render(ipu_plugin_image=ipu_plugin_image)
-        logger.info(rendered)
-
-    with open(outfilename, "w") as outFile:
-        outFile.write(rendered)
-
-
 def ExtraConfigDpu(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, Future[Optional[host.Result]]]) -> None:
     [f.result() for (_, f) in futures.items()]
     logger.info("Running post config step to start DPU operator on IPU")
 
-    ipu_node = cc.masters[0]
-    assert ipu_node.ip is not None
-    acc = host.Host(ipu_node.ip)
+    dpu_node = cc.masters[0]
+    assert dpu_node.ip is not None
+    acc = host.Host(dpu_node.ip)
     lh = host.LocalHost()
     acc.ssh_connect("root", "redhat")
     client = K8sClient(MICROSHIFT_KUBECONFIG, acc)
@@ -263,20 +214,21 @@ def ExtraConfigDpu(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, 
     operator_image = f"{registry}/openshift-dpu-operator/cda-dpu-operator:latest"
     daemon_image = f"{registry}/openshift-dpu-operator/cda-dpu-daemon:latest"
 
-    # TODO: Remove when this container is properly started by the vsp
-    # We need to manually start the p4 sdk container currently
-    img = "quay.io/sdaniele/intel-ipu-p4-sdk:temp_wa_5-28-24"
-    cmd = f"podman run --network host -d --privileged --entrypoint='[\"/bin/sh\", \"-c\", \"sleep 5; sh /entrypoint.sh\"]' -v /lib/modules/5.14.0-425.el9.aarch64:/lib/modules/5.14.0-425.el9.aarch64 -v data1:/opt/p4 {img}"
-    logger.info("Manually starting P4 container")
-    acc.run_or_die(cmd)
-
     # Build and start vsp on DPU
-    build_and_start_vsp(acc, client, registry)
+    vendor_plugin = init_vendor_plugin(acc)
+    if isinstance(vendor_plugin, IpuPlugin):
+        # TODO: Remove when this container is properly started by the vsp
+        # We need to manually start the p4 sdk container currently for the IPU plugin
+        img = "quay.io/sdaniele/intel-ipu-p4-sdk:temp_wa_5-28-24"
+        cmd = f"podman run --network host -d --privileged --entrypoint='[\"/bin/sh\", \"-c\", \"sleep 5; sh /entrypoint.sh\"]' -v /lib/modules/5.14.0-425.el9.aarch64:/lib/modules/5.14.0-425.el9.aarch64 -v data1:/opt/p4 {img}"
+        logger.info("Manually starting P4 container")
+        acc.run_or_die(cmd)
+    vendor_plugin.build_and_start(acc, client, registry)
 
     start_dpu_operator(acc, client, operator_image, daemon_image, repo_wipe=True)
 
     # Deploy dpu daemon
-    client.oc_run_or_die(f"label no {ipu_node.name} dpu=true")
+    client.oc_run_or_die(f"label no {dpu_node.name} dpu=true")
     logger.info("Waiting for all pods to become ready")
     client.oc_run_or_die("wait --for=condition=Ready pod --all --all-namespaces --timeout=2m")
     client.oc_run_or_die(f"create -f {REPO_DIR}/examples/dpu.yaml")
@@ -312,7 +264,9 @@ def ExtraConfigDpuHost(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[s
     # Need to trust the registry in OCP / Microshift
     reglocal.ocp_trust(client, reglocal.get_local_registry_base_directory(lh), reglocal.get_local_registry_hostname(lh), 5000)
 
-    build_and_start_vsp(lh, client, registry)
+    h = host.Host(cc.workers[0].node)
+    vendor_plugin = init_vendor_plugin(h)
+    vendor_plugin.build_and_start(lh, client, registry)
 
     start_dpu_operator(lh, client, operator_image, daemon_image)
     client.oc_run_or_die("wait --for=condition=Ready pod --all -n dpu-operator-system --timeout=2m")
