@@ -6,6 +6,8 @@ import contextlib
 from types import TracebackType
 import http.server
 from multiprocessing import Process
+from git.repo import Repo
+import shutil
 import host
 from logger import logger
 import json
@@ -524,3 +526,15 @@ def build_sriov_network_operator_check_permissions() -> bool:
     rsh = host.LocalHost()
     ret = rsh.run("podman pull registry.ci.openshift.org/ocp/builder:rhel-9-golang-1.21-openshift-4.16")
     return ret.success()
+
+
+def git_repo_setup(repo_dir: str, *, repo_wipe: bool = True, url: str, branch: str = "master") -> None:
+    exists = os.path.exists(repo_dir)
+    if exists and not repo_wipe:
+        return
+
+    if exists:
+        shutil.rmtree(repo_dir)
+
+    logger.info(f"Cloning repo {url} to {repo_dir}")
+    Repo.clone_from(url, repo_dir, branch=branch)

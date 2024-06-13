@@ -10,9 +10,9 @@ import host
 def wait_for_microshift(acc: host.Host, kubeconfig: str) -> None:
     logger.info("Waiting for microshift service to start")
     for attempt in range(1, 21):
-        ret = acc.run(f"oc get no --kubeconfig {kubeconfig}")
+        ret = acc.run(f"""oc get nodes --kubeconfig {kubeconfig} -o jsonpath="{{.items[*].status.conditions[?(@.type=='Ready')].status}}" """)
         if ret.returncode == 0:
-            if "Ready" in ret.out:
+            if "False" not in ret.out:
                 logger.info("Verified microshift node is ready")
                 break
         else:
@@ -28,7 +28,7 @@ def ExtraConfigMicroshift(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dic
     logger.info("Running post config step to start Microshift on the IPU")
 
     # Validate args
-    ipu_node = cc.masters[0]
+    dpu_node = cc.masters[0]
 
     # Enable NAT / IP forwarding on host to provide internet connectivity to ACC
     lh = host.LocalHost()
@@ -47,8 +47,8 @@ def ExtraConfigMicroshift(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dic
     lh.run_or_die(f"{ip_tables} -A FORWARD -i {wan_interface} -o {lan_interface} -m state --state RELATED,ESTABLISHED -j ACCEPT")
     lh.run_or_die(f"{ip_tables} -A FORWARD -i {lan_interface} -o {wan_interface} -j ACCEPT")
 
-    assert ipu_node.ip is not None
-    acc = host.Host(ipu_node.ip)
+    assert dpu_node.ip is not None
+    acc = host.Host(dpu_node.ip)
     acc.ssh_connect("root", "redhat")
 
     # Set up pull secret

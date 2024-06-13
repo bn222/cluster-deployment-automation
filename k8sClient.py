@@ -11,12 +11,12 @@ oc_url = "https://mirror.openshift.com/pub/openshift-v4/clients/ocp/latest/"
 
 
 class K8sClient:
-    def __init__(self, kubeconfig: str):
+    def __init__(self, kubeconfig: str, host: host.Host = host.LocalHost()):
         self._kc = kubeconfig
-        with open(kubeconfig) as f:
-            c = yaml.safe_load(f)
+        c = yaml.safe_load(host.read_file(kubeconfig))
         self._api_client = kubernetes.config.new_client_from_config_dict(c)
         self._client = kubernetes.client.CoreV1Api(self._api_client)
+        self._host = host
 
     def is_ready(self, name: str) -> bool:
         for e in self._client.list_node().items:
@@ -59,12 +59,11 @@ class K8sClient:
         return None
 
     def oc(self, cmd: str, must_succeed: bool = False) -> host.Result:
-        lh = host.LocalHost()
         cmd = f"oc {cmd} --kubeconfig {self._kc}"
         if must_succeed:
-            return lh.run_or_die(cmd)
+            return self._host.run_or_die(cmd)
         else:
-            return lh.run(cmd)
+            return self._host.run(cmd)
 
     def oc_run_or_die(self, cmd: str) -> host.Result:
         return self.oc(cmd, must_succeed=True)

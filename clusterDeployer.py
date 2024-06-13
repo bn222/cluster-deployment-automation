@@ -661,6 +661,7 @@ class IsoDeployer(ClusterDeployer):
                 logger.info("Skipping pre configuration.")
 
             if MASTERS_STEP in self.steps:
+                # TODO: We need to either auto-detect the hardware (IPU versus some other vendor) or take this as an additional config param.
                 isoCluster.IPUIsoBoot(self._cc, self._master, self._cc.install_iso)
             else:
                 logger.info("Skipping master creation.")
