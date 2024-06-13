@@ -227,6 +227,10 @@ def ExtraConfigDpu(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, 
 
     start_dpu_operator(acc, client, operator_image, daemon_image, repo_wipe=True)
 
+    # Disable firewall to ensure host-side can reach dpu
+    acc.run("systemctl stop firewalld")
+    acc.run("systemctl disable firewalld")
+
     # Deploy dpu daemon
     client.oc_run_or_die(f"label no {dpu_node.name} dpu=true")
     logger.info("Waiting for all pods to become ready")
