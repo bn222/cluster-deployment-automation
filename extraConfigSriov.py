@@ -7,6 +7,7 @@ from concurrent.futures import Future
 import jinja2
 import shlex
 import sys
+import common
 from typing import Optional
 from logger import logger
 from clustersConfig import ExtraConfigArgs
@@ -14,10 +15,36 @@ from reglocal import start_image_registry, git_build_local, GitBuildLocalContain
 from common import git_repo_setup
 
 
+def default_images(version: str) -> dict[str, str]:
+    ocp_version = common.extract_version_or_panic(version)
+
+    quay_tags = ("4.14", "4.15", "4.16", "4.17")
+
+    if ocp_version not in quay_tags:
+        # Only for these versions we currently have a default_base_images.
+        logger.error_and_exit(f"unsupported version \"{version}\"")
+
+    # The images at quay.io/thaller were pushed using the script mentioned in
+    # https://github.com/bn222/cluster-deployment-automation/pull/194. You can
+    # use the script, to build your own images and push to your own container
+    # registry.
+    return {
+        "SRIOV_INFINIBAND_CNI_IMAGE": f"quay.io/thaller/ib-sriov-cni:{ocp_version}",
+        "SRIOV_CNI_IMAGE": f"quay.io/thaller/sriov-cni:{ocp_version}",
+        "OVS_CNI_IMAGE": "quay.io/kubevirt/ovs-cni-plugin:latest",
+        "SRIOV_DEVICE_PLUGIN_IMAGE": f"quay.io/thaller/sriov-network-device-plugin:{ocp_version}",
+        "NETWORK_RESOURCES_INJECTOR_IMAGE": f"quay.io/thaller/sriov-dp-admission-controller:{ocp_version}",
+        "SRIOV_NETWORK_CONFIG_DAEMON_IMAGE": f"quay.io/thaller/sriov-network-config-daemon:{ocp_version}",
+        "SRIOV_NETWORK_WEBHOOK_IMAGE": f"quay.io/thaller/sriov-network-webhook:{ocp_version}",
+        "SRIOV_NETWORK_OPERATOR_IMAGE": f"quay.io/thaller/sriov-network-operator:{ocp_version}",
+    }
+
+
 def _sno_make_deploy(
     repo_dir: str,
     kubeconfig: str,
     *,
+    version: str,
     image: Optional[str] = None,
     build_local: bool = False,
 ) -> None:
@@ -37,6 +64,10 @@ def _sno_make_deploy(
     # Workaround PSA issues. https://issues.redhat.com/browse/OCPBUGS-1005
     client.oc("create namespace openshift-sriov-network-operator")
     client.oc("label ns --overwrite openshift-sriov-network-operator " "pod-security.kubernetes.io/enforce=privileged " "pod-security.kubernetes.io/enforce-version=v1.24 " "security.openshift.io/scc.podSecurityLabelSync=false")
+
+    # Images can be specified via environment variables, before falling back to
+    # the default.
+    deploy_env.update({k: os.environ.get(k, v) for k, v in default_images(version).items()})
 
     if image is not None:
         logger.info(f"Image {image} provided to load custom sriov-network-operator")
@@ -96,6 +127,7 @@ def ExtraConfigSriov(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str
     _sno_make_deploy(
         repo_dir,
         kubeconfig=cc.kubeconfig,
+        version=cc.version,
         image=cfg.image,
         build_local=cfg.sriov_network_operator_local,
     )
