@@ -12,6 +12,7 @@ import host
 from logger import logger
 import json
 import os
+import re
 import glob
 import socket
 import tempfile
@@ -538,3 +539,10 @@ def git_repo_setup(repo_dir: str, *, repo_wipe: bool = True, url: str, branch: s
 
     logger.info(f"Cloning repo {url} to {repo_dir}")
     Repo.clone_from(url, repo_dir, branch=branch)
+
+
+def extract_version_or_panic(version: str) -> str:
+    v, number_of_subs_made = re.subn("^([0-9]+[.][0-9]+\\b).*$", "\\1", version)
+    if number_of_subs_made == 1:
+        return v
+    logger.error_and_exit(f"unsupported version \"{version}\"")
