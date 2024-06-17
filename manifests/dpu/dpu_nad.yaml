@@ -4,7 +4,7 @@ metadata:
   name: sriov-net1
   namespace: default
   annotations:
-    k8s.v1.cni.cncf.io/resourceName: intel.com/intel_sriov_netdevice
+    k8s.v1.cni.cncf.io/resourceName: openshift.io/dpu
 spec:
   config: '{
   "type": "dpu-cni",
