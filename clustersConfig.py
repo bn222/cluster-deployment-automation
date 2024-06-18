@@ -245,7 +245,7 @@ class ClustersConfig:
 
         # Update the last IP based on the config.
         for node in self.all_nodes():
-            if node.ip and ipaddress.IPv4Address(node.ip) > ipaddress.IPv4Address(last_ip):
+            if node.ip and last_ip and ipaddress.IPv4Address(node.ip) > ipaddress.IPv4Address(last_ip):
                 last_ip = node.ip
 
         if last_ip and ipaddress.IPv4Address(last_ip) > ipaddress.IPv4Address(ip_range[0]) + n_nodes:
@@ -260,17 +260,19 @@ class ClustersConfig:
         self.local_bridge_config = BridgeConfig(ip=self.ip_range[0], mask=ip_mask, dynamic_ip_range=dynamic_ip_range)
         self.remote_bridge_config = BridgeConfig(ip=ip_range[1], mask=ip_mask)
 
-    def get_last_ip(self) -> str:
+    def get_last_ip(self) -> str | None:
         hostconn = host.LocalHost()
         last_ip = "0.0.0.0"
         xml_str = hostconn.run("virsh net-dumpxml default").out
-        tree = et.fromstring(xml_str)
-        ip_tree = next((it for it in tree.iter("ip")), et.Element(''))
-        dhcp = next((it for it in ip_tree.iter("dhcp")), et.Element(''))
-        for e in dhcp:
-            if ipaddress.IPv4Address(e.get('ip', "0.0.0.0")) > ipaddress.IPv4Address(last_ip):
-                last_ip = e.get('ip', "0.0.0.0")
-        return last_ip
+        if xml_str.strip():
+            tree = et.fromstring(xml_str)
+            ip_tree = next((it for it in tree.iter("ip")), et.Element(''))
+            dhcp = next((it for it in ip_tree.iter("dhcp")), et.Element(''))
+            for e in dhcp:
+                if ipaddress.IPv4Address(e.get('ip', "0.0.0.0")) > ipaddress.IPv4Address(last_ip):
+                    last_ip = e.get('ip', "0.0.0.0")
+            return last_ip
+        return None
 
     def set_cc_defaults(self, cc: dict[str, Union[None, str, list[dict[str, str]]]]) -> None:
         # Some config may be left out from the yaml. Try to provide defaults.
