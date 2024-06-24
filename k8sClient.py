@@ -85,3 +85,14 @@ class K8sClient:
             time.sleep(60)
         minutes, seconds = divmod(int(time.time() - start), 60)
         logger.info(f"It took {minutes}m {seconds}s for {resource} (attempts: {iteration})")
+
+    def wait_for_crd(self, name: str, cr_name: str, namespace: str) -> None:
+        logger.info(f"Waiting for crd {cr_name} to become available")
+        ret = self.oc(f"get {cr_name}/{name} -n {namespace}")
+        retries = 10
+        while ret.returncode != 0:
+            time.sleep(10)
+            ret = self.oc(f"get {cr_name}/{name} -n {namespace}")
+            retries -= 1
+            if retries <= 0:
+                logger.error_and_exit(f"Failed to get cr {cr_name}/{name}")
