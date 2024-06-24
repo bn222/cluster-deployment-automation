@@ -117,6 +117,7 @@ def _sno_make_deploy(
         break
 
     # Future proof for when sriov moves to new switchdev implementation: https://github.com/k8snetworkplumbingwg/sriov-network-operator/blob/master/doc/design/switchdev-refactoring.md
+    client.wait_for_crd(name="default", cr_name="sriovoperatorconfig", namespace="openshift-sriov-network-operator")
     client.oc("apply -f manifests/nicmode/sriov-operator-config.yaml")
 
 
@@ -152,8 +153,8 @@ def ExtraConfigSriovSubscription(cc: ClustersConfig, cfg: ExtraConfigArgs, futur
     client.oc("create -f manifests/nicmode/sriov-operator-group.yaml")
     client.oc("create -f manifests/nicmode/sriov-subscription.yaml")
 
+    client.wait_for_crd(name="default", cr_name="sriovoperatorconfig", namespace="openshift-sriov-network-operator")
     client.oc("apply -f manifests/nicmode/sriov-operator-config.yaml")
-
     _check_sriov_installed(client)
 
 
