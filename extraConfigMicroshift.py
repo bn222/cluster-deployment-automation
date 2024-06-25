@@ -53,6 +53,7 @@ def ExtraConfigMicroshift(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dic
 
     # Set up pull secret
     logger.info(f"Copying pull secret to {acc.hostname()}:/etc/crio/openshift-pull-secret")
+    acc.run("mkdir -p /etc/crio")
     acc.copy_to("pull_secret.json", "/etc/crio/openshift-pull-secret")
     acc.run_or_die("chown root:root /etc/crio/openshift-pull-secret")
     acc.run_or_die("chmod 600 /etc/crio/openshift-pull-secret")
@@ -84,7 +85,15 @@ name=OpenShift Dependencies
 baseurl=https://mirror.openshift.com/pub/openshift-v4/aarch64/dependencies/rpms/4.16-el9-beta/
 enabled=1
 gpgcheck=0
-skip_if_unavailable=0"""
+skip_if_unavailable=0
+
+[microshift-4.13-dependencies]
+name=Openshift 4.13 Dependencies
+baseurl=https://mirror.openshift.com/pub/openshift-v4/aarch64/dependencies/rpms/4.13-el9-beta/
+enabled=1
+gpgcheck=0
+skip_if_unavailable=0
+"""
 
     acc.write("/etc/yum.repos.d/microshift-canidate.repo", repo)
 
