@@ -296,10 +296,6 @@ def ExtraConfigDpuHost(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[s
                 logger.error_and_exit(f"Failed to bring up IPU net device on {h.hostname()}")
             ret = h.run(f"test -d /sys/class/net/{cfg.dpu_net_interface}")
 
-        # Temporarily we will need to manually create the vfs on each DPU host
-        # TODO: Remove when no longer required
-        h.run_or_die(f"echo {SRIOV_NUM_VFS} | sudo tee /sys/class/net/{cfg.dpu_net_interface}/device/sriov_numvfs")
-
         # Label the node
         logger.info(f"labeling node {h.hostname()} dpu=true")
         client.oc_run_or_die(f"label no {e.name} dpu=true")
