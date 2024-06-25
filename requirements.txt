@@ -12,3 +12,4 @@ jinja2
 kubernetes
 python-hosts
 argcomplete
+yq
