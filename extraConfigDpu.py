@@ -124,9 +124,9 @@ def ensure_go_installed(host: host.Host) -> None:
             os.environ['PATH'] = new_path
     else:
         host.run_or_die(f"wget https://go.dev/dl/{go_tarball}")
-        host.run_or_die(f"tar -C /usr/local -xzf {go_tarball}")
         host.run("rm -rf /usr/local/go")
         host.run("rm -rf /usr/bin/go")
+        host.run_or_die(f"tar -C /usr/local -xzf {go_tarball}")
         host.run_or_die("echo 'export PATH=$PATH:/usr/local/go/bin' >> /etc/profile")
         host.run_or_die("echo 'export PATH=$PATH:/usr/local/go/bin' > /etc/profile.d/go.sh")
         host.run_or_die("chmod +x /etc/profile.d/go.sh")

@@ -99,7 +99,7 @@ skip_if_unavailable=0
 
     logger.info("Installing microshift 4.16")
     acc.run_or_die("dnf install -y microshift microshift-multus")
-    acc.run_or_die("systemctl restart crio.service")
+    acc.run("systemctl restart crio.service")
     logger.info("Starting microshift")
     acc.run("systemctl restart microshift")
 
