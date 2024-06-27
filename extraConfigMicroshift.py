@@ -99,6 +99,11 @@ skip_if_unavailable=0
 
     logger.info("Installing microshift 4.16")
     acc.run_or_die("dnf install -y microshift microshift-multus")
+    ret = acc.run(r"grep '\[crio.runtime.runtimes.crun\]' /etc/crio/crio.conf")
+    if not ret.success():
+        crun_conf_lines = ['[crio.runtime.runtimes.crun]', 'runtime_path = "/usr/bin/crun"', 'runtime_type = "oci"', 'runtime_root = "/run/crun"']
+        for line in crun_conf_lines:
+            acc.run(f'echo \'{line}\' >> /etc/crio/crio.conf')
     acc.run("systemctl restart crio.service")
     logger.info("Starting microshift")
     acc.run("systemctl restart microshift")
