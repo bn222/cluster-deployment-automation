@@ -169,6 +169,7 @@ def start_dpu_operator(host: host.Host, client: K8sClient, operator_image: str, 
         render_local_images_yaml(operator_image=operator_image, daemon_image=daemon_image, outfilename="/tmp/dpu-local-images.yaml", pull_policy="IfNotPresent")
         host.copy_to("/tmp/dpu-local-images.yaml", f"{REPO_DIR}/config/dev/local-images.yaml")
 
+    host.run("dnf install -y pip")
     host.run_or_die("pip install yq")
     ensure_go_installed(host)
     reglocal.local_trust(host)
