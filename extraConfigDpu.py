@@ -277,7 +277,7 @@ def ExtraConfigDpuHost(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[s
     vendor_plugin.build_and_start(lh, client, registry)
 
     start_dpu_operator(lh, client, operator_image, daemon_image)
-    client.oc_run_or_die("wait --for=condition=Ready pod --all -n dpu-operator-system --timeout=2m")
+    client.oc_run_or_die("wait --for=condition=Ready pod --all -n openshift-dpu-operator --timeout=2m")
 
     def helper(h: host.Host, node: NodeConfig) -> Optional[host.Result]:
         logger.info(f"Manually creating vfs for host {h.hostname()}")
@@ -324,7 +324,7 @@ def ExtraConfigDpuHost(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[s
     # Deploy dpu daemon and wait for dpu pods to come up
     client.oc_run_or_die(f"create -f {REPO_DIR}/examples/dpu.yaml")
     time.sleep(30)
-    client.oc_run_or_die("wait --for=condition=Ready pod --all -n dpu-operator-system --timeout=2m")
+    client.oc_run_or_die("wait --for=condition=Ready pod --all -n openshift-dpu-operator --timeout=2m")
     logger.info("Finished setting up dpu operator on host")
 
 
