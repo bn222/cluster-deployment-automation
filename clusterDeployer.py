@@ -257,7 +257,7 @@ class ClusterDeployer:
     def _wait_known_state(self, names_gen: Generator[str, None, None], cb: Callable[[], None] = lambda: None) -> None:
         names = list(names_gen)
         logger.info(f"Waiting for {names} to be in \'known\' state")
-        status: dict[str, Optional[str]] = {n: "" for n in names}
+        status: dict[str, Optional[str]] = dict.fromkeys(names, "")
         while not all(v == "known" for v in status.values()):
             new_status: dict[str, Optional[str]] = {n: self._get_status(n) for n in names}
             if new_status != status:
