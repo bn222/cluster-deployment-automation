@@ -18,7 +18,51 @@ DPU_OPERATOR_REPO = "https://github.com/openshift/dpu-operator.git"
 MICROSHIFT_KUBECONFIG = "/var/lib/microshift/resources/kubeadmin/kubeconfig"
 OSE_DOCKERFILE = "https://pkgs.devel.redhat.com/cgit/containers/dpu-operator/tree/Dockerfile?h=rhaos-4.17-rhel-9"
 REPO_DIR = "/root/dpu-operator"
-SRIOV_NUM_VFS = 8
+
+KERNEL_RPMS = [
+    "https://download-01.beak-001.prod.iad2.dc.redhat.com/brewroot/vol/rhel-9/packages/kernel/5.14.0/427.2.1.el9_4/x86_64/kernel-5.14.0-427.2.1.el9_4.x86_64.rpm",
+    "https://download-01.beak-001.prod.iad2.dc.redhat.com/brewroot/vol/rhel-9/packages/kernel/5.14.0/427.2.1.el9_4/x86_64/kernel-core-5.14.0-427.2.1.el9_4.x86_64.rpm",
+    "https://download-01.beak-001.prod.iad2.dc.redhat.com/brewroot/vol/rhel-9/packages/kernel/5.14.0/427.2.1.el9_4/x86_64/kernel-modules-5.14.0-427.2.1.el9_4.x86_64.rpm",
+    "https://download-01.beak-001.prod.iad2.dc.redhat.com/brewroot/vol/rhel-9/packages/kernel/5.14.0/427.2.1.el9_4/x86_64/kernel-modules-core-5.14.0-427.2.1.el9_4.x86_64.rpm",
+    "https://download-01.beak-001.prod.iad2.dc.redhat.com/brewroot/vol/rhel-9/packages/kernel/5.14.0/427.2.1.el9_4/x86_64/kernel-modules-extra-5.14.0-427.2.1.el9_4.x86_64.rpm",
+]
+
+
+def ensure_rhel_9_4_kernel_is_installed(h: host.Host) -> None:
+    h.ssh_connect("core")
+    ret = h.run("uname -r")
+    if "el9_4" in ret.out:
+        return
+
+    logger.info(f"Installing RHEL 9.4 kernel on {h.hostname()}")
+
+    wd = "working_dir"
+    h.run(f"rm -rf {wd}")
+    h.run(f"mkdir -p {wd}")
+    logger.info(KERNEL_RPMS)
+
+    for e in KERNEL_RPMS:
+        fn = e.split("/")[-1]
+        cmd = f"curl -k {e} --create-dirs > {wd}/{fn}"
+        h.run(cmd)
+
+    cmd = f"sudo rpm-ostree override replace {wd}/*.rpm"
+    logger.info(cmd)
+    while True:
+        ret = h.run(cmd)
+        output = ret.out.strip().split("\n")
+        if output and output[-1] == 'Run "systemctl reboot" to start a reboot':
+            break
+        else:
+            logger.info(output)
+            logger.info("Output was something unexpected")
+
+    h.run("sudo systemctl reboot")
+    time.sleep(10)
+    h.ssh_connect("core")
+    ret = h.run("uname -r")
+    if "el9_4" not in ret.out:
+        logger.error_and_exit(f"Failed to install rhel 9.4 kernel on host {h.hostname()}")
 
 
 def _update_dockerfile(image: str, path: str) -> None:
@@ -59,7 +103,7 @@ def update_dockerfiles_with_ose_images(repo: str, dockerfile_url: str = OSE_DOCK
 
 
 def _ensure_local_registry_running(rsh: host.Host, delete_all: bool = False) -> str:
-    logger.info(f"creating local registry on {rsh.hostname()}")
+    logger.info(f"Ensuring local registry running on {rsh.hostname()}")
     _, reglocal_hostname, reglocal_listen_port, _ = reglocal.ensure_running(rsh, delete_all=delete_all)
     reglocal.local_trust(rsh)
     registry = f"{reglocal_hostname}:{reglocal_listen_port}"
@@ -185,7 +229,8 @@ def start_dpu_operator(host: host.Host, client: K8sClient, operator_image: str, 
     else:
         host.run(f"cd {REPO_DIR} && export KUBECONFIG={client._kc} && make undeploy")
         host.run_or_die(f"cd {REPO_DIR} && export KUBECONFIG={client._kc} && make local-deploy")
-    logger.info("Waiting for all pods to become ready")
+    logger.info("Waiting for all dpu operator pods to become ready")
+    client.oc_run_or_die("wait --for=condition=Ready pod --all -n openshift-dpu-operator --timeout=2m")
 
 
 def render_local_images_yaml(operator_image: str, daemon_image: str, outfilename: str, pull_policy: str = "Always") -> None:
@@ -212,6 +257,7 @@ def ExtraConfigDpu(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, 
     if cfg.rebuild_dpu_operators_images:
         registry = build_dpu_operator_images()
     else:
+        logger.info("Will not rebuild dpu-operator images")
         registry = _ensure_local_registry_running(lh, delete_all=False)
 
     operator_image = f"{registry}/openshift-dpu-operator/cda-dpu-operator:latest"
@@ -265,11 +311,13 @@ def ExtraConfigDpuHost(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[s
     if cfg.rebuild_dpu_operators_images:
         registry = build_dpu_operator_images()
     else:
+        logger.info("Will not rebuild dpu-operator images")
         registry = _ensure_local_registry_running(lh, delete_all=False)
     operator_image = f"{registry}/openshift-dpu-operator/cda-dpu-operator:latest"
     daemon_image = f"{registry}/openshift-dpu-operator/cda-dpu-daemon:latest"
 
     # Need to trust the registry in OCP / Microshift
+    logger.info("Ensuring local registry is trusted in OCP")
     reglocal.ocp_trust(client, reglocal.get_local_registry_base_directory(lh), reglocal.get_local_registry_hostname(lh), 5000)
 
     h = host.Host(cc.workers[0].node)
@@ -280,7 +328,9 @@ def ExtraConfigDpuHost(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[s
     client.oc_run_or_die("wait --for=condition=Ready pod --all -n openshift-dpu-operator --timeout=2m")
 
     def helper(h: host.Host, node: NodeConfig) -> Optional[host.Result]:
-        logger.info(f"Manually creating vfs for host {h.hostname()}")
+        # Temporary workaround, remove once 4.16 installations are working
+        logger.info("Ensuring Rhel 9.4 kernel is installed")
+        ensure_rhel_9_4_kernel_is_installed(h)
         # There is a bug with the idpf driver that causes the IPU to fail to be enumerated over PCIe on boot
         # As a result, we will need to trigger cold boots of the node until the device is available
         # TODO: Remove when no longer needed
@@ -315,13 +365,15 @@ def ExtraConfigDpuHost(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[s
     for thread in f:
         logger.info(thread.result())
 
-    logger.info("Completed creation of vfs on DPU worker nodes")
+    logger.info("Verified idpf is providing net-devs on DPU worker nodes")
 
     # Create host nad
     # TODO: Remove when this is automatically created by the dpu operator
+    logger.info("Creating dpu NAD")
     client.oc("delete -f manifests/dpu/dpu_nad.yaml")
     client.oc_run_or_die("create -f manifests/dpu/dpu_nad.yaml")
     # Deploy dpu daemon and wait for dpu pods to come up
+    logger.info("Creating dpu operator config")
     client.oc_run_or_die(f"create -f {REPO_DIR}/examples/dpu.yaml")
     time.sleep(30)
     client.oc_run_or_die("wait --for=condition=Ready pod --all -n openshift-dpu-operator --timeout=2m")
