@@ -169,6 +169,7 @@ def start_dpu_operator(host: host.Host, client: K8sClient, operator_image: str, 
         render_local_images_yaml(operator_image=operator_image, daemon_image=daemon_image, outfilename="/tmp/dpu-local-images.yaml", pull_policy="IfNotPresent")
         host.copy_to("/tmp/dpu-local-images.yaml", f"{REPO_DIR}/config/dev/local-images.yaml")
 
+    host.run("dnf install -y pip")
     host.run_or_die("pip install yq")
     ensure_go_installed(host)
     reglocal.local_trust(host)
@@ -222,7 +223,8 @@ def ExtraConfigDpu(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, 
         # TODO: Remove when this container is properly started by the vsp
         # We need to manually start the p4 sdk container currently for the IPU plugin
         img = "quay.io/sdaniele/intel-ipu-p4-sdk:temp_wa_5-28-24"
-        cmd = f"podman run --network host -d --privileged --entrypoint='[\"/bin/sh\", \"-c\", \"sleep 5; sh /entrypoint.sh\"]' -v /lib/modules/5.14.0-425.el9.aarch64:/lib/modules/5.14.0-425.el9.aarch64 -v data1:/opt/p4 {img}"
+        uname = acc.run("uname -r").out.strip()
+        cmd = f"podman run --network host -d --privileged --entrypoint='[\"/bin/sh\", \"-c\", \"sleep 5; sh /entrypoint.sh\"]' -v /lib/modules/{uname}:/lib/modules/{uname} -v data1:/opt/p4 {img}"
         logger.info("Manually starting P4 container")
         acc.run_or_die(cmd)
     vendor_plugin.build_and_start(acc, client, registry)
@@ -275,7 +277,7 @@ def ExtraConfigDpuHost(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[s
     vendor_plugin.build_and_start(lh, client, registry)
 
     start_dpu_operator(lh, client, operator_image, daemon_image)
-    client.oc_run_or_die("wait --for=condition=Ready pod --all -n dpu-operator-system --timeout=2m")
+    client.oc_run_or_die("wait --for=condition=Ready pod --all -n openshift-dpu-operator --timeout=2m")
 
     def helper(h: host.Host, node: NodeConfig) -> Optional[host.Result]:
         logger.info(f"Manually creating vfs for host {h.hostname()}")
@@ -322,7 +324,7 @@ def ExtraConfigDpuHost(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[s
     # Deploy dpu daemon and wait for dpu pods to come up
     client.oc_run_or_die(f"create -f {REPO_DIR}/examples/dpu.yaml")
     time.sleep(30)
-    client.oc_run_or_die("wait --for=condition=Ready pod --all -n dpu-operator-system --timeout=2m")
+    client.oc_run_or_die("wait --for=condition=Ready pod --all -n openshift-dpu-operator --timeout=2m")
     logger.info("Finished setting up dpu operator on host")
 
 
