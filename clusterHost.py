@@ -205,7 +205,7 @@ class ClusterHost:
         if not nodes:
             return
 
-        def wait_state(state_name: str, get_states: Callable[[], Dict[str, bool]]):
+        def wait_state(state_name: str, get_states: Callable[[], Dict[str, bool]]) -> None:
             states = get_states()
             for try_count in itertools.count(0):
                 new_states = get_states()
@@ -220,10 +220,12 @@ class ClusterHost:
 
         def boot_state() -> Dict[str, bool]:
             return {node.config.name: node.has_booted() for node in nodes}
+
         wait_state("boot", boot_state)
 
-        def post_boot_state():
+        def post_boot_state() -> Dict[str, bool]:
             return {node.config.name: node.post_boot(desired_ip_range) for node in nodes}
+
         wait_state("post_boot", post_boot_state)
 
         for node in nodes:
