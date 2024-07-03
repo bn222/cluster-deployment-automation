@@ -378,7 +378,7 @@ def ExtraConfigDpuHost(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[s
     logger.info("Creating dpu operator config")
     client.oc_run_or_die(f"create -f {REPO_DIR}/examples/dpu.yaml")
     time.sleep(30)
-    client.oc_run_or_die("wait --for=condition=Ready pod --all -n openshift-dpu-operator --timeout=2m")
+    client.oc_run_or_die("wait --for=condition=Ready pod --all -n openshift-dpu-operator --timeout=5m")
     logger.info("Finished setting up dpu operator on host")
 
 
