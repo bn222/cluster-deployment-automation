@@ -3,7 +3,7 @@ import os
 import time
 from concurrent.futures import Future, ThreadPoolExecutor
 from logger import logger
-from typing import Optional
+from typing import Optional, Dict, Callable
 
 import common
 import coreosBuilder
@@ -205,25 +205,26 @@ class ClusterHost:
         if not nodes:
             return
 
-        for try_count in itertools.count(0):
-            states = {node.config.name: node.has_booted() for node in nodes}
-            node_names = ', '.join(states.keys())
-            logger.info(f"Waiting for nodes ({node_names}) to have booted (try #{try_count})..")
-            logger.info(f"Current boot state: {states}")
-            if all(has_booted for has_booted in states.values()):
-                break
-            time.sleep(10)
-        logger.info(f"It took {try_count} tries to wait for nodes ({node_names}) to have booted.")
+        def wait_state(state_name: str, get_states: Callable[[], Dict[str, bool]]):
+            states = get_states()
+            for try_count in itertools.count(0):
+                new_states = get_states()
+                if new_states != states:
+                    states = new_states
+                    logger.info(f"Waiting for nodes to {state_name} (try #{try_count}), last state: {states}")
 
-        for try_count in itertools.count(0):
-            states = {node.config.name: node.post_boot(desired_ip_range) for node in nodes}
-            node_names = ', '.join(states.keys())
-            logger.info(f"Waiting for nodes ({node_names}) to have run post_boot (try #{try_count})..")
-            logger.info(f"Current post_boot state: {states}")
-            if all(has_post_booted for has_post_booted in states.values()):
-                break
-            time.sleep(10)
-        logger.info(f"It took {try_count} tries to wait for nodes ({node_names}) to have run post_boot.")
+                if all(states.values()):
+                    logger.info(f"Took {try_count} tries for all nodes to {state_name}")
+                    break
+                time.sleep(10)
+
+        def boot_state() -> Dict[str, bool]:
+            return {node.config.name: node.has_booted() for node in nodes}
+        wait_state("boot", boot_state)
+
+        def post_boot_state():
+            return {node.config.name: node.post_boot(desired_ip_range) for node in nodes}
+        wait_state("post_boot", post_boot_state)
 
         for node in nodes:
             node.health_check()
