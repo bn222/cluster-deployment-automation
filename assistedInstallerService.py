@@ -49,12 +49,11 @@ class AssistedInstallerService:
     # The values are taken from:
     # https://gitlab.cee.redhat.com/service/app-interface/-/blob/ee5f631ce539537085b5ef043bbd9593fa74f860/data/services/assisted-installer/cicd/target/production/assisted-service.yaml#L44-47
     #
-    # NOTE: aicli is compatible only with v2.29.0+ but the AI API doesn't come
-    # up unless we use the installer and agent versions from v2.27.0.
-    SAAS_VERSION = "v2.29.0"
-    INSTALLER_IMAGE = "registry.redhat.io/rhai-tech-preview/assisted-installer-rhel8:v1.0.0-306"
-    CONTROLLER_IMAGE = "registry.redhat.io/rhai-tech-preview/assisted-installer-reporter-rhel8:v1.0.0-383"
-    AGENT_DOCKER_IMAGE = "registry.redhat.io/rhai-tech-preview/assisted-installer-agent-rhel8:v1.0.0-295"
+    SAAS_VERSION = "latest"
+    INSTALLER_IMAGE = "registry.redhat.io/rhai-tech-preview/assisted-installer-rhel8:v1.0.0-340"
+    CONTROLLER_IMAGE = "registry.redhat.io/rhai-tech-preview/assisted-installer-reporter-rhel8:v1.0.0-418"
+    AGENT_DOCKER_IMAGE = "registry.redhat.io/rhai-tech-preview/assisted-installer-agent-rhel8:v1.0.0-315"
+
 
     def __init__(self, version: str, ip: str, proxy: Optional[str] = None, noproxy: Optional[str] = None, branch: str = "master"):
         self._version = version
@@ -129,6 +128,7 @@ class AssistedInstallerService:
             image = container.get('image', '')
             if image.startswith('quay.io/edge-infrastructure/assisted'):
                 container['image'] = image.replace(':latest', f':{AssistedInstallerService.SAAS_VERSION}')
+                container['securityContext'] = {"runAsUser": 0}
 
         return y
 
