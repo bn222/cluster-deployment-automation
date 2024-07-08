@@ -230,7 +230,8 @@ def start_dpu_operator(host: host.Host, client: K8sClient, operator_image: str, 
         host.run(f"cd {REPO_DIR} && export KUBECONFIG={client._kc} && make undeploy")
         host.run_or_die(f"cd {REPO_DIR} && export KUBECONFIG={client._kc} && make local-deploy")
     logger.info("Waiting for all dpu operator pods to become ready")
-    client.oc_run_or_die("wait --for=condition=Ready pod --all -n openshift-dpu-operator --timeout=2m")
+    time.sleep(30)
+    client.oc_run_or_die("wait --for=condition=Ready pod --all -n openshift-dpu-operator --timeout=5m")
 
 
 def render_local_images_yaml(operator_image: str, daemon_image: str, outfilename: str, pull_policy: str = "Always") -> None:
@@ -327,7 +328,6 @@ def ExtraConfigDpuHost(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[s
     vendor_plugin.build_and_start(lh, client, registry)
 
     start_dpu_operator(lh, client, operator_image, daemon_image)
-    client.oc_run_or_die("wait --for=condition=Ready pod --all -n openshift-dpu-operator --timeout=2m")
 
     def helper(h: host.Host, node: NodeConfig) -> Optional[host.Result]:
         # Temporary workaround, remove once 4.16 installations are working
