@@ -407,6 +407,8 @@ class AssistedInstallerService:
 
         if ret.returncode:
             logger.error(f"Failed to teardown {name}: {ret.err}")
+        lh.run(f"podman volume rm ai-db-data")
+        lh.run(f"podman volume rm ai-service-data")
 
     def start(self, force: bool = False) -> None:
         self._configure()
