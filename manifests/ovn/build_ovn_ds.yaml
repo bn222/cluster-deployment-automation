@@ -42,6 +42,12 @@ spec:
               # on UBI.
               OVN_REMOVE_DEPS=${OVN_REMOVE_DEPS:-"graphviz groff sphinx-build unbound checkpolicy selinux-policy-devel"}
 
+              # Make sure we are using the fatest mirror and skip any slow ones as slow mirror could freeze
+              # dnf "forever".
+              echo "fastestmirror=true" >> /etc/dnf/dnf.conf
+              echo "minrate=25k" >> /etc/dnf/dnf.conf
+              echo "timeout=10" >> /etc/dnf/dnf.conf
+
               DEPS="containernetworking-plugins podman runc wget"
               sudo dnf install -y $DEPS
 
