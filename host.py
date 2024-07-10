@@ -39,6 +39,10 @@ class Result:
     def success(self) -> bool:
         return self.returncode == 0
 
+    @staticmethod
+    def result_success() -> 'Result':
+        return Result("", "", 0)
+
 
 class Login(ABC):
     def __init__(self, hostname: str, username: str) -> None:
