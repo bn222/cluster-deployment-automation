@@ -412,9 +412,9 @@ class ClusterDeployer:
         executor = ThreadPoolExecutor(max_workers=len(self._cc.workers))
 
         # Install all hosts that need to run (or be) workers.
-        preinstall_futures = [h.preinstall(self._cc.external_port, executor) for h in hosts_with_workers]
-        for pf in preinstall_futures:
-            logger.info(pf.result())
+        preinstall_futures = {h: h.preinstall(self._cc.external_port, executor) for h in hosts_with_workers}
+        for h, pf in preinstall_futures.items():
+            logger.info(f"Preinstall {h}: {pf.result()}")
 
         # Start all workers on all hosts.
         if not self.is_bf:
