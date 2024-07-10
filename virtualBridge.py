@@ -82,7 +82,8 @@ class VirBridge:
                 ip = e.attrib["ip"]
                 pre = "virsh net-update default delete ip-dhcp-host"
                 cmd = f"{pre} \"<host mac='{mac}' name='{name}' ip='{ip}'/>\" --live --config"
-                logger.info(self.hostconn.run(cmd))
+                result = self.hostconn.run(cmd)
+                logger.info(f"Delete DHCP configuration for {name}: {result}")
                 removed_macs.append(mac)
 
         fn = "/var/lib/libvirt/dnsmasq/virbr0.status"
@@ -96,11 +97,13 @@ class VirBridge:
             logger.info(f'Cleaning up {fn}')
             logger.info(f'removing hosts with mac in {removed_macs} or name in {names}')
             filtered = filter_dhcp_leases(j, removed_macs, names)
-            logger.info(self.hostconn.run("virsh net-destroy default"))
+            result = self.hostconn.run("virsh net-destroy default")
+            logger.info(f"Delete \"default\" Libvirt network: {result}")
 
             with p.open("w") as f:
                 f.write(json.dumps(filtered, indent=4))
-            logger.info(self.hostconn.run("virsh net-start default"))
+            result = self.hostconn.run("virsh net-start default")
+            logger.info(f"Start \"default\" Libvirt network: {result}")
             self._restart()
 
     def _ensure_started(self, bridge_xml: str, api_port: Optional[str]) -> None:
