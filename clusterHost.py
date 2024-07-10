@@ -170,10 +170,10 @@ class ClusterHost:
         logger.info(f"Removing DHCP reply drop rules on {self.api_port}")
         self.hostconn.run("ebtables -t filter -F FORWARD")
 
-    def preinstall(self, external_port: str, executor: ThreadPoolExecutor) -> Future[None]:
-        def _preinstall() -> None:
+    def preinstall(self, external_port: str, executor: ThreadPoolExecutor) -> Future[host.Result]:
+        def _preinstall() -> host.Result:
             if self.config.is_preinstalled():
-                return
+                return host.Result.result_success()
 
             iso = "fedora-coreos.iso"
             coreosBuilder.ensure_fcos_exists(os.path.join(os.getcwd(), iso))
@@ -182,7 +182,7 @@ class ClusterHost:
             # Use the X86 node provisioning infrastructure to provision the host
             # too.
             x86_node = X86ClusterNode(self.k8s_worker_nodes[0].config, external_port)
-            x86_node._boot_iso_x86(iso)
+            return x86_node._boot_iso_x86(iso)
 
         return executor.submit(_preinstall)
 
