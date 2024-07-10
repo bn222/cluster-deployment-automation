@@ -1,9 +1,12 @@
 # Cluster Deployment Automation
 Automate deployment of OpenShift clusters in different configurations.
-The main functionality is showcased below.  The distribution specific
-steps assume a RHEL/Fedora based distribution is used.  Also, the
+The main functionality is showcased below. The distribution specific
+steps assume a RHEL/Fedora based distribution is used. Also, the
 instructions below make the assumption that everything is run as root
-from the repository root directory.
+from the repository root directory. Keep in mind that the deployment
+process will require your pull secret (by default this should be stored
+at {cwd}/pull_secret.json). This can be obtained from 
+[Red Hat OpenShift](https://console.redhat.com/openshift/install/pull-secret).
 
 ## Install Software and Python Packages, Start a Python Virtual Environment and Setup
 NOTE: Requires Python3.11 or higher
@@ -27,6 +30,7 @@ deactivate
 ```
 
 ## Generate a baremetal worker cluster configuration file (1)
+NOTE: Replace `...` with your specific information.
 ```yaml
 cat > cluster.yaml << EOF
 clusters:
@@ -97,7 +101,7 @@ cat > cluster.yaml << EOF
 clusters:
   - name : "vm"
     api_vip: "192.168.122.99"
-    ingress_ip: "192.168.122.101"
+    ingress_vip: "192.168.122.101"
     kubeconfig: "/root/kubeconfig.vm"
     masters:
     - name: "vm-master-1"
@@ -164,6 +168,8 @@ popd
 ```
 
 ## Set the kubeconfig after a successful installation
+NOTE: By default, The `kubeconfig` file is generated in the current working directory
+unless specified and follows the convention `kubeconfig.<cluster-name>`:
 ```bash
 export KUBECONFIG=/root/kubeconfig.vm
 ```
