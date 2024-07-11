@@ -310,13 +310,23 @@ class Host:
     def copy_to(self, src_file: str, dst_file: str) -> None:
         if not os.path.exists(src_file):
             raise FileNotFoundError(2, f"No such file or dir: {src_file}")
+        self._copy(src_file, dst_file, True)
+
+    # Copying remote_file from "Host", which can be local or remote
+    def copy_from(self, src_file: str, dst_file: str) -> None:
+        self._copy(src_file, dst_file, False)
+
+    def _copy(self, src_file: str, dst_file: str, to: bool):
         if self.is_localhost():
             shutil.copy(src_file, dst_file)
         else:
             while True:
                 try:
                     sftp = self._host.open_sftp()
-                    sftp.put(src_file, dst_file)
+                    if to:
+                        sftp.put(src_file, dst_file)
+                    else:
+                        sftp.get(src_file, dst_file)
                     break
                 except Exception as e:
                     logger.info(e)
