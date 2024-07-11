@@ -34,10 +34,6 @@ class ExtraConfigArgs:
     kubeconfig: Optional[str] = None
     mapping: Optional[list[dict[str, str]]] = None
 
-    # Custom OVN build extra configs:
-    # Time to wait for the builders to roll out.
-    custom_ovn_build_timeout: str = "20m"
-
     # With "sriov_network_operator", if true build the container images locally
     # and push them to the internal container registry of openshift.
     #
