@@ -6,6 +6,7 @@ import sys
 from typing import Optional
 from typing import Callable
 from logger import logger
+from common import calculate_elapsed_time
 
 oc_url = "https://mirror.openshift.com/pub/openshift-v4/clients/ocp/latest/"
 
@@ -86,6 +87,24 @@ class K8sClient:
         minutes, seconds = divmod(int(time.time() - start), 60)
         logger.info(f"It took {minutes}m {seconds}s for {resource} (attempts: {iteration})")
 
+    def wait_for_all_mcp(self) -> None:
+        time.sleep(60)
+        iteration = 0
+        max_tries = 10
+        start = time.time()
+        while True:
+            ret = self.oc("wait mcp --for condition=updated --all --timeout=20m")
+            if ret.returncode == 0:
+                break
+            if iteration >= max_tries:
+                logger.info(ret)
+                logger.error(f"Not all mcp updated after {max_tries}, quitting ...")
+                sys.exit(-1)
+            iteration = iteration + 1
+            time.sleep(60)
+        minutes, seconds = divmod(int(time.time() - start), 60)
+        logger.info(f"It took {minutes}m {seconds}s for all mcp to be updated (attempts: {iteration})")
+
     def wait_for_crd(self, name: str, cr_name: str, namespace: str) -> None:
         logger.info(f"Waiting for crd {cr_name} to become available")
         ret = self.oc(f"get {cr_name}/{name} -n {namespace}")
@@ -96,3 +115,44 @@ class K8sClient:
             retries -= 1
             if retries <= 0:
                 logger.error_and_exit(f"Failed to get cr {cr_name}/{name}")
+
+    def wait_for_all_pods_in_namespace(self, namespace: str, condition: str = "Ready") -> None:
+        logger.info(f"Waiting for all pods in namespace {namespace} to be '{condition}'")
+        it = 0
+        retries = 3
+        start = time.time()
+        # Keep away any race conditions of waiting for pods before deployment is available
+        self.wait_for_deployment(deployment_name="sriov-network-operator", namespace=namespace, condition="available")
+        while True:
+            # My tests show it generally takes about 5 minutes for all pods to be ready
+            ret = self.oc(f"wait --for=condition={condition} --timeout=5m pods --all -n {namespace}")
+            if ret.returncode == 0:
+                break
+            if it >= retries:
+                logger.info(ret)
+                logger.error(f"Not all pods in namespace {namespace} became '{condition}' after {retries} retries, quitting ...")
+                sys.exit(-1)
+            it = it + 1
+            time.sleep(30)
+        minutes, seconds = calculate_elapsed_time(start, time.time())
+        logger.info(f"All pods in {namespace} are '{condition}'")
+        logger.info(f"It took {minutes} m {seconds}s for all pods in {namespace} to be '{condition}' (attempts: {it})")
+
+    def wait_for_deployment(self, deployment_name: str, namespace: str, condition: str) -> None:
+        logger.info(f"Waiting for deployment in namespace {namespace} to be '{condition}'")
+        retries = 3
+        it = 0
+        start = time.time()
+        while it <= retries:
+            ret = self.oc(f"wait --for condition={condition} --timeout=30s -n {namespace} deployments/{deployment_name}")
+            if ret.returncode == 0:
+                break
+            it += 1
+            if it > retries:
+                logger.info(ret)
+                logger.error(f"The all pods in namespace {namespace} failed to become '{condition}' after {retries}, quitting ...")
+                sys.exit(-1)
+            time.sleep(30)
+        minutes, seconds = calculate_elapsed_time(start, time.time())
+        logger.info(f"Deployment {deployment_name} in {namespace} are '{condition}'")
+        logger.info(f"It took {minutes} m {seconds}s for deployments/{deployment_name} in {namespace} to be '{condition}' (attempts: {it})")

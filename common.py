@@ -546,3 +546,8 @@ def extract_version_or_panic(version: str) -> str:
     if number_of_subs_made == 1:
         return v
     logger.error_and_exit(f"unsupported version \"{version}\"")
+
+
+def calculate_elapsed_time(start: float, end: float) -> tuple[int, int]:
+    minutes, seconds = divmod(int(end - start), 60)
+    return minutes, seconds
