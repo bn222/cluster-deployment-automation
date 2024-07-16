@@ -107,5 +107,6 @@ skip_if_unavailable=0
     acc.run("systemctl restart crio.service")
     logger.info("Starting microshift")
     acc.run("systemctl restart microshift")
+    acc.run("systemctl enable microshift")
 
     wait_for_microshift(acc, kubeconfig)
