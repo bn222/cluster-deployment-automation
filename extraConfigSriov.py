@@ -68,7 +68,6 @@ def _sno_make_deploy(
     # Images can be specified via environment variables, before falling back to
     # the default.
     deploy_env.update({k: os.environ.get(k, v) for k, v in default_images(version).items()})
-
     if image is not None:
         logger.info(f"Image {image} provided to load custom sriov-network-operator")
         deploy_env["SRIOV_NETWORK_OPERATOR_IMAGE"] = image
@@ -116,9 +115,10 @@ def _sno_make_deploy(
         logger.error(f"completed with error: {ret}")
         break
 
-    # Future proof for when sriov moves to new switchdev implementation: https://github.com/k8snetworkplumbingwg/sriov-network-operator/blob/master/doc/design/switchdev-refactoring.md
-    client.wait_for_crd(name="default", cr_name="sriovoperatorconfig", namespace="openshift-sriov-network-operator")
+    # Make sure pods are ready, with the config daemon being the most important here
+    client.wait_for_all_pods_in_namespace(namespace="openshift-sriov-network-operator")
     client.oc("apply -f manifests/nicmode/sriov-operator-config.yaml")
+    client.wait_for_all_mcp()
 
 
 def ExtraConfigSriov(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, Future[Optional[host.Result]]]) -> None:
@@ -153,8 +153,10 @@ def ExtraConfigSriovSubscription(cc: ClustersConfig, cfg: ExtraConfigArgs, futur
     client.oc("create -f manifests/nicmode/sriov-operator-group.yaml")
     client.oc("create -f manifests/nicmode/sriov-subscription.yaml")
 
-    client.wait_for_crd(name="default", cr_name="sriovoperatorconfig", namespace="openshift-sriov-network-operator")
+    # Make sure pods are ready, with the config daemon being the most important here
+    client.wait_for_all_pods_in_namespace(namespace="openshift-sriov-network-operator")
     client.oc("apply -f manifests/nicmode/sriov-operator-config.yaml")
+    client.wait_for_all_mcp()
     _check_sriov_installed(client)
 
 
