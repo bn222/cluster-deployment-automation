@@ -13,16 +13,6 @@ fi
 $PYTHON_CMD -m ensurepip --upgrade
 $PYTHON_CMD -m pip install PyYAML --ignore-installed
 
-cat <<EOF | sudo tee /etc/yum.repos.d/kubernetes.repo
-[kubernetes]
-name=Kubernetes
-baseurl=https://pkgs.k8s.io/core:/stable:/v1.29/rpm/
-enabled=1
-gpgcheck=1
-gpgkey=https://pkgs.k8s.io/core:/stable:/v1.29/rpm/repodata/repomd.xml.key
-#exclude=kubelet kubeadm kubectl cri-tools kubernetes-cni
-EOF
-
 dnf install -y \
         bash-completion \
         cockpit-composer \
@@ -33,7 +23,6 @@ dnf install -y \
         firewalld \
         git \
         golang-bin \
-        kubectl \
         libvirt \
         lorax \
         make \
