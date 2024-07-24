@@ -44,6 +44,7 @@ def extract_microshift_kubeconfig(acc: host.Host) -> str:
     to_write = to_write.replace(f"{key}:", f"# {key}:")
     return to_write
 
+
 def ExtraConfigMicroshift(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, Future[Optional[host.Result]]]) -> None:
     [f.result() for (_, f) in futures.items()]
     logger.info("Running post config step to start Microshift on the IPU")
@@ -108,7 +109,8 @@ def ExtraConfigMicroshift(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dic
     kubeconfig = "/root/kubeconfig.microshift"
     with open(kubeconfig, "w") as f:
         f.write(contents)
+
     def cb() -> None:
         acc.run("ip r del default via 192.168.0.1")
-    K8sClient(kubeconfig).wait_ready_all(cb)
 
+    K8sClient(kubeconfig).wait_ready_all(cb)

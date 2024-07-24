@@ -30,7 +30,7 @@ class K8sClient:
     def get_nodes(self) -> list[str]:
         return [e.metadata.name for e in self._client.list_node().items]
 
-    def wait_ready(self, name: str, cb: Callable[[], None] = lambda : None) -> None:
+    def wait_ready(self, name: str, cb: Callable[[], None] = lambda: None) -> None:
         logger.info(f"waiting for {name} to be ready")
         while True:
             if self.is_ready(name):
@@ -40,7 +40,7 @@ class K8sClient:
             cb()
             self.approve_csr()
 
-    def wait_ready_all(self, cb: Callable[[], None] = lambda : None) -> None:
+    def wait_ready_all(self, cb: Callable[[], None] = lambda: None) -> None:
         for n in self.get_nodes():
             self.wait_ready(n, cb)
 
