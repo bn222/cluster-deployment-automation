@@ -1,4 +1,3 @@
-import time
 from concurrent.futures import Future
 from typing import Optional, Any, Dict
 from k8sClient import K8sClient
