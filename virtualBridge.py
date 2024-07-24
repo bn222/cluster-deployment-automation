@@ -11,6 +11,7 @@ from logger import logger
 import common
 import host
 from clustersConfig import BridgeConfig, NodeConfig
+from libvirt import Libvirt
 
 
 def bridge_dhcp_range_str(dhcp_range: Optional[tuple[str, str]]) -> str:
@@ -32,10 +33,12 @@ class VirBridge:
 
     hostconn: host.Host
     config: BridgeConfig
+    libvirt: Libvirt
 
     def __init__(self, h: host.Host, config: BridgeConfig):
         self.hostconn = h
         self.config = config
+        self.libvirt = Libvirt(h)
 
     def setup_dhcp_entries(self, vms: list[NodeConfig]) -> None:
         # DHCP entries should have been removed during teardown.
@@ -152,7 +155,7 @@ class VirBridge:
                 </network>"""
 
     def _restart(self) -> None:
-        self.hostconn.run_or_die("systemctl restart libvirtd")
+        self.libvirt.restart()
 
     def _ensure_run_as_root(self) -> None:
         qemu_conf = self.hostconn.read_file("/etc/libvirt/qemu.conf")
@@ -163,8 +166,7 @@ class VirBridge:
 
     def configure(self, api_port: Optional[str]) -> None:
         hostname = self.hostconn.hostname()
-        cmd = "systemctl enable libvirtd --now"
-        self.hostconn.run_or_die(cmd)
+        self.libvirt.configure()
 
         self._ensure_run_as_root()
 

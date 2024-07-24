@@ -14,6 +14,7 @@ from requests import get as get_url
 from logger import logger
 import host
 import common
+from libvirt import Libvirt
 
 
 def load_url_or_file(url_or_file: str) -> str:
@@ -356,8 +357,8 @@ class AssistedInstallerService:
         lh = host.LocalHost()
         if not common.ip_links(lh, ifname="virbr0"):
             logger.info("Can't find virbr0. Trying to restart libvirt.")
-            cmd = "systemctl start libvirtd"
-            lh.run(cmd)
+            libvirt = Libvirt(lh)
+            libvirt.configure()
             cmd = "virsh net-start default"
             lh.run(cmd)
 
@@ -366,7 +367,7 @@ class AssistedInstallerService:
             time.sleep(5)
 
         if not common.ip_links(lh, ifname="virbr0"):
-            logger.error_and_exit("Can't find virbr0. Make sure that libvirtd is running.")
+            logger.error_and_exit("Can't find virbr0. Make sure that libvirt is running.")
 
     def wait_for_api(self) -> None:
         self._ensure_libvirt_running()
