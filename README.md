@@ -15,7 +15,6 @@ dnf install -y python3.11
 python3.11 -m venv ocp-venv
 source ocp-venv/bin/activate
 ./dependencies.sh
-systemctl enable --now libvirtd
 usermod -a -G root qemu
 
 # Ensure having a suitable SSH key

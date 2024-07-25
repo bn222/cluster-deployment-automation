@@ -25,6 +25,7 @@ import dnsutil
 from virshPool import VirshPool
 from arguments import PRE_STEP, WORKERS_STEP, MASTERS_STEP, POST_STEP
 import isoCluster
+from libvirt import Libvirt
 
 
 def match_to_proper_version_format(version_cluster_config: str) -> str:
@@ -559,10 +560,10 @@ class ClusterDeployer:
         hosts.add([HostsEntry(entry_type='ipv4', address=api_vip, names=[api_name])])
         hosts.write()
 
-        # libvirtd also runs dnsmasq, and dnsmasq reads /etc/hosts.
-        # For that reason, restart libvirtd to re-read the changes.
-        lh = host.LocalHost()
-        lh.run("systemctl restart libvirtd")
+        # libvirt also runs dnsmasq, and dnsmasq reads /etc/hosts.
+        # For that reason, restart libvirt to re-read the changes.
+        libvirt = Libvirt(host.LocalHost())
+        libvirt.restart()
 
     def update_dnsmasq(self, *, setup: bool = True) -> None:
         cluster_name = self._cc.name
