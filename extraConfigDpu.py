@@ -198,7 +198,7 @@ def build_dpu_operator_images() -> str:
 
     operator_image = f"{registry}/openshift-dpu-operator/cda-dpu-operator:latest"
     daemon_image = f"{registry}/openshift-dpu-operator/cda-dpu-daemon:latest"
-    render_local_images_yaml(operator_image=operator_image, daemon_image=daemon_image, outfilename=f"{REPO_DIR}/config/dev/local-images.yaml")
+    render_local_images_yaml(operator_image=operator_image, daemon_image=daemon_image, outfilename=f"{REPO_DIR}/config/dev/local-images-template.yaml")
 
     lh.run_or_die(f"make -C {REPO_DIR} local-buildx")
     lh.run_or_die(f"make -C {REPO_DIR} local-pushx")
@@ -211,8 +211,8 @@ def start_dpu_operator(host: host.Host, client: K8sClient, operator_image: str, 
     if repo_wipe:
         host.run(f"rm -rf {REPO_DIR}")
         host.run_or_die(f"git clone {DPU_OPERATOR_REPO}")
-        render_local_images_yaml(operator_image=operator_image, daemon_image=daemon_image, outfilename="/tmp/dpu-local-images.yaml", pull_policy="IfNotPresent")
-        host.copy_to("/tmp/dpu-local-images.yaml", f"{REPO_DIR}/config/dev/local-images.yaml")
+        render_local_images_yaml(operator_image=operator_image, daemon_image=daemon_image, outfilename="/tmp/dpu-local-images-template.yaml", pull_policy="IfNotPresent")
+        host.copy_to("/tmp/dpu-local-images-template.yaml", f"{REPO_DIR}/config/dev/local-images-template.yaml")
 
     host.run("dnf install -y pip")
     host.run_or_die("pip install yq")
@@ -236,7 +236,7 @@ def start_dpu_operator(host: host.Host, client: K8sClient, operator_image: str, 
 
 
 def render_local_images_yaml(operator_image: str, daemon_image: str, outfilename: str, pull_policy: str = "Always") -> None:
-    with open('./manifests/dpu/local-images.yaml.j2') as f:
+    with open('./manifests/dpu/local-images-template.yaml.j2') as f:
         j2_template = jinja2.Template(f.read())
         rendered = j2_template.render(operator_image=operator_image, daemon_image=daemon_image, pull_policy=pull_policy)
         logger.info(rendered)
