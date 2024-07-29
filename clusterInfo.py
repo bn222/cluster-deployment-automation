@@ -14,7 +14,7 @@ class ClusterInfo:
         self.bmcs = []  # type: list[str]
 
 
-def read_sheet() -> list[list[str]]:
+def read_sheet() -> list[dict[str, str]]:
     logger.info("Downloading sheet from Google")
     scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
     cred_paths = [os.path.join(os.getcwd(), "credentials.json"), os.path.join(os.environ["HOME"], "credentials.json")]
@@ -29,33 +29,29 @@ def read_sheet() -> list[list[str]]:
     file = gspread.authorize(credentials)
     sheet = file.open("ANL lab HW enablement clusters and connections")
     sheet = sheet.sheet1
-
-    return [list(e.values()) for e in sheet.get_all_records()]
+    return [{k: str(v) for k, v in record.items()} for record in sheet.get_all_records()]
 
 
 def load_all_cluster_info() -> dict[str, ClusterInfo]:
     cluster = None
     ret = []
     logger.info("loading cluster information")
-    for e in read_sheet():
-        if e[0].startswith("Cluster"):
+    for row in read_sheet():
+        if row["Name"].startswith("Cluster"):
             if cluster is not None:
                 ret.append(cluster)
-            cluster = ClusterInfo(e[0])
+            cluster = ClusterInfo(row["Name"])
         if cluster is None:
             continue
-        if e[0].startswith("BF2"):
+        if "BF2" in row["Name"]:
             continue
-        if e[7] == "yes":
-            cluster.provision_host = e[0]
-            cluster.network_api_port = e[3]
-        elif e[7] == "no":
-            cluster.workers.append(e[0])
-            if "https://" in e[1]:
-                cluster.bmcs.append(e[1][8:])
-            else:
-                cluster.bmcs.append(e[1])
-
+        if row["Provision host"] == "yes":
+            cluster.provision_host = row["Name"]
+            cluster.network_api_port = row["Ports"]
+        elif row["Provision host"] == "no":
+            cluster.workers.append(row["Name"])
+            bmc_host = row["IPMI"][8:] if "https://" in row["IPMI"] else row["IPMI"]
+            cluster.bmcs.append(bmc_host)
     if cluster is not None:
         ret.append(cluster)
     return {x.provision_host: x for x in ret}
