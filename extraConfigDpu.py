@@ -200,7 +200,8 @@ def build_dpu_operator_images() -> str:
     daemon_image = f"{registry}/openshift-dpu-operator/cda-dpu-daemon:latest"
     render_local_images_yaml(operator_image=operator_image, daemon_image=daemon_image, outfilename=f"{REPO_DIR}/config/dev/local-images.yaml")
 
-    lh.run_or_die(f"make -C {REPO_DIR} images-buildx")
+    lh.run_or_die(f"make -C {REPO_DIR} local-buildx")
+    lh.run_or_die(f"make -C {REPO_DIR} local-pushx")
 
     return registry
 
