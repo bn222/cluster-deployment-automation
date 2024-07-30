@@ -18,6 +18,8 @@ DPU_OPERATOR_REPO = "https://github.com/openshift/dpu-operator.git"
 MICROSHIFT_KUBECONFIG = "/var/lib/microshift/resources/kubeadmin/kubeconfig"
 OSE_DOCKERFILE = "https://pkgs.devel.redhat.com/cgit/containers/dpu-operator/tree/Dockerfile?h=rhaos-4.17-rhel-9"
 REPO_DIR = "/root/dpu-operator"
+DAEMON_IMG = "dpu-daemon:dev"
+OPERATOR_IMG = "dpu-operator:dev"
 
 KERNEL_RPMS = [
     "https://download-01.beak-001.prod.iad2.dc.redhat.com/brewroot/vol/rhel-9/packages/kernel/5.14.0/427.2.1.el9_4/x86_64/kernel-5.14.0-427.2.1.el9_4.x86_64.rpm",
@@ -196,8 +198,8 @@ def build_dpu_operator_images() -> str:
     registry = _ensure_local_registry_running(lh, delete_all=True)
     reglocal.local_trust(lh)
 
-    operator_image = f"{registry}/openshift-dpu-operator/cda-dpu-operator:latest"
-    daemon_image = f"{registry}/openshift-dpu-operator/cda-dpu-daemon:latest"
+    operator_image = f"{registry}/{OPERATOR_IMG}"
+    daemon_image = f"{registry}/{DAEMON_IMG}"
     render_local_images_yaml(operator_image=operator_image, daemon_image=daemon_image, outfilename=f"{REPO_DIR}/config/dev/local-images-template.yaml")
 
     lh.run_or_die(f"make -C {REPO_DIR} local-buildx")
@@ -262,8 +264,8 @@ def ExtraConfigDpu(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, 
         logger.info("Will not rebuild dpu-operator images")
         registry = _ensure_local_registry_running(lh, delete_all=False)
 
-    operator_image = f"{registry}/openshift-dpu-operator/cda-dpu-operator:latest"
-    daemon_image = f"{registry}/openshift-dpu-operator/cda-dpu-daemon:latest"
+    operator_image = f"{registry}/{OPERATOR_IMG}"
+    daemon_image = f"{registry}/{DAEMON_IMG}"
 
     # Build and start vsp on DPU
     vendor_plugin = init_vendor_plugin(acc)
@@ -317,8 +319,8 @@ def ExtraConfigDpuHost(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[s
     else:
         logger.info("Will not rebuild dpu-operator images")
         registry = _ensure_local_registry_running(lh, delete_all=False)
-    operator_image = f"{registry}/openshift-dpu-operator/cda-dpu-operator:latest"
-    daemon_image = f"{registry}/openshift-dpu-operator/cda-dpu-daemon:latest"
+    operator_image = f"{registry}/{OPERATOR_IMG}"
+    daemon_image = f"{registry}/{DAEMON_IMG}"
 
     # Need to trust the registry in OCP / Microshift
     logger.info("Ensuring local registry is trusted in OCP")
