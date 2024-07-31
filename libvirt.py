@@ -27,6 +27,7 @@ class Libvirt:
         self.hostconn.run_or_die("systemctl disable libvirtd.service")
         self._run_per_suffix("systemctl disable", "libvirtd", MONOLITHIC_SOCKET_SUFFIXES)
 
+        self.hostconn.run_or_die("systemctl restart virtqemud.service")
         for service in MODULAR_SERVICES:
             self.hostconn.run_or_die(f"systemctl enable virt{service}d.service")
             self._run_per_suffix("systemctl enable", f"virt{service}d", MODULAR_SOCKET_SUFFIXES)
@@ -35,7 +36,7 @@ class Libvirt:
     def restart(self) -> None:
         for service in MODULAR_SERVICES:
             self.hostconn.run_or_die(f"systemctl restart virt{service}d.service")
-            self._run_per_suffix("systemctl restart", f"virt{service}d", MODULAR_SOCKET_SUFFIXES)
+            self._run_per_suffix("systemctl start", f"virt{service}d", MODULAR_SOCKET_SUFFIXES)
 
     def _run_per_suffix(self, cmd: str, service: str, suffixes: list[str]) -> None:
         for suffix in suffixes:
