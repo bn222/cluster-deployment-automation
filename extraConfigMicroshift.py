@@ -109,6 +109,9 @@ def ExtraConfigMicroshift(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dic
     with open(kubeconfig, "w") as f:
         f.write(contents)
 
+    acc.run("systemctl stop firewalld")
+    acc.run("systemctl disable firewalld")
+
     def cb() -> None:
         acc.run("ip r del default via 192.168.0.1")
 
