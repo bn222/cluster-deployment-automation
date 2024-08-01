@@ -26,10 +26,10 @@ def read_sheet() -> list[dict[str, str]]:
         logger.info("Missing credentials.json while using templated config file")
         sys.exit(-1)
     credentials = ServiceAccountCredentials.from_json_keyfile_name(cred_path, scopes)
-    file = gspread.authorize(credentials)
+    file = gspread.auth.authorize(credentials)
     sheet = file.open("ANL lab HW enablement clusters and connections")
-    sheet = sheet.sheet1
-    return [{k: str(v) for k, v in record.items()} for record in sheet.get_all_records()]
+    sheet1 = sheet.sheet1
+    return [{k: str(v) for k, v in record.items()} for record in sheet1.get_all_records()]
 
 
 def load_all_cluster_info() -> dict[str, ClusterInfo]:
