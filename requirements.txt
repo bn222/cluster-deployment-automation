@@ -13,3 +13,4 @@ kubernetes
 python-hosts
 argcomplete
 yq
+git+https://github.com/thom311/ktoolbox@1ed46e23e058521d6ed7811dbbe6e97f244dafd9
