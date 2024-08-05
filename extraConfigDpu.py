@@ -208,30 +208,31 @@ def build_dpu_operator_images() -> str:
     return registry
 
 
-def start_dpu_operator(host: host.Host, client: K8sClient, operator_image: str, daemon_image: str, repo_wipe: bool = False) -> None:
-    logger.info(f"Deploying dpu operator containers on {host.hostname()}")
+def start_dpu_operator(h: host.Host, client: K8sClient, operator_image: str, daemon_image: str, repo_wipe: bool = False) -> None:
+    logger.info(f"Deploying dpu operator containers on {h.hostname()}")
     if repo_wipe:
-        host.run(f"rm -rf {REPO_DIR}")
-        host.run_or_die(f"git clone {DPU_OPERATOR_REPO}")
+        h.run(f"rm -rf {REPO_DIR}")
+        h.run_or_die(f"git clone {DPU_OPERATOR_REPO}")
         render_local_images_yaml(operator_image=operator_image, daemon_image=daemon_image, outfilename="/tmp/dpu-local-images-template.yaml", pull_policy="IfNotPresent")
-        host.copy_to("/tmp/dpu-local-images-template.yaml", f"{REPO_DIR}/config/dev/local-images-template.yaml")
+        h.copy_to("/tmp/dpu-local-images-template.yaml", f"{REPO_DIR}/config/dev/local-images-template.yaml")
 
-    host.run("dnf install -y pip")
-    host.run_or_die("pip install yq")
-    ensure_go_installed(host)
-    reglocal.local_trust(host)
-    host.run_or_die(f"podman pull {operator_image}")
-    host.run_or_die(f"podman pull {daemon_image}")
-    if host.is_localhost():
+    h.run("dnf install -y pip")
+    h.run_or_die("pip install yq")
+    ensure_go_installed(h)
+    reglocal.local_trust(h)
+    h.run_or_die(f"podman pull {operator_image}")
+    h.run_or_die(f"podman pull {daemon_image}")
+    if h.is_localhost():
         env = os.environ.copy()
         env["KUBECONFIG"] = client._kc
-        host.run(f"make -C {REPO_DIR} undeploy", env=env)
-        ret = host.run(f"make -C {REPO_DIR} local-deploy", env=env)
+        env["REGISTRY"] = host.LocalHost().hostname()
+        h.run(f"make -C {REPO_DIR} undeploy", env=env)
+        ret = h.run(f"make -C {REPO_DIR} local-deploy", env=env)
         if not ret.success():
             logger.error_and_exit("Failed to deploy dpu operator")
     else:
-        host.run(f"cd {REPO_DIR} && export KUBECONFIG={client._kc} && make undeploy")
-        host.run_or_die(f"cd {REPO_DIR} && export KUBECONFIG={client._kc} && make local-deploy")
+        h.run(f"cd {REPO_DIR} && export KUBECONFIG={client._kc} && make undeploy")
+        h.run_or_die(f"cd {REPO_DIR} && export KUBECONFIG={client._kc} && make local-deploy")
     logger.info("Waiting for all dpu operator pods to become ready")
     time.sleep(30)
     client.oc_run_or_die("wait --for=condition=Ready pod --all -n openshift-dpu-operator --timeout=5m")
