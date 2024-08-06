@@ -1,5 +1,6 @@
 import sys
 import os
+import shlex
 from pathlib import Path
 import shutil
 import time
@@ -70,30 +71,33 @@ def configure_iso_network_port(api_port: str, node_ip: str) -> None:
 
 def enable_acc_connectivity(node: NodeConfig) -> None:
     logger.info(f"Establishing connectivity to {node.name}")
-    ipu_imc = host.RemoteHost(node.bmc)
-    ipu_imc.ssh_connect(node.bmc_user, node.bmc_password)
-    # ipu_imc.run_or_die("/usr/bin/scripts/cfg_acc_apf_x2.py")
-    # """
-    # We need to ensure the ACC physical port connectivity is enabled during reboot to ensure dhcp gets an ip.
-    # Trigger an acc reboot and try to run python /usr/bin/scripts/cfg_acc_apf_x2.py. This will fail until the
-    # ACC_LAN_APF_VPORTs are ready. Once this succeeds, we can try to connect to the ACC
-    # """
-    logger.info("Rebooting IMC to trigger ACC reboot")
-    ipu_imc.run("systemctl reboot")
-    time.sleep(30)
-    # ipu_imc.ssh_connect(node.bmc_user, node.bmc_password)
-    # logger.info(f"Attempting to enable ACC connectivity from IMC {node.bmc} on reboot")
-    # retries = 30
-    # for _ in range(retries):
-    #     ret = ipu_imc.run("/usr/bin/scripts/cfg_acc_apf_x2.py")
-    #     if ret.returncode == 0:
-    #         logger.info("Enabled ACC physical port connectivity")
-    #         break
-    #     logger.debug(f"ACC SPF script failed with returncode {ret.returncode}")
-    #     logger.debug(f"out: {ret.out}\n err: {ret.err}")
-    #     time.sleep(15)
-    # else:
-    #     logger.error_and_exit("Failed to enable ACC connectivity")
+    if node.kind == "marvell-dpu":
+        pass
+    else:
+        ipu_imc = host.RemoteHost(node.bmc)
+        ipu_imc.ssh_connect(node.bmc_user, node.bmc_password)
+        # ipu_imc.run_or_die("/usr/bin/scripts/cfg_acc_apf_x2.py")
+        # """
+        # We need to ensure the ACC physical port connectivity is enabled during reboot to ensure dhcp gets an ip.
+        # Trigger an acc reboot and try to run python /usr/bin/scripts/cfg_acc_apf_x2.py. This will fail until the
+        # ACC_LAN_APF_VPORTs are ready. Once this succeeds, we can try to connect to the ACC
+        # """
+        logger.info("Rebooting IMC to trigger ACC reboot")
+        ipu_imc.run("systemctl reboot")
+        time.sleep(30)
+        # ipu_imc.ssh_connect(node.bmc_user, node.bmc_password)
+        # logger.info(f"Attempting to enable ACC connectivity from IMC {node.bmc} on reboot")
+        # retries = 30
+        # for _ in range(retries):
+        #     ret = ipu_imc.run("/usr/bin/scripts/cfg_acc_apf_x2.py")
+        #     if ret.returncode == 0:
+        #         logger.info("Enabled ACC physical port connectivity")
+        #         break
+        #     logger.debug(f"ACC SPF script failed with returncode {ret.returncode}")
+        #     logger.debug(f"out: {ret.out}\n err: {ret.err}")
+        #     time.sleep(15)
+        # else:
+        #     logger.error_and_exit("Failed to enable ACC connectivity")
 
     ipu_acc = host.RemoteHost(str(node.ip))
     ipu_acc.ping()
@@ -149,8 +153,59 @@ def _redfish_boot_ipu(cc: ClustersConfig, node: NodeConfig, iso: str) -> None:
             logger.info(helper(node))
 
 
+def _pxeboot_marvell_dpu(name: str, node: str, mac: str, ip: str, iso: str) -> None:
+    rsh = host.RemoteHost(node)
+    rsh.ssh_connect("core")
+
+    ip_addr = f"{ip}/24"
+    ip_gateway, _ = get_subnet_range(ip, "255.255.255.0")
+
+    # An empty entry means to use the host's "id_ed25519.pub". We want that.
+    ssh_keys = [""]
+    for pub_file, pub_key_content, priv_key_file in common.iterate_ssh_keys():
+        ssh_keys.append(pub_key_content)
+
+    ssh_key_options = [f"--ssh-key={shlex.quote(s)}" for s in ssh_keys]
+
+    image = os.environ.get("CDA_MARVELL_TOOLS_IMAGE", "quay.io/sdaniele/marvell-tools:latest")
+
+    r = rsh.run(
+        "sudo "
+        "podman "
+        "run "
+        "--pull always "
+        "--rm "
+        "--replace "
+        "--privileged "
+        "--pid host "
+        "--network host "
+        "--user 0 "
+        "--name marvell-tools "
+        "-i "
+        "-v /:/host "
+        "-v /dev:/dev "
+        f"{shlex.quote(image)} "
+        "./pxeboot.py "
+        f"--dpu-name={shlex.quote(name)} "
+        "--host-mode=coreos "
+        f"--nm-secondary-cloned-mac-address={shlex.quote(mac)} "
+        f"--nm-secondary-ip-address={shlex.quote(ip_addr)} "
+        f"--nm-secondary-ip-gateway={shlex.quote(ip_gateway)} "
+        "--yum-repos=rhel-nightly "
+        f"{' '.join(ssh_key_options)} "
+        f"{shlex.quote(iso)} "
+        "2>&1"
+    )
+    if not r.success():
+        raise RuntimeError(f"Failure to to pxeboot: {r}")
+
+
 def IPUIsoBoot(cc: ClustersConfig, node: NodeConfig, iso: str) -> None:
-    _redfish_boot_ipu(cc, node, iso)
+    if node.kind == "marvell-dpu":
+        assert node.ip
+        _pxeboot_marvell_dpu(node.name, node.node, node.mac, node.ip, iso)
+    else:
+        _redfish_boot_ipu(cc, node, iso)
     assert node.ip is not None
     configure_iso_network_port(cc.network_api_port, node.ip)
     configure_dhcpd(node)
