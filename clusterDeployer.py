@@ -638,13 +638,7 @@ class IsoDeployer(BaseDeployer):
             logger.error("Masters must be of length one for deploying from iso")
             sys.exit(-1)
         self._master = self._cc.masters[0]
-
-        def empty() -> Future[Optional[host.Result]]:
-            f: Future[Optional[host.Result]] = Future()
-            f.set_result(None)
-            return f
-
-        self._futures[self._master.name] = empty()
+        self._futures[self._master.name] = common.empty_future(host.Result)
         self._validate()
 
     def _validate(self) -> None:

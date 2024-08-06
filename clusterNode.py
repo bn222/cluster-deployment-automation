@@ -30,13 +30,8 @@ class ClusterNode:
     dynamic_ip: Optional[str] = None
 
     def __init__(self, config: NodeConfig):
-        def empty() -> Future[Optional[host.Result]]:
-            f: Future[Optional[host.Result]] = Future()
-            f.set_result(None)
-            return f
-
         self.config = config
-        self.future = empty()
+        self.future = common.empty_future(host.Result)
 
     def ip(self) -> str:
         if self.config.ip is not None:
