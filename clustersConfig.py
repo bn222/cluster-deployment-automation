@@ -54,6 +54,8 @@ class ExtraConfigArgs:
 
     activation_key: Optional[str] = None
 
+    dpu_operator_branch: Optional[str] = "main"
+
     rebuild_dpu_operators_images: bool = True
 
     dpu_net_interface: Optional[str] = "ens2f0"
