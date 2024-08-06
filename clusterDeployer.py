@@ -46,8 +46,6 @@ class BaseDeployer(abc.ABC):
         self.steps = tuple(steps)
 
     def _prepost_config(self, to_run: ExtraConfigArgs) -> None:
-        if not to_run:
-            return
         self._extra_config.run(to_run, self._futures)
 
     def _preconfig(self) -> None:
