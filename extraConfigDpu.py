@@ -2,7 +2,6 @@ from clustersConfig import ClustersConfig, NodeConfig
 import host
 from k8sClient import K8sClient
 from concurrent.futures import Future, ThreadPoolExecutor
-import jinja2
 import re
 import os
 import requests
@@ -18,8 +17,6 @@ DPU_OPERATOR_REPO = "https://github.com/openshift/dpu-operator.git"
 MICROSHIFT_KUBECONFIG = "/var/lib/microshift/resources/kubeadmin/kubeconfig"
 OSE_DOCKERFILE = "https://pkgs.devel.redhat.com/cgit/containers/dpu-operator/tree/Dockerfile?h=rhaos-4.17-rhel-9"
 REPO_DIR = "/root/dpu-operator"
-DAEMON_IMG = "dpu-daemon:dev"
-OPERATOR_IMG = "dpu-operator:dev"
 
 KERNEL_RPMS = [
     "https://download-01.beak-001.prod.iad2.dc.redhat.com/brewroot/vol/rhel-9/packages/kernel/5.14.0/427.2.1.el9_4/x86_64/kernel-5.14.0-427.2.1.el9_4.x86_64.rpm",
@@ -198,54 +195,37 @@ def build_dpu_operator_images() -> str:
     registry = _ensure_local_registry_running(lh, delete_all=True)
     reglocal.local_trust(lh)
 
-    operator_image = f"{registry}/{OPERATOR_IMG}"
-    daemon_image = f"{registry}/{DAEMON_IMG}"
-    render_local_images_yaml(operator_image=operator_image, daemon_image=daemon_image, outfilename=f"{REPO_DIR}/config/dev/local-images-template.yaml")
-
     lh.run_or_die(f"make -C {REPO_DIR} local-buildx")
     lh.run_or_die(f"make -C {REPO_DIR} local-pushx")
 
     return registry
 
 
-def start_dpu_operator(h: host.Host, client: K8sClient, operator_image: str, daemon_image: str, repo_wipe: bool = False) -> None:
+def start_dpu_operator(h: host.Host, client: K8sClient, repo_wipe: bool = False) -> None:
     logger.info(f"Deploying dpu operator containers on {h.hostname()}")
     if repo_wipe:
         h.run(f"rm -rf {REPO_DIR}")
         h.run_or_die(f"git clone {DPU_OPERATOR_REPO}")
-        render_local_images_yaml(operator_image=operator_image, daemon_image=daemon_image, outfilename="/tmp/dpu-local-images-template.yaml", pull_policy="IfNotPresent")
-        h.copy_to("/tmp/dpu-local-images-template.yaml", f"{REPO_DIR}/config/dev/local-images-template.yaml")
 
+    REGISTRY = host.LocalHost().hostname()
     h.run("dnf install -y pip")
     h.run_or_die("pip install yq")
     ensure_go_installed(h)
-    reglocal.local_trust(h)
-    h.run_or_die(f"podman pull {operator_image}")
-    h.run_or_die(f"podman pull {daemon_image}")
     if h.is_localhost():
         env = os.environ.copy()
         env["KUBECONFIG"] = client._kc
-        env["REGISTRY"] = host.LocalHost().hostname()
+        env["REGISTRY"] = REGISTRY
         h.run(f"make -C {REPO_DIR} undeploy", env=env)
         ret = h.run(f"make -C {REPO_DIR} local-deploy", env=env)
         if not ret.success():
             logger.error_and_exit("Failed to deploy dpu operator")
     else:
-        h.run(f"cd {REPO_DIR} && export KUBECONFIG={client._kc} && make undeploy")
-        h.run_or_die(f"cd {REPO_DIR} && export KUBECONFIG={client._kc} && make local-deploy")
+        env_cmds = f"export KUBECONFIG={client._kc} && export REGISTRY={REGISTRY}"
+        h.run(f"cd {REPO_DIR} && {env_cmds} && make undeploy")
+        h.run_or_die(f"cd {REPO_DIR} && {env_cmds} && make local-deploy")
     logger.info("Waiting for all dpu operator pods to become ready")
     time.sleep(30)
     client.oc_run_or_die("wait --for=condition=Ready pod --all -n openshift-dpu-operator --timeout=5m")
-
-
-def render_local_images_yaml(operator_image: str, daemon_image: str, outfilename: str, pull_policy: str = "Always") -> None:
-    with open('./manifests/dpu/local-images-template.yaml.j2') as f:
-        j2_template = jinja2.Template(f.read())
-        rendered = j2_template.render(operator_image=operator_image, daemon_image=daemon_image, pull_policy=pull_policy)
-        logger.info(rendered)
-
-    with open(outfilename, "w") as outFile:
-        outFile.write(rendered)
 
 
 def ExtraConfigDpu(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, Future[Optional[host.Result]]]) -> None:
@@ -265,9 +245,6 @@ def ExtraConfigDpu(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, 
         logger.info("Will not rebuild dpu-operator images")
         registry = _ensure_local_registry_running(lh, delete_all=False)
 
-    operator_image = f"{registry}/{OPERATOR_IMG}"
-    daemon_image = f"{registry}/{DAEMON_IMG}"
-
     # Build and start vsp on DPU
     vendor_plugin = init_vendor_plugin(acc)
     if isinstance(vendor_plugin, IpuPlugin):
@@ -280,7 +257,7 @@ def ExtraConfigDpu(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, 
         acc.run_or_die(cmd)
     vendor_plugin.build_and_start(acc, client, registry)
 
-    start_dpu_operator(acc, client, operator_image, daemon_image, repo_wipe=True)
+    start_dpu_operator(acc, client, repo_wipe=True)
 
     # Disable firewall to ensure host-side can reach dpu
     acc.run("systemctl stop firewalld")
@@ -320,8 +297,6 @@ def ExtraConfigDpuHost(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[s
     else:
         logger.info("Will not rebuild dpu-operator images")
         registry = _ensure_local_registry_running(lh, delete_all=False)
-    operator_image = f"{registry}/{OPERATOR_IMG}"
-    daemon_image = f"{registry}/{DAEMON_IMG}"
 
     # Need to trust the registry in OCP / Microshift
     logger.info("Ensuring local registry is trusted in OCP")
@@ -331,7 +306,7 @@ def ExtraConfigDpuHost(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[s
     vendor_plugin = init_vendor_plugin(h)
     vendor_plugin.build_and_start(lh, client, registry)
 
-    start_dpu_operator(lh, client, operator_image, daemon_image)
+    start_dpu_operator(lh, client)
 
     def helper(h: host.Host, node: NodeConfig) -> Optional[host.Result]:
         # Temporary workaround, remove once 4.16 installations are working
