@@ -185,10 +185,10 @@ def copy_local_registry_certs(host: host.Host, path: str) -> None:
         host.copy_to(f"{directory}/{file}", f"{path}/{file}")
 
 
-def build_dpu_operator_images() -> str:
+def build_dpu_operator_images(repo: str, branch: str) -> str:
     logger.info("Building dpu operator images")
     lh = host.LocalHost()
-    git_repo_setup(REPO_DIR, repo_wipe=True, url=DPU_OPERATOR_REPO, branch="main")
+    git_repo_setup(REPO_DIR, repo_wipe=True, url=repo, branch=branch)
     update_dockerfiles_with_ose_images(REPO_DIR)
 
     # Start a local registry to store dpu-operator images
@@ -201,26 +201,24 @@ def build_dpu_operator_images() -> str:
     return registry
 
 
-def start_dpu_operator(h: host.Host, client: K8sClient, repo_wipe: bool = False) -> None:
+def start_dpu_operator(h: host.Host, client: K8sClient, repo_wipe: bool = False, repo: str = DPU_OPERATOR_REPO, branch: str = "main") -> None:
     logger.info(f"Deploying dpu operator containers on {h.hostname()}")
     if repo_wipe:
         h.run(f"rm -rf {REPO_DIR}")
-        h.run_or_die(f"git clone {DPU_OPERATOR_REPO}")
+        h.run_or_die(f"git clone --branch {branch} {repo} {REPO_DIR}")
 
-    REGISTRY = host.LocalHost().hostname()
     h.run("dnf install -y pip")
     h.run_or_die("pip install yq")
     ensure_go_installed(h)
     if h.is_localhost():
         env = os.environ.copy()
         env["KUBECONFIG"] = client._kc
-        env["REGISTRY"] = REGISTRY
         h.run(f"make -C {REPO_DIR} undeploy", env=env)
         ret = h.run(f"make -C {REPO_DIR} local-deploy", env=env)
         if not ret.success():
             logger.error_and_exit("Failed to deploy dpu operator")
     else:
-        env_cmds = f"export KUBECONFIG={client._kc} && export REGISTRY={REGISTRY}"
+        env_cmds = f"export KUBECONFIG={client._kc} && export REGISTRY={host.LocalHost().hostname()}"
         h.run(f"cd {REPO_DIR} && {env_cmds} && make undeploy")
         h.run_or_die(f"cd {REPO_DIR} && {env_cmds} && make local-deploy")
     logger.info("Waiting for all dpu operator pods to become ready")
@@ -240,7 +238,7 @@ def ExtraConfigDpu(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, 
     client = K8sClient(MICROSHIFT_KUBECONFIG, acc)
 
     if cfg.rebuild_dpu_operators_images:
-        registry = build_dpu_operator_images()
+        registry = build_dpu_operator_images(repo=cfg.dpu_operator_repo, branch=cfg.dpu_operator_branch)
     else:
         logger.info("Will not rebuild dpu-operator images")
         registry = _ensure_local_registry_running(lh, delete_all=False)
@@ -257,7 +255,7 @@ def ExtraConfigDpu(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, 
         acc.run_or_die(cmd)
     vendor_plugin.build_and_start(acc, client, registry)
 
-    start_dpu_operator(acc, client, repo_wipe=True)
+    start_dpu_operator(acc, client, repo_wipe=True, repo=cfg.dpu_operator_repo, branch=cfg.dpu_operator_branch)
 
     # Disable firewall to ensure host-side can reach dpu
     acc.run("systemctl stop firewalld")
@@ -293,7 +291,7 @@ def ExtraConfigDpuHost(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[s
     client = K8sClient(cc.kubeconfig)
 
     if cfg.rebuild_dpu_operators_images:
-        registry = build_dpu_operator_images()
+        registry = build_dpu_operator_images(repo=cfg.dpu_operator_repo, branch=cfg.dpu_operator_branch)
     else:
         logger.info("Will not rebuild dpu-operator images")
         registry = _ensure_local_registry_running(lh, delete_all=False)
@@ -306,7 +304,7 @@ def ExtraConfigDpuHost(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[s
     vendor_plugin = init_vendor_plugin(h)
     vendor_plugin.build_and_start(lh, client, registry)
 
-    start_dpu_operator(lh, client)
+    start_dpu_operator(lh, client, repo_wipe=False, repo=cfg.dpu_operator_repo, branch=cfg.dpu_operator_branch)
 
     def helper(h: host.Host, node: NodeConfig) -> Optional[host.Result]:
         # Temporary workaround, remove once 4.16 installations are working

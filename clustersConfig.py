@@ -57,6 +57,8 @@ class ExtraConfigArgs:
     rebuild_dpu_operators_images: bool = True
 
     dpu_net_interface: Optional[str] = "ens2f0"
+    dpu_operator_repo: str = "https://github.com/openshift/dpu-operator.git"
+    dpu_operator_branch: str = "main"
 
     def pre_check(self) -> None:
         if self.sriov_network_operator_local:
