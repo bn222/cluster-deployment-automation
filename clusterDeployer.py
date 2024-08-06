@@ -1,3 +1,4 @@
+import abc
 import itertools
 import os
 import sys
@@ -37,15 +38,34 @@ def match_to_proper_version_format(version_cluster_config: str) -> str:
     return match.group(0)
 
 
-class ClusterDeployer:
-    def __init__(self, cc: ClustersConfig, ai: AssistedClientAutomation, steps: list[str], secrets_path: str):
-        self._client: Optional[K8sClient] = None
-        self.steps = steps
+class BaseDeployer(abc.ABC):
+    def __init__(self, cc: ClustersConfig, steps: list[str]):
         self._cc = cc
+        self._extra_config = ExtraConfigRunner(cc)
+        self._futures: dict[str, Future[Optional[host.Result]]] = {}
+        self.steps = tuple(steps)
+
+    def _prepost_config(self, to_run: ExtraConfigArgs) -> None:
+        if not to_run:
+            return
+        self._extra_config.run(to_run, self._futures)
+
+    def _preconfig(self) -> None:
+        for e in self._cc.preconfig:
+            self._prepost_config(e)
+
+    def _postconfig(self) -> None:
+        for e in self._cc.postconfig:
+            self._prepost_config(e)
+
+
+class ClusterDeployer(BaseDeployer):
+    def __init__(self, cc: ClustersConfig, ai: AssistedClientAutomation, steps: list[str], secrets_path: str):
+        super().__init__(cc, steps)
+        self._client: Optional[K8sClient] = None
         self._ai = ai
         self._secrets_path = secrets_path
         self._bf_iso_path = "/root/iso"
-        self._extra_config = ExtraConfigRunner(cc)
 
         if self.need_external_network():
             self._cc.prepare_external_port()
@@ -55,7 +75,7 @@ class ClusterDeployer:
         self._local_host = ClusterHost(lh, lh_config, cc, cc.local_bridge_config)
         self._remote_hosts = {bm.name: ClusterHost(host.RemoteHost(bm.name), bm, cc, cc.remote_bridge_config) for bm in self._cc.hosts if bm.name != lh.hostname()}
         self._all_hosts = [self._local_host] + list(self._remote_hosts.values())
-        self._futures = {k8s_node.config.name: k8s_node.future for h in self._all_hosts for k8s_node in h._k8s_nodes()}
+        self._futures.update((k8s_node.config.name, k8s_node.future) for h in self._all_hosts for k8s_node in h._k8s_nodes())
         self._all_nodes = {k8s_node.config.name: k8s_node for h in self._all_hosts for k8s_node in h._k8s_nodes()}
 
         self.masters_arch = "x86_64"
@@ -172,19 +192,6 @@ class ClusterDeployer:
             logger.info(f"Deleting worker {w.name}")
             self.client().delete_node(w.name)
             self._ai.delete_host(w.name)
-
-    def _preconfig(self) -> None:
-        for e in self._cc.preconfig:
-            self._prepost_config(e)
-
-    def _postconfig(self) -> None:
-        for e in self._cc.postconfig:
-            self._prepost_config(e)
-
-    def _prepost_config(self, to_run: ExtraConfigArgs) -> None:
-        if not to_run:
-            return
-        self._extra_config.run(to_run, self._futures)
 
     def need_external_network(self) -> bool:
         vm_bm = [x for x in self._cc.workers if x.kind == "vm" and x.node != "localhost"]
@@ -625,11 +632,9 @@ class ClusterDeployer:
             time.sleep(30)
 
 
-class IsoDeployer(ClusterDeployer):
+class IsoDeployer(BaseDeployer):
     def __init__(self, cc: ClustersConfig, steps: list[str]):
-        self.steps = steps
-        self._cc = cc
-        self._extra_config = ExtraConfigRunner(cc)
+        super().__init__(cc, steps)
 
         if len(self._cc.masters) != 1:
             logger.error("Masters must be of length one for deploying from iso")
@@ -641,7 +646,7 @@ class IsoDeployer(ClusterDeployer):
             f.set_result(None)
             return f
 
-        self._futures = {self._master.name: empty()}
+        self._futures[self._master.name] = empty()
         self._validate()
 
     def _validate(self) -> None:
