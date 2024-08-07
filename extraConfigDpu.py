@@ -207,20 +207,19 @@ def start_dpu_operator(h: host.Host, client: K8sClient, repo_wipe: bool = False)
         h.run(f"rm -rf {REPO_DIR}")
         h.run_or_die(f"git clone {DPU_OPERATOR_REPO}")
 
-    REGISTRY = host.LocalHost().hostname()
     h.run("dnf install -y pip")
     h.run_or_die("pip install yq")
     ensure_go_installed(h)
     if h.is_localhost():
         env = os.environ.copy()
         env["KUBECONFIG"] = client._kc
-        env["REGISTRY"] = REGISTRY
         h.run(f"make -C {REPO_DIR} undeploy", env=env)
         ret = h.run(f"make -C {REPO_DIR} local-deploy", env=env)
         if not ret.success():
             logger.error_and_exit("Failed to deploy dpu operator")
     else:
-        env_cmds = f"export KUBECONFIG={client._kc} && export REGISTRY={REGISTRY}"
+        registry = host.LocalHost().run_or_die("hostname").out.strip()
+        env_cmds = f"export KUBECONFIG={client._kc} && export REGISTRY={registry}"
         h.run(f"cd {REPO_DIR} && {env_cmds} && make undeploy")
         h.run_or_die(f"cd {REPO_DIR} && {env_cmds} && make local-deploy")
     logger.info("Waiting for all dpu operator pods to become ready")
