@@ -2,6 +2,7 @@ from dataclasses import dataclass
 import dataclasses
 import ipaddress
 from typing import Optional, TypeVar, Iterator, Type
+from concurrent.futures import Future
 import contextlib
 from types import TracebackType
 import http.server
@@ -551,3 +552,9 @@ def extract_version_or_panic(version: str) -> str:
 def calculate_elapsed_time(start: float, end: float) -> tuple[int, int]:
     minutes, seconds = divmod(int(end - start), 60)
     return minutes, seconds
+
+
+def empty_future(result_type: type[T]) -> Future[Optional[T]]:
+    f: Future[Optional[T]] = Future()
+    f.set_result(None)
+    return f
