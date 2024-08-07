@@ -62,9 +62,14 @@ def test_atomic_write(tmp_path: pathlib.Path) -> None:
     with common.atomic_write(filename, mode=0o002) as f:
         f.write("hello2")
     assert os.path.exists(filename)
-    with pytest.raises(PermissionError):
-        # We took away permissions to read the file.
+    if os.access(filename, os.R_OK):
+        # If we have CAP_DAC_OVERRIDE, we still can open the file despite the
+        # file permissions.
         open(filename)
+    else:
+        with pytest.raises(PermissionError):
+            # We took away permissions to read the file.
+            open(filename)
     st = os.stat(filename)
     assert st.st_mode == 0o100002
 
