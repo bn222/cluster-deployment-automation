@@ -380,6 +380,16 @@ class ClustersConfig:
             assert self._cluster_info is not None
             return self._cluster_info.network_api_port
 
+        def imc_hostname(a: int) -> str:
+            self._ensure_clusters_loaded()
+            assert self._cluster_info is not None
+            return self._cluster_info.bmc_imc_hostnames[a]
+
+        def ipu_mac_address(a: int) -> str:
+            self._ensure_clusters_loaded()
+            assert self._cluster_info is not None
+            return self._cluster_info.ipu_mac_addresses[a]
+
         format_string = contents
 
         template = jinja2.Template(format_string)
@@ -387,6 +397,8 @@ class ClustersConfig:
         template.globals['worker_name'] = worker_name
         template.globals['api_network'] = api_network
         template.globals['bmc'] = bmc
+        template.globals['IMC_hostname'] = imc_hostname
+        template.globals['IPU_mac_address'] = ipu_mac_address
 
         kwargs = {}
         kwargs["cluster_name"] = cluster_name
