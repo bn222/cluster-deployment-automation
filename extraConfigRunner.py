@@ -6,6 +6,7 @@ from extraConfigOvnK import ExtraConfigOvnK
 from extraConfigCustomOvn import ExtraConfigCustomOvn
 from extraConfigImageRegistry import ExtraConfigImageRegistry
 from extraConfigMastersSchedulable import ExtraConfigMastersSchedulable
+from extraConfigMonitoring import ExtraConfigMonitoring
 from extraConfigCNO import ExtraConfigCNO
 from extraConfigRT import ExtraConfigRT
 from extraConfigDualStack import ExtraConfigDualStack
@@ -46,6 +47,7 @@ class ExtraConfigRunner:
             "cx_firmware": ExtraConfigCX,
             "microshift": ExtraConfigMicroshift,
             "masters_schedulable": ExtraConfigMastersSchedulable,
+            "monitoring_config": ExtraConfigMonitoring,
             "rh_subscription": ExtraConfigRhSubscription,
             "dpu_operator_host": ExtraConfigDpuHost,
             "dpu_operator_dpu": ExtraConfigDpu,

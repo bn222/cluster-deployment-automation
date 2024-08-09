@@ -234,8 +234,6 @@ class ClusterDeployer(BaseDeployer):
                 logger.error_and_exit("Masters must be of length one for deploying microshift")
         if POST_STEP in self.steps:
             self._postconfig()
-            cmd = "apply -f manifests/monitoring-config.yaml"
-            self.client().oc_run_or_die(cmd)
         else:
             logger.info("Skipping post configuration.")
 
