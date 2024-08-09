@@ -373,7 +373,7 @@ class Host:
 
             out = []
             for line in iter(stdout.readline, ""):
-                logger.log(log_level, f"{self._hostname}: {line.strip()}")
+                logger.log(log_level, f"{self._hostname}: {line.rstrip()}")
                 out.append(line)
 
             err = []
