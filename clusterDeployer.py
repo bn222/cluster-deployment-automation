@@ -14,7 +14,7 @@ import re
 import logging
 from assistedInstaller import AssistedClientAutomation
 import host
-from clustersConfig import ClustersConfig, ExtraConfigArgs
+from clustersConfig import ClustersConfig, ExtraConfigArgs, NodeConfig
 from k8sClient import K8sClient
 import common
 from python_hosts import Hosts, HostsEntry
@@ -324,11 +324,7 @@ class ClusterDeployer(BaseDeployer):
 
         hosts_with_masters = self._all_hosts_with_masters()
 
-        # Ensure the virtual bridge is properly configured and
-        # configure DHCP entries for all masters on the local virbr.
-        for h in hosts_with_masters:
-            h.configure_bridge()
-        self._local_host.bridge.setup_dhcp_entries(self._cc.master_vms())
+        self._common_network_setup(hosts_with_masters, self._cc.master_vms())
 
         # Start all masters on all hosts.
         executor = ThreadPoolExecutor(max_workers=len(self._cc.masters))
@@ -399,19 +395,7 @@ class ClusterDeployer(BaseDeployer):
         self._ai.ensure_infraenv_created(infra_env, cfg)
         hosts_with_workers = self._all_hosts_with_workers()
 
-        # Ensure the virtual bridge is properly configured and
-        # configure DHCP entries for all workers on the local virbr and
-        # connect the workers to the physical network.
-        #
-        # NOTE: linking the network must happen before starting workers because
-        # they need to be able to access the DHCP server running on the
-        # provisioning node.
-        for h in hosts_with_workers:
-            h.configure_bridge()
-
-        self._local_host.setup_dhcp_entries(self._cc.worker_vms())
-        for h in hosts_with_workers:
-            h.ensure_linked_to_network(self._local_host.bridge)
+        self._common_network_setup(hosts_with_workers, self._cc.worker_vms())
 
         executor = ThreadPoolExecutor(max_workers=len(self._cc.workers))
 
@@ -531,6 +515,21 @@ class ClusterDeployer(BaseDeployer):
                         logger.info(f"renamed {k8s_node.config.name}")
                         renamed += 1
         return renamed
+
+    def _common_network_setup(self, hosts: set[ClusterHost], vms: list[NodeConfig]) -> None:
+        # Ensure the virtual bridge is properly configured and
+        # configure DHCP entries for all vms on the local virbr and
+        # connect the vms to the physical network.
+        #
+        # NOTE: linking the network must happen before starting vms because
+        # they need to be able to access the DHCP server running on the
+        # provisioning node.
+        for h in hosts:
+            h.configure_bridge()
+        self._local_host.bridge.setup_dhcp_entries(vms)
+
+        for h in hosts:
+            h.ensure_linked_to_network(self._local_host.bridge)
 
     def _get_discovery_ign_ssh_priv_key(self, infra_env: str) -> str:
         self._ai.download_discovery_ignition(infra_env, "/tmp")
