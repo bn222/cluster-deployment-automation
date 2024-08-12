@@ -20,7 +20,7 @@ def ExtraConfigImageRegistry(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: 
     client.oc_run_or_die("patch configs.imageregistry.operator.openshift.io cluster --type=merge --patch '{\"spec\":{\"storage\":{\"emptyDir\":{},\"managementState\":\"Managed\"}}}'")
 
     # Wait for the change to rollout and for the operators to be ready.
-    client.oc_run_or_die("wait --for=jsonpath='{.status.readyReplicas}'=1 configs.imageregistry.operator.openshift.io/cluster")
+    client.oc_run_or_die("wait --for=jsonpath='{.status.readyReplicas}'=1 configs.imageregistry.operator.openshift.io/cluster --timeout=15m")
     timeout = "30s"
     logger.info("Waiting for all cluster operators to be aavailable, not progressing, not degraded")
 
