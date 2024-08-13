@@ -50,7 +50,7 @@ def load_all_cluster_info() -> dict[str, ClusterInfo]:
             cluster.network_api_port = row["Ports"]
         elif row["Provision host"] == "no":
             cluster.workers.append(row["Name"])
-            bmc_host = row["IPMI"][8:] if "https://" in row["IPMI"] else row["IPMI"]
+            bmc_host = row["BMC/IMC hostname"][8:] if "https://" in row["BMC/IMC hostname"] else row["BMC/IMC hostname"]
             cluster.bmcs.append(bmc_host)
     if cluster is not None:
         ret.append(cluster)
