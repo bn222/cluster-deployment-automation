@@ -68,11 +68,26 @@ def ExtraConfigSwitchNicMode(cc: ClustersConfig, _: ExtraConfigArgs, futures: di
 
     client.oc("create -f manifests/nicmode/pool.yaml")
 
+    def helper(h: host.HostWithBF2) -> Optional[host.Result]:
+        h.cold_boot()
+        return None
+
+    executor = ThreadPoolExecutor(max_workers=len(cc.workers))
     # label nodes
     for e in cc.workers:
         logger.info(client.oc(f'label node {e.name} --overwrite=true feature.node.kubernetes.io/network-sriov.capable=true'))
 
     client.oc("delete -f manifests/nicmode/switch.yaml")
     client.oc("create -f manifests/nicmode/switch.yaml")
+    # Workaround for https://issues.redhat.com/browse/OCPBUGS-29882 caused by the BF-2 firmware failing to update without cold boot
+
+    logger.info("Cold booting.....")
+    for e in cc.workers:
+        bmc = BMC.from_bmc(e.bmc, e.bmc_user, e.bmc_password)
+        h = host.HostWithBF2(e.node, bmc)
+        futures[e.name].result()
+        f = executor.submit(helper, h)
+        futures[e.name] = f
+
     logger.info("Waiting for mcp to update")
     client.wait_for_mcp("sriov", "switch.yaml")
