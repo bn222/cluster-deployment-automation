@@ -58,11 +58,23 @@ class IpuPlugin(VendorPlugin):
         client.oc_run_or_die("create -f /tmp/vsp-ds.yaml")
 
 
-def init_vendor_plugin(h: host.Host) -> VendorPlugin:
+class MarvellDpuPlugin(VendorPlugin):
+    def __init__(self) -> None:
+        pass
+
+    def build_and_start(self, h: host.Host, client: K8sClient, registry: str) -> None:
+        # TODO: https://github.com/openshift/dpu-operator/pull/82
+        logger.warning("Setting up Marvell DPU not yet implemented")
+
+
+def init_vendor_plugin(h: host.Host, node_kind: str) -> VendorPlugin:
     # TODO: Autodetect the vendor hardware and return the proper implementation.
-    logger.info(f"Detected Intel IPU hardware on {h.hostname()}")
-    vsp_plugin = IpuPlugin()
-    return vsp_plugin
+    if node_kind == "marvell-dpu":
+        logger.info(f"Detected Marvell DPU on {h.hostname()}")
+        return MarvellDpuPlugin()
+    else:
+        logger.info(f"Detected Intel IPU hardware on {h.hostname()}")
+        return IpuPlugin()
 
 
 def extractContainerImage(dockerfile: str) -> str:

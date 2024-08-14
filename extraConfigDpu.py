@@ -230,7 +230,7 @@ def ExtraConfigDpu(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, 
     acc.run("systemctl disable firewalld")
 
     # Build and start vsp on DPU
-    vendor_plugin = init_vendor_plugin(acc)
+    vendor_plugin = init_vendor_plugin(acc, dpu_node.kind or "")
     if isinstance(vendor_plugin, IpuPlugin):
         # TODO: Remove when this container is properly started by the vsp
         # We need to manually start the p4 sdk container currently for the IPU plugin
@@ -281,8 +281,9 @@ def ExtraConfigDpuHost(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[s
     # Need to trust the registry in OCP / Microshift
     logger.info("Ensuring local registry is trusted in OCP")
 
-    h = host.Host(cc.workers[0].node)
-    vendor_plugin = init_vendor_plugin(h)
+    node = cc.workers[0]
+    h = host.Host(node.node)
+    vendor_plugin = init_vendor_plugin(h, node.kind or "")
     vendor_plugin.build_and_start(lh, client, imgReg.url())
 
     git_repo_setup(REPO_DIR, repo_wipe=True, url=DPU_OPERATOR_REPO, branch=branch)
