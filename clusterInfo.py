@@ -10,6 +10,8 @@ class ClusterInfo:
         self.name = name
         self.provision_host = ""
         self.network_api_port = ""
+        self.bmc_imc_hostnames = []  # type: list[str]
+        self.ipu_mac_addresses = []  # type: list[str]
         self.workers = []  # type: list[str]
         self.bmcs = []  # type: list[str]
 
@@ -45,6 +47,9 @@ def load_all_cluster_info() -> dict[str, ClusterInfo]:
             continue
         if "BF2" in row["Name"]:
             continue
+        if row["Card type"] == "IPU-Cluster":
+            cluster.bmc_imc_hostnames.append(row["BMC/IMC hostname"])
+            cluster.ipu_mac_addresses.append(row["MAC"])
         if row["Provision host"] == "yes":
             cluster.provision_host = row["Name"]
             cluster.network_api_port = row["Ports"]
