@@ -425,18 +425,9 @@ class ClusterDeployer(BaseDeployer):
 
         worker_nodes = sum((h.k8s_worker_nodes for h in hosts_with_workers), [])
 
-        nodes_with_futures = [(n, executor.submit(self._start_node, infra_env, n, False)) for n in worker_nodes]
-        for node, future in nodes_with_futures:
-            if not future.result():
-                logger.error_and_exit(f"Failed to start node {node.config.name}....")
-
-        logger.info("starting infra env")
-        self._ai.start_infraenv(infra_env)
-
-        nodes_with_futures = [(n, executor.submit(n.ensure_reboot)) for n in worker_nodes]
-        for node, future in nodes_with_futures:
-            if not future.result():
-                logger.error_and_exit(f"Failed to reboot node {node.config.name}....")
+        nodes_with_futures = [(n, executor.submit(self._install_worker_with_retry, infra_env, n)) for n in worker_nodes]
+        for _, future in nodes_with_futures:
+            future.result()
 
         logger.info("waiting for workers to be ready")
         self.wait_for_workers()
@@ -445,6 +436,26 @@ class ClusterDeployer(BaseDeployer):
         for h in hosts_with_workers:
             for worker in h.k8s_worker_nodes:
                 worker.set_password()
+
+    def _install_worker_with_retry(self, infra_env: str, node: ClusterNode) -> None:
+        def installation_finished(ai: AssistedClientAutomation, node_name: str) -> bool:
+            info = ai.get_ai_host(node_name)
+            return info is not None and info.status in ["error", "added-to-existing-cluster"]
+
+        name = node.config.name
+        for try_count in itertools.count(0):
+            if self._start_node(infra_env, node, False):
+                self._ai.install_ai_host(infra_env, name)
+
+                common.wait_true(f"installation {name}", installation_finished, ai=self._ai, node_name=name)
+                info = self._ai.get_ai_host(name)
+                if info is not None and info.status == "added-to-existing-cluster" and node.ensure_reboot():
+                    logger.info(f"Worker {name} installation finished after {try_count} retries")
+                    break
+
+            logger.warn(f"Worker {name} installation failed, retrying...")
+            node.teardown()
+            self._ai.delete_host(name)
 
     def _start_node(self, infra_env: str, node: ClusterNode, master: bool) -> bool:
         image = os.path.join(os.path.dirname(node.config.image_path), f"{infra_env}.iso")
