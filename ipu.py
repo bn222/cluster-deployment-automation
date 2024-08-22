@@ -81,11 +81,12 @@ class IPUClusterNode(ClusterNode):
         self._wait_for_acc_with_retry(acc)
         # configure_iso_network_port(self.network_api_port, self.config.ip)
 
-    def start(self, iso_or_image_path: str) -> None:
+    def start(self, iso_or_image_path: str) -> bool:
         ipu_bmc = IPUBMC(self.config.bmc)
         if ipu_bmc.version() != "1.8.0":
             logger.error_and_exit(f"Unexpected version {ipu_bmc.version()}, should be 1.8.0")
         self._boot_iso(iso_or_image_path)
+        return True
 
     def has_booted(self) -> bool:
         return True
