@@ -1,9 +1,7 @@
-import itertools
 import os
-import time
 from concurrent.futures import Future, ThreadPoolExecutor
 from logger import logger
-from typing import Optional, Dict, Callable
+from typing import Optional
 
 import common
 import coreosBuilder
@@ -89,9 +87,9 @@ class ClusterHost:
     def _k8s_nodes(self) -> list[ClusterNode]:
         return self.k8s_master_nodes + self.k8s_worker_nodes
 
-    def ensure_images(self, local_iso_path: str, infra_env: str, nodes: list[ClusterNode]) -> None:
+    def ensure_images(self, local_iso_path: str, infra_env: str, nodes: list[ClusterNode]) -> bool:
         if not self.hosts_vms:
-            return
+            return True
 
         image_paths = {os.path.dirname(node.config.image_path) for node in nodes}
         for image_path in image_paths:
@@ -112,6 +110,8 @@ class ClusterHost:
                 image_path=image_path,
             )
             vp.ensure_initialized()
+
+        return True
 
     def configure_bridge(self) -> None:
         if not self.hosts_vms:
@@ -197,56 +197,6 @@ class ClusterHost:
             return x86_node._boot_iso_x86(iso)
 
         return executor.submit(_preinstall)
-
-    def _start_nodes(self, infra_env: str, executor: ThreadPoolExecutor, nodes: list[ClusterNode]) -> list[Future[Optional[host.Result]]]:
-        futures = []
-        for node in nodes:
-            remote_iso_path = os.path.join(os.path.dirname(node.config.image_path), f"{infra_env}.iso")
-            node.start(remote_iso_path, executor)
-            futures.append(node.future)
-        return futures
-
-    def start_masters(self, infra_env: str, executor: ThreadPoolExecutor) -> list[Future[Optional[host.Result]]]:
-        return self._start_nodes(infra_env, executor, self.k8s_master_nodes)
-
-    def start_workers(self, infra_env: str, executor: ThreadPoolExecutor) -> list[Future[Optional[host.Result]]]:
-        return self._start_nodes(infra_env, executor, self.k8s_worker_nodes)
-
-    def _wait_for_boot(self, nodes: list[ClusterNode], desired_ip_range: tuple[str, str]) -> None:
-        if not nodes:
-            return
-
-        def wait_state(state_name: str, get_states: Callable[[], Dict[str, bool]]) -> None:
-            states = get_states()
-            for try_count in itertools.count(0):
-                new_states = get_states()
-                if new_states != states:
-                    states = new_states
-                    logger.info(f"Waiting for nodes to {state_name} (try #{try_count}), last state: {states}")
-
-                if all(states.values()):
-                    logger.info(f"Took {try_count} tries for all nodes to {state_name}")
-                    break
-                time.sleep(10)
-
-        def boot_state() -> Dict[str, bool]:
-            return {node.config.name: node.has_booted() for node in nodes}
-
-        wait_state("boot", boot_state)
-
-        def post_boot_state() -> Dict[str, bool]:
-            return {node.config.name: node.post_boot(desired_ip_range=desired_ip_range) for node in nodes}
-
-        wait_state("post_boot", post_boot_state)
-
-        for node in nodes:
-            node.health_check()
-
-    def wait_for_masters_boot(self, desired_ip_range: tuple[str, str]) -> None:
-        return self._wait_for_boot(self.k8s_master_nodes, desired_ip_range)
-
-    def wait_for_workers_boot(self, desired_ip_range: tuple[str, str]) -> None:
-        return self._wait_for_boot(self.k8s_worker_nodes, desired_ip_range)
 
     def teardown_nodes(self, nodes: list[ClusterNode]) -> None:
         for node in nodes:

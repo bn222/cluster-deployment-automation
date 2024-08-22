@@ -9,7 +9,6 @@ from clusterNode import ClusterNode
 import host
 from bmc import BMC
 import common
-from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 import urllib.parse
 from urllib.parse import urlparse
@@ -87,14 +86,14 @@ class IPUClusterNode(ClusterNode):
         logger.info(acc.run("uname -a"))
         logger.info("Connected to ACC")
 
-    def start(self, iso_or_image_path: str, executor: ThreadPoolExecutor) -> None:
+    def start(self, iso_or_image_path: str) -> None:
         ipu_bmc = IPUBMC(self.config.bmc)
         if ipu_bmc.version() != "1.8.0":
             logger.error_and_exit(f"Unexpected version {ipu_bmc.version()}, should be 1.8.0")
-        self.future = executor.submit(self._boot_iso, iso_or_image_path)
+        self._boot_iso(iso_or_image_path)
 
     def has_booted(self) -> bool:
-        return self.get_future_done()
+        return True
 
     def _redfish_boot_ipu(self, external_port: str, node: NodeConfig, iso: str) -> None:
         def helper(node: NodeConfig, iso_address: str) -> str:

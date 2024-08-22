@@ -3,7 +3,6 @@ import os
 import paramiko
 import sys
 import time
-from concurrent.futures import Future, ThreadPoolExecutor
 from logger import logger
 from typing import Optional
 
@@ -26,7 +25,6 @@ class ClusterNode:
     """
 
     config: NodeConfig
-    future: Future[Optional[host.Result]]
     dynamic_ip: Optional[str]
 
     __slots__ = [
@@ -37,7 +35,6 @@ class ClusterNode:
 
     def __init__(self, config: NodeConfig):
         self.config = config
-        self.future = common.empty_future(host.Result)
         self.dynamic_ip = None
 
     def ip(self) -> str:
@@ -48,17 +45,20 @@ class ClusterNode:
         return self.dynamic_ip
 
     @abc.abstractmethod
-    def start(self, iso_or_image_path: str, executor: ThreadPoolExecutor) -> None:
+    def start(self, iso_or_image_path: str) -> None:
         pass
 
     def has_booted(self) -> bool:
-        return self.get_future_done()
+        return True
 
     def post_boot(self, *, desired_ip_range: Optional[tuple[str, str]] = None) -> bool:
         return True
 
     def teardown(self) -> None:
         pass
+
+    def ensure_reboot(self) -> bool:
+        return True
 
     def set_password(self, user: str = "root", password: str = "redhat") -> None:
         rh = host.RemoteHost(self.ip())
@@ -77,12 +77,6 @@ class ClusterNode:
         return not ret.returncode
 
     def health_check(self) -> None:
-        # Check that the boot stage completed correctly.
-        if self.get_future_done():
-            result = self.future.result()
-            if result is not None and result.returncode != 0:
-                logger.error_and_exit(f"Failed to provision node {self.config.name}: {result.err}")
-
         # Check that the right packages are installed.
         required_packages = ["kernel-modules-extra"]
         missing_packages = [p for p in required_packages if not self._verify_package_is_installed(p)]
@@ -91,14 +85,10 @@ class ClusterNode:
         if any(missing_packages):
             sys.exit(-1)
 
-    def get_future_done(self) -> bool:
-        state = self.future.done()
-        if state is True:
-            exception = self.future.exception()
-            if exception is not None:
-                raise Exception(f"Got exception from future {exception}")
-
-        return state
+    def wait_for_boot(self, desired_ip_range: tuple[str, str]) -> None:
+        common.wait_true(f"{self.config.name} boot", 0, self.has_booted)
+        common.wait_true(f"{self.config.name} post_boot", 0, self.post_boot, desired_ip_range=desired_ip_range)
+        self.health_check()
 
 
 class VmClusterNode(ClusterNode):
@@ -129,12 +119,8 @@ class VmClusterNode(ClusterNode):
             self.hostconn.run_or_die(f'qemu-img create -f qcow2 {options} {self.config.image_path} {disk_size_gb}G')
 
             cdrom_line = f"--cdrom {iso_or_image_path}"
-            append = "--wait=-1"
-            self.install_wait = True
         else:
             cdrom_line = ""
-            append = "--noautoconsole"
-            self.install_wait = False
 
         if self.hostconn.is_localhost():
             network = "network=default"
@@ -153,7 +139,8 @@ class VmClusterNode(ClusterNode):
             --events on_reboot=restart
             {cdrom_line}
             --disk path={self.config.image_path}
-            {append}
+            --noreboot
+            --noautoconsole
         """
 
         logger.info(f"Starting VM {self.config.name}")
@@ -164,23 +151,11 @@ class VmClusterNode(ClusterNode):
             logger.info(f"Finished starting VM {self.config.name} successfully")
         return ret
 
-    def start(self, iso_or_image_path: str, executor: ThreadPoolExecutor) -> None:
-        self.future = executor.submit(self.setup_vm, iso_or_image_path)
+    def start(self, iso_or_image_path: str) -> None:
+        self.setup_vm(iso_or_image_path)
 
     def has_booted(self) -> bool:
-        if self.install_wait:
-            # If the future is done an error probably happened.  Declare
-            # successful "boot".  The real status is checked in the
-            # health_check stage.
-            if self.get_future_done():
-                return True
-            return self.hostconn.vm_is_running(self.config.name)
-        return self.get_future_done()
-
-    def post_boot(self, *, desired_ip_range: Optional[tuple[str, str]] = None) -> bool:
-        if not self.install_wait:
-            self.future.result()
-        return True
+        return self.hostconn.vm_is_running(self.config.name)
 
     def teardown(self) -> None:
         # remove the image only if it really exists
@@ -194,6 +169,21 @@ class VmClusterNode(ClusterNode):
             logger.info(r.err if r.err else r.out.strip())
             r = self.hostconn.run(f"virsh undefine {self.config.name}")
             logger.info(r.err if r.err else r.out.strip())
+
+    def ensure_reboot(self) -> bool:
+        def vm_state(h: host.Host, node_name: str, running: bool) -> bool:
+            return running == h.vm_is_running(node_name)
+
+        name = self.config.name
+        common.wait_true(f"reboot of {name} to start", 0, vm_state, h=self.hostconn, node_name=name, running=False)
+
+        r = self.hostconn.run(f"virsh start {name}")
+        if not r.success():
+            return False
+
+        common.wait_true(f"reboot of {name} to finish", 0, vm_state, h=self.hostconn, node_name=name, running=True)
+
+        return True
 
 
 class X86ClusterNode(ClusterNode):
@@ -222,8 +212,8 @@ class X86ClusterNode(ClusterNode):
         logger.info("connected")
         return h.run("hostname")
 
-    def start(self, iso_or_image_path: str, executor: ThreadPoolExecutor) -> None:
-        self.future = executor.submit(self._boot_iso_x86, iso_or_image_path)
+    def start(self, iso_or_image_path: str) -> None:
+        self._boot_iso_x86(iso_or_image_path)
 
     def post_boot(self, *, desired_ip_range: Optional[tuple[str, str]] = None) -> bool:
         rh = host.RemoteHost(self.config.node)
@@ -330,13 +320,9 @@ class BFClusterNode(ClusterNode):
         logger.info(f"Detected ip {ip}")
         return host.Result(out=f"{ip}", err="", returncode=0)
 
-    def start(self, iso_or_image_path: str, executor: ThreadPoolExecutor) -> None:
-        self.future = executor.submit(self._boot_iso_bf, iso_or_image_path)
-
-    def post_boot(self, *, desired_ip_range: Optional[tuple[str, str]] = None) -> bool:
-        result: Optional[host.Result] = self.future.result()
+    def start(self, iso_or_image_path: str) -> None:
+        result = self._boot_iso_bf(iso_or_image_path)
         if result is not None:
             self.dynamic_ip = result.out
         else:
             logger.error_and_exit(f"Couldn't find ip of worker {self.config.name}")
-        return True

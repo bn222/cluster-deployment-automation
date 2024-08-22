@@ -1,6 +1,5 @@
 import itertools
 import os
-import sys
 import time
 import json
 import shutil
@@ -13,7 +12,9 @@ import re
 import logging
 from assistedInstaller import AssistedClientAutomation
 import host
+from clusterNode import ClusterNode
 from clustersConfig import ClustersConfig
+from common import wait_futures
 from k8sClient import K8sClient
 import common
 from python_hosts import Hosts, HostsEntry
@@ -52,7 +53,6 @@ class ClusterDeployer(BaseDeployer):
         self._local_host = ClusterHost(lh, lh_config, cc, cc.local_bridge_config)
         self._remote_hosts = {bm.name: ClusterHost(host.RemoteHost(bm.name), bm, cc, cc.remote_bridge_config) for bm in self._cc.hosts if bm.name != lh.hostname()}
         self._all_hosts = [self._local_host] + list(self._remote_hosts.values())
-        self._futures.update((k8s_node.config.name, k8s_node.future) for h in self._all_hosts for k8s_node in h._k8s_nodes())
         self._all_nodes = {k8s_node.config.name: k8s_node for h in self._all_hosts for k8s_node in h._k8s_nodes()}
 
         self.masters_arch = "x86_64"
@@ -334,38 +334,25 @@ class ClusterDeployer(BaseDeployer):
         iso_file = os.path.join(iso_path, f"{infra_env}.iso")
         self._ai.download_iso_with_retry(infra_env, iso_path)
 
-        for h in hosts_with_masters:
-            h.ensure_images(iso_file, infra_env, h.k8s_master_nodes)
+        image_futures = [(h.config.name, executor.submit(h.ensure_images, iso_file, infra_env, nodes=h.k8s_master_nodes)) for h in hosts_with_masters]
+        wait_futures("ensure image", image_futures)
 
-        futures = []
-        for h in hosts_with_masters:
-            futures.extend(h.start_masters(infra_env, executor))
+        master_nodes = sum((h.k8s_master_nodes for h in hosts_with_masters), [])
 
-        # Wait for masters to have booted.
-        for h in hosts_with_masters:
-            h.wait_for_masters_boot(self._cc.full_ip_range)
+        nodes_with_futures = [(n.config.name, executor.submit(self._start_node, infra_env, n, True)) for n in master_nodes]
+        wait_futures("start node", nodes_with_futures)
 
-        def cb() -> None:
-            finished = [p for p in futures if p.done()]
-            for f in finished:
-                result = f.result()
-                if result is not None and result.returncode != 0:
-                    raise Exception(f"Can't install masters {result}")
-
-        names = (e.name for e in self._cc.masters)
-        self._wait_known_state(names, cb)
         self._ai.ensure_cluster_installing(cluster_name)
 
         self._ai.download_kubeconfig_and_secrets(self._cc.name, self._cc.kubeconfig)
+
+        nodes_with_futures = [(n.config.name, executor.submit(n.ensure_reboot)) for n in master_nodes]
+        wait_futures("reboot node", nodes_with_futures)
 
         self._ai.wait_cluster_status(cluster_name, "installed")
 
         logger.info('updating /etc/hosts')
         self.update_etc_hosts()
-
-        # Make sure any submitted tasks have completed.
-        for p in futures:
-            p.result()
 
         # Connect the masters to the physical network.
         # NOTE: this must happen after the masters are installed by AI
@@ -374,9 +361,8 @@ class ClusterDeployer(BaseDeployer):
             h.ensure_linked_to_network(self._local_host.bridge)
 
         logger.info("Setting password to for root to redhat")
-        for h in hosts_with_masters:
-            for master in h.k8s_master_nodes:
-                master.set_password()
+        for master in master_nodes:
+            master.set_password()
 
         self.update_dnsmasq()
 
@@ -437,32 +423,21 @@ class ClusterDeployer(BaseDeployer):
         ssh_priv_key_path = self._get_discovery_ign_ssh_priv_key(infra_env)
         shutil.copyfile(ssh_priv_key_path, os.path.join(_BF_ISO_PATH, "ssh_priv_key"))
 
-        for h in hosts_with_workers:
-            h.ensure_images(iso_file, infra_env, h.k8s_worker_nodes)
+        image_futures = [(h.config.name, executor.submit(h.ensure_images, iso_file, infra_env, nodes=h.k8s_worker_nodes)) for h in hosts_with_workers]
+        wait_futures("ensure image", image_futures)
 
-        futures = []
-        for h in hosts_with_workers:
-            futures.extend(h.start_workers(infra_env, executor))
+        worker_nodes = sum((h.k8s_worker_nodes for h in hosts_with_workers), [])
 
-        # Wait for workers to have booted.
-        for h in hosts_with_workers:
-            h.wait_for_workers_boot(self._cc.full_ip_range)
-
-        # Rename workers in AI.
-        logger.info("renaming workers")
-        self._rename_workers(infra_env)
-
-        def cb() -> None:
-            finished = [p for p in futures if p.done()]
-            for f in finished:
-                result = f.result()
-                if result is not None and result.returncode != 0:
-                    raise Exception(f"Can't install workers {result}")
-
-        self._wait_known_state((e.name for e in self._cc.workers), cb)
+        nodes_with_futures = [(n.config.name, executor.submit(self._start_node, infra_env, n, False)) for n in worker_nodes]
+        wait_futures("start node", nodes_with_futures)
 
         logger.info("starting infra env")
         self._ai.start_infraenv(infra_env)
+
+        nodes_with_futures = [(n.config.name, executor.submit(n.ensure_reboot)) for n in worker_nodes]
+        wait_futures("reboot node", nodes_with_futures)
+
+        logger.info("waiting for workers to be ready")
         self.wait_for_workers()
 
         logger.info("Setting password to for root to redhat")
@@ -470,23 +445,23 @@ class ClusterDeployer(BaseDeployer):
             for worker in h.k8s_worker_nodes:
                 worker.set_password()
 
-        # Make sure any submitted tasks have completed.
-        for p in futures:
-            p.result()
+    def _start_node(self, infra_env: str, node: ClusterNode, master: bool) -> bool:
+        image = os.path.join(os.path.dirname(node.config.image_path), f"{infra_env}.iso")
+        node.start(image)
+        node.wait_for_boot(self._cc.full_ip_range)
 
-    def _rename_workers(self, infra_env: str) -> None:
-        logger.info("Waiting for connectivity to all workers")
-        hosts = []
-        workers = []
-        for bm in self._all_hosts:
-            for k8s_node in bm.k8s_worker_nodes:
-                rh = host.RemoteHost(k8s_node.ip())
-                rh.ssh_connect("core")
-                hosts.append(rh)
-                workers.append(k8s_node)
+        if not master and not self._rename_worker(node):
+            return False
+
+        return self._wait_known(node)
+
+    def _rename_worker(self, node: ClusterNode) -> bool:
+        logger.info(f"Waiting for connectivity to worker {node.config.name}")
+        rh = host.RemoteHost(node.ip())
+        rh.ssh_connect("core")
 
         ip_range = self._cc.full_ip_range
-        logger.info(f"Connectivity established to all workers; checking that they have an IP in range: {ip_range}")
+        logger.info(f"Connectivity established to worker {node.config.name} checking that it has an IP in range: {ip_range}")
 
         def any_address_in_range(h: host.Host, ip_range: tuple[str, str]) -> bool:
             for ipaddr in common.ip_addrs(h):
@@ -498,38 +473,30 @@ class ClusterDeployer(BaseDeployer):
                     return True
             return False
 
-        any_worker_bad = False
-        for w, h in zip(workers, hosts):
-            if not any_address_in_range(h, ip_range):
-                logger.error(f"Worker {w.config.name} doesn't have an IP in range {ip_range}.")
-                any_worker_bad = True
+        if not any_address_in_range(rh, ip_range):
+            logger.error(f"Worker {node.config.name} doesn't have an IP in range {ip_range}.")
+            return False
 
-        if any_worker_bad:
-            sys.exit(-1)
+        for try_count in range(30):
+            info = self._ai.get_ai_host_by_ip(node.ip())
+            if info is not None:
+                self._ai.update_host(info.id, {"name": node.config.name})
+                logger.info(f"Renamed {node.config.name}")
+                return True
 
-        logger.info("Connectivity established to all workers, renaming them in Assisted installer")
-        logger.info(f"looking for workers with ip {[w.ip() for w in workers]}")
-        for try_count in itertools.count(0):
-            renamed = self._try_rename_workers(infra_env)
-            expected = len(workers)
-            if renamed == expected:
-                logger.info(f"Found and renamed {renamed} workers")
-                break
-            if renamed:
-                logger.info(f"Found and renamed {renamed} workers, but waiting for {expected}, retrying (try #{try_count})")
-                time.sleep(5)
+            logger.info(f"Waiting for {node.config.name} rename, retrying (try #{try_count})")
+            time.sleep(10)
 
-    def _try_rename_workers(self, infra_env: str) -> int:
-        renamed = 0
+        return False
 
-        for bm in self._all_hosts:
-            for k8s_node in bm.k8s_worker_nodes:
-                info = self._ai.get_ai_host_by_ip(k8s_node.ip())
-                if info is not None:
-                    self._ai.update_host(info.id, {"name": k8s_node.config.name})
-                    logger.info(f"renamed {k8s_node.config.name}")
-                    renamed += 1
-        return renamed
+    def _wait_known(self, node: ClusterNode) -> bool:
+        def node_status_known(ai: AssistedClientAutomation, node: ClusterNode) -> bool:
+            info = ai.get_ai_host(node.config.name)
+            return info is not None and info.status == "known"
+
+        common.wait_true(f"known status {node.config.name}", 0, node_status_known, ai=self._ai, node=node)
+
+        return True
 
     def _get_discovery_ign_ssh_priv_key(self, infra_env: str) -> str:
         self._ai.download_discovery_ignition(infra_env, "/tmp")
