@@ -200,3 +200,10 @@ class AssistedClientAutomation(AssistedClient):  # type: ignore
             sys.exit(-1)
 
         return AssistedClientClusterInfo(cluster_info.id, cluster_info.api_vips[0].ip)
+
+    def install_ai_host(self, infra_env: str, name: str) -> None:
+        infra_env_id = self.get_infra_env_id(infra_env)
+        host_info = self.get_ai_host(name)
+        if host_info is not None and host_info.status not in ["installed", "added-to-existing-cluster"]:
+            logger.info(f"Installing host {name}")
+            self.client.v2_install_host(infra_env_id=infra_env_id, host_id=host_info.id)
