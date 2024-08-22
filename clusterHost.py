@@ -89,7 +89,7 @@ class ClusterHost:
     def _k8s_nodes(self) -> list[ClusterNode]:
         return self.k8s_master_nodes + self.k8s_worker_nodes
 
-    def _ensure_images(self, local_iso_path: str, infra_env: str, nodes: list[ClusterNode]) -> None:
+    def ensure_images(self, local_iso_path: str, infra_env: str, nodes: list[ClusterNode]) -> None:
         if not self.hosts_vms:
             return
 
@@ -198,8 +198,7 @@ class ClusterHost:
 
         return executor.submit(_preinstall)
 
-    def _start_nodes(self, iso_path: str, infra_env: str, executor: ThreadPoolExecutor, nodes: list[ClusterNode]) -> list[Future[Optional[host.Result]]]:
-        self._ensure_images(iso_path, infra_env, nodes)
+    def _start_nodes(self, infra_env: str, executor: ThreadPoolExecutor, nodes: list[ClusterNode]) -> list[Future[Optional[host.Result]]]:
         futures = []
         for node in nodes:
             remote_iso_path = os.path.join(os.path.dirname(node.config.image_path), f"{infra_env}.iso")
@@ -207,11 +206,11 @@ class ClusterHost:
             futures.append(node.future)
         return futures
 
-    def start_masters(self, iso_path: str, infra_env: str, executor: ThreadPoolExecutor) -> list[Future[Optional[host.Result]]]:
-        return self._start_nodes(iso_path, infra_env, executor, self.k8s_master_nodes)
+    def start_masters(self, infra_env: str, executor: ThreadPoolExecutor) -> list[Future[Optional[host.Result]]]:
+        return self._start_nodes(infra_env, executor, self.k8s_master_nodes)
 
-    def start_workers(self, iso_path: str, infra_env: str, executor: ThreadPoolExecutor) -> list[Future[Optional[host.Result]]]:
-        return self._start_nodes(iso_path, infra_env, executor, self.k8s_worker_nodes)
+    def start_workers(self, infra_env: str, executor: ThreadPoolExecutor) -> list[Future[Optional[host.Result]]]:
+        return self._start_nodes(infra_env, executor, self.k8s_worker_nodes)
 
     def _wait_for_boot(self, nodes: list[ClusterNode], desired_ip_range: tuple[str, str]) -> None:
         if not nodes:
