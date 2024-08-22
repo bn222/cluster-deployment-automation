@@ -45,7 +45,7 @@ class ClusterNode:
         return self.dynamic_ip
 
     @abc.abstractmethod
-    def start(self, iso_or_image_path: str) -> None:
+    def start(self, iso_or_image_path: str) -> bool:
         pass
 
     def has_booted(self) -> bool:
@@ -85,10 +85,15 @@ class ClusterNode:
         if any(missing_packages):
             sys.exit(-1)
 
-    def wait_for_boot(self, desired_ip_range: tuple[str, str]) -> None:
-        common.wait_true(f"{self.config.name} boot", 0, self.has_booted)
-        common.wait_true(f"{self.config.name} post_boot", 0, self.post_boot, desired_ip_range=desired_ip_range)
+    def wait_for_boot(self, desired_ip_range: tuple[str, str]) -> bool:
+        if not common.wait_true(f"{self.config.name} boot", 10, self.has_booted):
+            return False
+
+        if not common.wait_true(f"{self.config.name} post_boot", 10, self.post_boot, desired_ip_range=desired_ip_range):
+            return False
+
         self.health_check()
+        return True
 
 
 class VmClusterNode(ClusterNode):
@@ -151,8 +156,8 @@ class VmClusterNode(ClusterNode):
             logger.info(f"Finished starting VM {self.config.name} successfully")
         return ret
 
-    def start(self, iso_or_image_path: str) -> None:
-        self.setup_vm(iso_or_image_path)
+    def start(self, iso_or_image_path: str) -> bool:
+        return self.setup_vm(iso_or_image_path).success()
 
     def has_booted(self) -> bool:
         return self.hostconn.vm_is_running(self.config.name)
@@ -212,8 +217,8 @@ class X86ClusterNode(ClusterNode):
         logger.info("connected")
         return h.run("hostname")
 
-    def start(self, iso_or_image_path: str) -> None:
-        self._boot_iso_x86(iso_or_image_path)
+    def start(self, iso_or_image_path: str) -> bool:
+        return self._boot_iso_x86(iso_or_image_path).success()
 
     def post_boot(self, *, desired_ip_range: Optional[tuple[str, str]] = None) -> bool:
         rh = host.RemoteHost(self.config.node)
@@ -320,9 +325,10 @@ class BFClusterNode(ClusterNode):
         logger.info(f"Detected ip {ip}")
         return host.Result(out=f"{ip}", err="", returncode=0)
 
-    def start(self, iso_or_image_path: str) -> None:
+    def start(self, iso_or_image_path: str) -> bool:
         result = self._boot_iso_bf(iso_or_image_path)
         if result is not None:
             self.dynamic_ip = result.out
+            return result.success()
         else:
             logger.error_and_exit(f"Couldn't find ip of worker {self.config.name}")
