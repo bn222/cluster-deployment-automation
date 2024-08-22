@@ -615,3 +615,14 @@ def empty_future(result_type: type[T]) -> Future[Optional[T]]:
     f: Future[Optional[T]] = Future()
     f.set_result(None)
     return f
+
+
+def any_address_in_range(h: host.Host, ip_range: tuple[str, str]) -> bool:
+    for ipaddr in ip_addrs(h):
+        for ainfo in ipaddr.addr_info:
+            if ainfo.family != "inet":
+                continue
+            if not ip_range_contains(ip_range, ainfo.local):
+                continue
+            return True
+    return False
