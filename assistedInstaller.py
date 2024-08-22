@@ -233,3 +233,10 @@ class AssistedClientAutomation(AssistedClient):  # type: ignore
 
     def exists(self, host_name: str) -> bool:
         return host_name in [x.name for x in self.list_ai_hosts()]
+
+    def install_ai_host(self, infra_env: str, name: str) -> None:
+        infra_env_id = self.get_infra_env_id(infra_env)
+        host_info = self.get_ai_host(name)
+        if host_info is not None and host_info.status not in ["installed", "added-to-existing-cluster"]:
+            logger.info(f"Installing host {name}")
+            self.client.v2_install_host(infra_env_id=infra_env_id, host_id=host_info.id)
