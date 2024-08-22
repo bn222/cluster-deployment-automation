@@ -5,7 +5,7 @@ pull_secret.json
 ocp-venv
 .mypy_cache
 __pycache__
-ocp-venv
+/*venv*/
 credentials.json
 bin
 build
