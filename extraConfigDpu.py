@@ -231,15 +231,16 @@ def ExtraConfigDpu(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, 
 
     # Build and start vsp on DPU
     vendor_plugin = init_vendor_plugin(acc)
-    if isinstance(vendor_plugin, IpuPlugin):
-        # TODO: Remove when this container is properly started by the vsp
-        # We need to manually start the p4 sdk container currently for the IPU plugin
-        img = "quay.io/sdaniele/intel-ipu-p4-sdk:temp_wa_5-28-24"
-        uname = acc.run("uname -r").out.strip()
-        cmd = f"podman run --network host -d --privileged --entrypoint='[\"/bin/sh\", \"-c\", \"sleep 5; sh /entrypoint.sh\"]' -v /lib/modules/{uname}:/lib/modules/{uname} -v data1:/opt/p4 {img}"
-        logger.info("Manually starting P4 container")
-        acc.run_or_die(cmd)
-    vendor_plugin.build_and_start(lh, client, imgReg.url())
+    # TODO: Remove when this container is properly started by the vsp
+    # We need to manually start the p4 sdk container currently for the IPU plugin
+    img = "quay.io/sdaniele/intel-ipu-p4-sdk:temp_wa_5-28-24"
+    uname = acc.run("uname -r").out.strip()
+    logger.info("Manually starting P4 container")
+    cmd = f"podman run --network host -d --privileged --entrypoint='[\"/bin/sh\", \"-c\", \"sleep 5; sh /entrypoint.sh\"]' -v /lib/modules/{uname}:/lib/modules/{uname} -v data1:/opt/p4 {img}"
+    acc.run_or_die(cmd)
+    vendor_plugin.import_from_url("http://10.26.16.5/ipu-plugin.tar")
+    vendor_plugin.push(imgReg)
+    vendor_plugin.start(vendor_plugin.vsp_image_name(imgReg), client)
 
     git_repo_setup(REPO_DIR, repo_wipe=True, url=DPU_OPERATOR_REPO, branch=branch)
     if cfg.rebuild_dpu_operators_images:
@@ -283,7 +284,7 @@ def ExtraConfigDpuHost(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[s
 
     h = host.Host(cc.workers[0].node)
     vendor_plugin = init_vendor_plugin(h)
-    vendor_plugin.build_and_start(lh, client, imgReg.url())
+    vendor_plugin.build_and_start(lh, client, imgReg)
 
     git_repo_setup(REPO_DIR, repo_wipe=True, url=DPU_OPERATOR_REPO, branch=branch)
     if cfg.rebuild_dpu_operators_images:

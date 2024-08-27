@@ -15,6 +15,7 @@ spec:
       automountServiceAccountToken: false
       containers:
       - name: appcntr1
+        imagePullPolicy: Always
         image: {{ipu_plugin_image}}
         securityContext:
           privileged: true
