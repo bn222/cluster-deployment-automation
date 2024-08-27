@@ -228,7 +228,7 @@ class VirBridge:
             if range_elem.tag:
                 xml_str = f"\"<range {xml_str}/>\""
                 cmd = f"virsh net-update default delete ip-dhcp-range {xml_str} --live --config"
-                self.hostconn.run_or_die(cmd)
+                self.hostconn.run(cmd)
 
             cmd = f"virsh net-update default add ip-dhcp-range \"{expected_dhcp_range}\" --live --config"
             self.hostconn.run_or_die(cmd)
