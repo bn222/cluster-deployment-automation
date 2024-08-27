@@ -9,12 +9,13 @@ import time
 from typing import Optional, Match
 from logger import logger
 from clustersConfig import ExtraConfigArgs
-import reglocal
+import imageRegistry
 from common import git_repo_setup
 from dpuVendor import init_vendor_plugin, IpuPlugin
+from imageRegistry import ImageRegistry
 
 DPU_OPERATOR_REPO = "https://github.com/openshift/dpu-operator.git"
-MICROSHIFT_KUBECONFIG = "/var/lib/microshift/resources/kubeadmin/kubeconfig"
+MICROSHIFT_KUBECONFIG = "/root/kubeconfig.microshift"
 OSE_DOCKERFILE = "https://pkgs.devel.redhat.com/cgit/containers/dpu-operator/tree/Dockerfile?h=rhaos-4.17-rhel-9"
 REPO_DIR = "/root/dpu-operator"
 
@@ -101,12 +102,12 @@ def update_dockerfiles_with_ose_images(repo: str, dockerfile_url: str = OSE_DOCK
         _update_dockerfile(image, file)
 
 
-def _ensure_local_registry_running(rsh: host.Host, delete_all: bool = False) -> str:
+def _ensure_local_registry_running(rsh: host.Host, delete_all: bool = False) -> ImageRegistry:
     logger.info(f"Ensuring local registry running on {rsh.hostname()}")
-    _, reglocal_hostname, reglocal_listen_port, _ = reglocal.ensure_running(rsh, delete_all=delete_all)
-    reglocal.local_trust(rsh)
-    registry = f"{reglocal_hostname}:{reglocal_listen_port}"
-    return registry
+    imgReg = imageRegistry.ImageRegistry(rsh)
+    imgReg.ensure_running(delete_all=delete_all)
+    imgReg.trust(host.LocalHost())
+    return imgReg
 
 
 def go_is_installed(host: host.Host) -> bool:
@@ -185,43 +186,26 @@ def copy_local_registry_certs(host: host.Host, path: str) -> None:
         host.copy_to(f"{directory}/{file}", f"{path}/{file}")
 
 
-def build_dpu_operator_images(branch: Optional[str] = "main") -> str:
-    logger.info("Building dpu operator images")
-    lh = host.LocalHost()
-    git_repo_setup(REPO_DIR, repo_wipe=True, url=DPU_OPERATOR_REPO, branch=branch)
-    update_dockerfiles_with_ose_images(REPO_DIR)
-
-    # Start a local registry to store dpu-operator images
-    registry = _ensure_local_registry_running(lh, delete_all=True)
-    reglocal.local_trust(lh)
-
-    lh.run_or_die(f"make -C {REPO_DIR} local-buildx")
-    lh.run_or_die(f"make -C {REPO_DIR} local-pushx")
-
-    return registry
+def dpu_operator_build_push() -> None:
+    h = host.LocalHost()
+    logger.info(f"Building dpu operator images in {REPO_DIR} on {h.hostname()}")
+    h.run_or_die(f"make -C {REPO_DIR} local-buildx")
+    h.run_or_die(f"make -C {REPO_DIR} local-pushx")
 
 
-def start_dpu_operator(h: host.Host, client: K8sClient, dpu_operator_branch: Optional[str] = "main", repo_wipe: bool = False) -> None:
-    logger.info(f"Deploying dpu operator containers on {h.hostname()}")
-    if repo_wipe:
-        h.run(f"rm -rf {REPO_DIR}")
-        h.run_or_die(f"git clone -b {dpu_operator_branch} {DPU_OPERATOR_REPO}")
+def dpu_operator_start(client: K8sClient) -> None:
+    h = host.LocalHost()
+    logger.info(f"Deploying dpu operator from {h.hostname()}")
 
     h.run("dnf install -y pip")
     h.run_or_die("pip install yq")
     ensure_go_installed(h)
-    if h.is_localhost():
-        env = os.environ.copy()
-        env["KUBECONFIG"] = client._kc
-        h.run(f"make -C {REPO_DIR} undeploy", env=env)
-        ret = h.run(f"make -C {REPO_DIR} local-deploy", env=env)
-        if not ret.success():
-            logger.error_and_exit("Failed to deploy dpu operator")
-    else:
-        registry = host.LocalHost().run_or_die("hostname").out.strip()
-        env_cmds = f"export KUBECONFIG={client._kc} && export REGISTRY={registry}"
-        h.run(f"cd {REPO_DIR} && {env_cmds} && make undeploy")
-        h.run_or_die(f"cd {REPO_DIR} && {env_cmds} && make local-deploy")
+    env = os.environ.copy()
+    env["KUBECONFIG"] = client._kc
+    h.run(f"make -C {REPO_DIR} undeploy", env=env)
+    ret = h.run(f"make -C {REPO_DIR} local-deploy", env=env)
+    if not ret.success():
+        logger.error_and_exit("Failed to deploy dpu operator")
     logger.info("Waiting for all dpu operator pods to become ready")
     time.sleep(30)
     client.oc_run_or_die("wait --for=condition=Ready pod --all -n openshift-dpu-operator --timeout=5m")
@@ -237,13 +221,13 @@ def ExtraConfigDpu(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, 
     acc = host.Host(dpu_node.ip)
     lh = host.LocalHost()
     acc.ssh_connect("root", "redhat")
-    client = K8sClient(MICROSHIFT_KUBECONFIG, acc)
-
-    if cfg.rebuild_dpu_operators_images:
-        registry = build_dpu_operator_images(branch)
-    else:
-        logger.info("Will not rebuild dpu-operator images")
-        registry = _ensure_local_registry_running(lh, delete_all=False)
+    client = K8sClient(MICROSHIFT_KUBECONFIG)
+    imgReg = _ensure_local_registry_running(lh, delete_all=False)
+    imgReg.trust(acc)
+    acc.run("systemctl restart crio")
+    # Disable firewall to ensure host-side can reach dpu
+    acc.run("systemctl stop firewalld")
+    acc.run("systemctl disable firewalld")
 
     # Build and start vsp on DPU
     vendor_plugin = init_vendor_plugin(acc)
@@ -255,13 +239,14 @@ def ExtraConfigDpu(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, 
         cmd = f"podman run --network host -d --privileged --entrypoint='[\"/bin/sh\", \"-c\", \"sleep 5; sh /entrypoint.sh\"]' -v /lib/modules/{uname}:/lib/modules/{uname} -v data1:/opt/p4 {img}"
         logger.info("Manually starting P4 container")
         acc.run_or_die(cmd)
-    vendor_plugin.build_and_start(acc, client, registry)
+    vendor_plugin.build_and_start(lh, client, imgReg.url())
 
-    start_dpu_operator(acc, client, branch, repo_wipe=True)
-
-    # Disable firewall to ensure host-side can reach dpu
-    acc.run("systemctl stop firewalld")
-    acc.run("systemctl disable firewalld")
+    git_repo_setup(REPO_DIR, repo_wipe=True, url=DPU_OPERATOR_REPO, branch=branch)
+    if cfg.rebuild_dpu_operators_images:
+        dpu_operator_build_push()
+    else:
+        logger.info("Will not rebuild dpu-operator images")
+    dpu_operator_start(client)
 
     # Deploy dpu daemon
     client.oc_run_or_die(f"label no {dpu_node.name} dpu=true")
@@ -292,21 +277,20 @@ def ExtraConfigDpuHost(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[s
     client = K8sClient(cc.kubeconfig)
     branch = cfg.dpu_operator_branch
 
-    if cfg.rebuild_dpu_operators_images:
-        registry = build_dpu_operator_images(branch)
-    else:
-        logger.info("Will not rebuild dpu-operator images")
-        registry = _ensure_local_registry_running(lh, delete_all=False)
-
+    imgReg = _ensure_local_registry_running(lh, delete_all=False)
     # Need to trust the registry in OCP / Microshift
     logger.info("Ensuring local registry is trusted in OCP")
-    reglocal.ocp_trust(client, reglocal.get_local_registry_base_directory(lh), reglocal.get_local_registry_hostname(lh), 5000)
 
     h = host.Host(cc.workers[0].node)
     vendor_plugin = init_vendor_plugin(h)
-    vendor_plugin.build_and_start(lh, client, registry)
+    vendor_plugin.build_and_start(lh, client, imgReg.url())
 
-    start_dpu_operator(lh, client, branch)
+    git_repo_setup(REPO_DIR, repo_wipe=True, url=DPU_OPERATOR_REPO, branch=branch)
+    if cfg.rebuild_dpu_operators_images:
+        dpu_operator_build_push()
+    else:
+        logger.info("Will not rebuild dpu-operator images")
+    dpu_operator_start(client)
 
     def helper(h: host.Host, node: NodeConfig) -> Optional[host.Result]:
         # Temporary workaround, remove once 4.16 installations are working

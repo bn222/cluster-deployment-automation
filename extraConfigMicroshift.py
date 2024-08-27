@@ -81,9 +81,8 @@ def ExtraConfigMicroshift(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dic
 
     # Configure firewalld for microshift
     logger.info("Configuring firewall for microshift")
-    acc.run("firewall-cmd --permanent --zone=trusted --add-source=10.42.0.0/16")
-    acc.run("firewall-cmd --permanent --zone=trusted --add-source=169.254.169.1")
-    acc.run("firewall-cmd --reload")
+    acc.run("systemctl disable firewalld")
+    acc.run("systemctl stop firewalld")
 
     # Adjust the timeout for microshift service to ensure it starts successfully
     acc.run_or_die("mkdir -p /etc/systemd/system/microshift.service.d/")
