@@ -21,7 +21,12 @@ def main_deploy_openshift(cc: ClustersConfig, args: argparse.Namespace) -> None:
 
     # microshift does not use assisted installer so we don't need this check
     if args.url == cc.ip_range[0]:
-        ais = AssistedInstallerService(cc.version, args.url, cc.proxy, cc.noproxy)
+        ais = AssistedInstallerService(
+            cc.version,
+            args.url,
+            cc.cluster_config.proxy,
+            cc.cluster_config.noproxy,
+        )
         ais.start()
     else:
         logger.info(f"Will use Assisted Installer running at {args.url}")

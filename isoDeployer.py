@@ -9,6 +9,7 @@ from clustersConfig import ClustersConfig
 from concurrent.futures import ThreadPoolExecutor
 import sys
 import timer
+from ktoolbox.common import unwrap
 
 
 class IsoDeployer(BaseDeployer):
@@ -64,10 +65,10 @@ class IsoDeployer(BaseDeployer):
             self._cc.prepare_external_port()
             node = ipu.IPUClusterNode(self._master, self._cc.external_port, self._cc.network_api_port)
             executor = ThreadPoolExecutor(max_workers=len(self._cc.masters))
-            node.start(self._cc.install_iso, executor)
+            node.start(unwrap(self._cc.cluster_config.install_iso), executor)
             node.future.result()
         elif self._master.kind == "marvell-dpu":
-            isoCluster.MarvellIsoBoot(self._cc, self._master, self._cc.install_iso)
+            isoCluster.MarvellIsoBoot(self._cc, self._master, unwrap(self._cc.cluster_config.install_iso))
         else:
             logger.error("Not tested")
             sys.exit(-1)

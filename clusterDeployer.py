@@ -51,10 +51,8 @@ class ClusterDeployer(BaseDeployer):
         if self.need_external_network():
             self._cc.prepare_external_port()
 
-        lh = host.LocalHost()
-        lh_config = list(filter(lambda hc: hc.name == lh.hostname(), self._cc.hosts))[0]
-        self._local_host = ClusterHost(lh, lh_config, cc, cc.local_bridge_config)
-        self._remote_hosts = {bm.name: ClusterHost(host.RemoteHost(bm.name), bm, cc, cc.remote_bridge_config) for bm in self._cc.hosts if bm.name != lh.hostname()}
+        self._local_host = ClusterHost(host.LocalHost(), self._cc.hosts["localhost"], cc, cc.local_bridge_config)
+        self._remote_hosts = {bm.name: ClusterHost(host.RemoteHost(bm.name), bm, cc, cc.remote_bridge_config) for bm in self._cc.hosts.values() if bm.name != "localhost"}
         self._all_hosts = [self._local_host] + list(self._remote_hosts.values())
         self._futures.update((k8s_node.config.name, k8s_node.future) for h in self._all_hosts for k8s_node in h._k8s_nodes())
         self._all_nodes = {k8s_node.config.name: k8s_node for h in self._all_hosts for k8s_node in h._k8s_nodes()}
@@ -237,7 +235,7 @@ class ClusterDeployer(BaseDeployer):
             logger.info(f"{k}: {v.duration()}")
 
     def _validate(self) -> None:
-        if self._cc.is_sno():
+        if self._cc.cluster_config.is_sno:
             logger.info("Setting up a Single Node OpenShift (SNO) environment")
             if self._cc.masters[0].ip is None:
                 logger.error_and_exit("Missing ip on master")
@@ -288,18 +286,26 @@ class ClusterDeployer(BaseDeployer):
         cfg["pull_secret"] = self._secrets_path
         cfg["infraenv"] = "false"
 
-        if not self._cc.is_sno():
-            cfg["api_vips"] = [self._cc.api_vip]
-            cfg["ingress_vips"] = [self._cc.ingress_vip]
+        if not self._cc.cluster_config.is_sno:
+            cfg["api_vips"] = [
+                {
+                    "ip": unwrap(self._cc.cluster_config.api_vip),
+                }
+            ]
+            cfg["ingress_vips"] = [
+                {
+                    "ip": unwrap(self._cc.cluster_config.ingress_vip),
+                }
+            ]
 
         cfg["vip_dhcp_allocation"] = False
-        cfg["additional_ntp_source"] = self._cc.ntp_source
-        cfg["base_dns_domain"] = self._cc.base_dns_domain
-        cfg["sno"] = self._cc.is_sno()
-        if self._cc.proxy:
-            cfg["proxy"] = self._cc.proxy
-        if self._cc.noproxy:
-            cfg["noproxy"] = self._cc.noproxy
+        cfg["additional_ntp_source"] = unwrap(self._cc.cluster_config.ntp_source)
+        cfg["base_dns_domain"] = unwrap(self._cc.cluster_config.base_dns_domain)
+        cfg["sno"] = self._cc.cluster_config.is_sno
+        if self._cc.cluster_config.proxy:
+            cfg["proxy"] = self._cc.cluster_config.proxy
+        if self._cc.cluster_config.noproxy:
+            cfg["noproxy"] = self._cc.cluster_config.noproxy
 
         logger.info("Creating cluster")
         logger.info(cfg)
@@ -315,10 +321,10 @@ class ClusterDeployer(BaseDeployer):
         cfg["pull_secret"] = self._secrets_path
         cfg["cpu_architecture"] = self.masters_arch
         cfg["openshift_version"] = self._cc.version
-        if self._cc.proxy:
-            cfg["proxy"] = self._cc.proxy
-        if self._cc.noproxy:
-            cfg["noproxy"] = self._cc.noproxy
+        if self._cc.cluster_config.proxy:
+            cfg["proxy"] = self._cc.cluster_config.proxy
+        if self._cc.cluster_config.noproxy:
+            cfg["noproxy"] = self._cc.cluster_config.noproxy
         self._ai.ensure_infraenv_created(infra_env, cfg)
 
         hosts_with_masters = self._all_hosts_with_masters()
@@ -401,10 +407,10 @@ class ClusterDeployer(BaseDeployer):
         cfg["pull_secret"] = self._secrets_path
         cfg["cpu_architecture"] = self.workers_arch
         cfg["openshift_version"] = self._cc.version
-        if self._cc.proxy:
-            cfg["proxy"] = self._cc.proxy
-        if self._cc.noproxy:
-            cfg["noproxy"] = self._cc.noproxy
+        if self._cc.cluster_config.proxy:
+            cfg["proxy"] = self._cc.cluster_config.proxy
+        if self._cc.cluster_config.noproxy:
+            cfg["noproxy"] = self._cc.cluster_config.noproxy
 
         self._ai.ensure_infraenv_created(infra_env, cfg)
         hosts_with_workers = self._all_hosts_with_workers()
