@@ -91,6 +91,7 @@ class MarvellDpuPlugin(VendorPlugin):
         # TODO: https://github.com/openshift/dpu-operator/pull/82
         logger.warning("Setting up Marvell DPU not yet implemented")
 
+
 def init_vendor_plugin(h: host.Host, node_kind: str) -> VendorPlugin:
     # TODO: Autodetect the vendor hardware and return the proper implementation.
     if node_kind == "marvell-dpu":
