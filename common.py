@@ -18,6 +18,8 @@ import glob
 import socket
 import tempfile
 import typing
+from collections.abc import Iterable
+from typing import Union
 
 
 T = TypeVar("T")
@@ -90,41 +92,97 @@ def str_to_list(input_str: str) -> list[int]:
 
     for part in parts:
         if '-' in part:
-            start, end = map(int, part.split('-'))
-            result.update(range(start, end + 1))
+            start, end = part.split('-')
+            result.update(range(int(start), int(end) + 1))
         else:
             result.add(int(part))
 
     return sorted(result)
 
 
+@dataclass(frozen=True, init=False)
 class RangeList:
-    _range: list[tuple[bool, list[int]]] = []
-    initial_values: Optional[list[int]] = None
+    _include: Optional[set[int]]
+    _exclude: Optional[set[int]]
 
-    def __init__(self, initial_values: Optional[list[int]] = None):
-        self.initial_values = initial_values
+    UNLIMITED: typing.ClassVar['RangeList']
 
-    def _append(self, lst: list[int], expand: bool) -> None:
-        self._range.append((expand, lst))
+    def __init__(
+        self,
+        include: Optional[Iterable[int]] = None,
+        exclude: Optional[Iterable[int]] = None,
+    ):
+        def prepare(arg: Optional[Iterable[int]]) -> Optional[set[int]]:
+            return set(arg) if arg is not None else None
 
-    def include(self, lst: list[int]) -> None:
-        self._append(lst, True)
+        object.__setattr__(self, "_include", prepare(include))
+        object.__setattr__(self, "_exclude", prepare(exclude))
 
-    def exclude(self, lst: list[int]) -> None:
-        self._append(lst, False)
+    def match(self, idx: int) -> bool:
+        if self._include is not None and idx not in self._include:
+            return False
+        if self._exclude is not None and idx in self._exclude:
+            return False
+        return True
 
-    def filter_list(self, initial: list[T]) -> list[T]:
-        applied = set(range(len(initial)))
-        if self.initial_values is not None:
-            applied &= set(self.initial_values)
+    def filter(self, lst: Iterable[T]) -> list[T]:
+        lst = list(lst)
+        return [lst[idx] for idx in range(len(lst)) if self.match(idx)]
 
-        for expand, lst in self._range:
-            if expand:
-                applied = applied | set(lst)
-            else:
-                applied = applied - set(lst)
-        return [initial[x] for x in sorted(applied) if x < len(initial)]
+    def _accumulate(
+        self,
+        is_include: bool,
+        value: typing.Any,
+    ) -> None:
+
+        if not isinstance(value, str):
+            raise ValueError(f"Unexpected argument type {type(value)} for value")
+
+        lst = RangeList.parse_list(value)
+        assert lst is not None
+
+        # RangeList is mostly immutable, except this _accumulate() method.
+        # It's used while parsing the command line arguments, to incrementally
+        # built the RangeList.
+        if is_include:
+            add_attr, del_attr = "_include", "_exclude"
+        else:
+            add_attr, del_attr = "_exclude", "_include"
+
+        s: Optional[set[int]]
+
+        s = getattr(self, add_attr)
+        if s is None:
+            s = set()
+            object.__setattr__(self, add_attr, s)
+        s.update(lst)
+
+        s = getattr(self, del_attr)
+        if s is not None:
+            s.difference_update(lst)
+
+    @staticmethod
+    def parse_list(lst: Optional[Union[str, Iterable[Union[int, str, Iterable[int]]]]]) -> Optional[set[int]]:
+        if lst is None:
+            return None
+        result: set[int] = set()
+        if isinstance(lst, str):
+            result.update(str_to_list(lst))
+        else:
+            for entry in list(lst):
+                if isinstance(entry, str):
+                    result.update(str_to_list(entry))
+                elif isinstance(entry, int):
+                    result.add(entry)
+                else:
+                    for entry2 in list(entry):
+                        if not isinstance(entry2, int):
+                            raise ValueError("Unsupported argument for range")
+                        result.add(entry2)
+        return result
+
+
+RangeList.UNLIMITED = RangeList()
 
 
 @strict_dataclass

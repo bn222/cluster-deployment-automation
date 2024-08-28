@@ -169,7 +169,11 @@ class ClustersConfig:
     # Used to warn the user to change their config.
     deprecated_configs: dict[str, Optional[str]] = {"api_ip": "api_vip", "ingress_ip": "ingress_vip"}
 
-    def __init__(self, yaml_path: str, worker_range: common.RangeList):
+    def __init__(
+        self,
+        yaml_path: str,
+        worker_range: common.RangeList = common.RangeList.UNLIMITED,
+    ):
         self._cluster_info: Optional[ClusterInfo] = None
         self._load_full_config(yaml_path)
         self._check_deprecated_config()
@@ -204,7 +208,7 @@ class ClustersConfig:
             self.masters.append(NodeConfig(self.name, **n))
 
         self.configured_workers = [NodeConfig(self.name, **w) for w in cc["workers"]]
-        self.workers = [NodeConfig(self.name, **w) for w in worker_range.filter_list(cc["workers"])]
+        self.workers = [NodeConfig(self.name, **w) for w in worker_range.filter(cc["workers"])]
 
         if self.kind == "openshift":
             self.configure_ip_range()

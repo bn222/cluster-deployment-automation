@@ -5,6 +5,7 @@ import sys
 import logging
 import argcomplete
 import difflib
+import typing
 from logger import logger, configure_logger
 from typing import Optional
 
@@ -52,6 +53,31 @@ def remove_empty_strings(comma_string: str) -> list[str]:
 
 
 def parse_args() -> argparse.Namespace:
+    class WorkersIncludeExcludeAction(argparse.Action):
+        def __call__(
+            self,
+            parser: argparse.ArgumentParser,
+            namespace: argparse.Namespace,
+            values: Optional[str | typing.Sequence[typing.Any]],
+            option_string: Optional[str] = None,
+        ) -> None:
+
+            range_list: Optional[common.RangeList] = getattr(namespace, 'worker_range_accumulator', None)
+            if range_list is None:
+                range_list = common.RangeList()
+                setattr(namespace, 'worker_range_accumulator', range_list)
+
+            if option_string in ('-w', "--workers"):
+                is_include = True
+            else:
+                assert option_string in ('-sw', "--skip-workers")
+                is_include = False
+
+            try:
+                range_list._accumulate(is_include, values)
+            except Exception:
+                raise argparse.ArgumentError(self, f"Invalid {option_string} value {repr(values)} is not a range")
+
     parser = argparse.ArgumentParser(description='Cluster deployment automation')
     parser.add_argument('config', metavar='config', type=str, help='Yaml file with config').completer = yaml_completer  # type: ignore
     parser.add_argument('-v', '--verbosity', choices=['debug', 'info', 'warning', 'error', 'critical'], default='info', help='Set the logging level (default: info)')
@@ -65,8 +91,8 @@ def parse_args() -> argparse.Namespace:
 
     deploy_parser.add_argument('-s', '--steps', dest='steps', type=str, default=join_valid_steps(), help=f'Comma-separated list of steps to run (by default: {join_valid_steps()})').completer = step_completer  # type: ignore
     deploy_parser.add_argument('-d', '--skip-steps', dest='skip_steps', type=str, default="", help="Comma-separated list of steps to skip").completer = step_completer  # type: ignore
-    deploy_parser.add_argument('-w', '--workers', dest='workers', type=common.str_to_list, nargs='?', help='Range and/or list of workers to include')
-    deploy_parser.add_argument('-sw', '--skip-workers', dest='skip_workers', type=common.str_to_list, nargs='?', default=[], help='Range and/or list of workers to exclude')
+    deploy_parser.add_argument('-w', '--workers', action=WorkersIncludeExcludeAction, help='Range and/or list of workers to include')
+    deploy_parser.add_argument('-sw', '--skip-workers', action=WorkersIncludeExcludeAction, help='Range and/or list of workers to exclude')
 
     snapshot_parser = subparsers.add_parser('snapshot', help='Take or restore snapshots')
     snapshot_parser.add_argument('loadsave', metavar='loadsave', type=str, help='Load or save a snapshot', choices=(("load", "save")))
@@ -90,8 +116,9 @@ def parse_args() -> argparse.Namespace:
             sys.exit(-1)
 
         args.steps = [x for x in args.steps if x not in args.skip_steps]
-        args.worker_range = common.RangeList(args.workers)
-        args.worker_range.exclude(args.skip_workers)
+
+        range_list: Optional[common.RangeList] = getattr(args, 'worker_range_accumulator', None)
+        args.worker_range = range_list or common.RangeList.UNLIMITED
 
     configure_logger(getattr(logging, args.verbosity.upper()))
 
