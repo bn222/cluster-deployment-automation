@@ -72,11 +72,11 @@ class IpuPlugin(VendorPlugin):
         return vsp_image
 
     def start(self, vsp_image: str, client: K8sClient) -> None:
-        self.render_dpu_vsp_ds(vsp_image, "/tmp/vsp-ds.yaml")
+        self.render_dpu_vsp_ds_helper(vsp_image, "/tmp/vsp-ds.yaml")
         client.oc("delete -f /tmp/vsp-ds.yaml")
         client.oc_run_or_die("create -f /tmp/vsp-ds.yaml")
 
-    def render_dpu_vsp_ds(self, ipu_plugin_image: str, outfilename: str) -> None:
+    def render_dpu_vsp_ds_helper(self, ipu_plugin_image: str, outfilename: str) -> None:
         with open(self.vsp_ds_manifest) as f:
             j2_template = jinja2.Template(f.read())
             rendered = j2_template.render(ipu_plugin_image=ipu_plugin_image)
