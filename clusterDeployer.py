@@ -26,6 +26,7 @@ from virshPool import VirshPool
 from arguments import PRE_STEP, WORKERS_STEP, MASTERS_STEP, POST_STEP
 from libvirt import Libvirt
 from baseDeployer import BaseDeployer
+from ktoolbox.common import unwrap
 
 
 def match_to_proper_version_format(version_cluster_config: str) -> str:
@@ -126,7 +127,7 @@ class ClusterDeployer(BaseDeployer):
 
         self._local_host.bridge.remove_dhcp_entries(self._cc.master_vms())
 
-        image_paths = {os.path.dirname(n.image_path) for n in self._cc.local_vms()}
+        image_paths = {os.path.dirname(unwrap(n.image_path)) for n in self._cc.local_vms()}
         for image_path in image_paths:
             vp = VirshPool(
                 name=os.path.basename(image_path),

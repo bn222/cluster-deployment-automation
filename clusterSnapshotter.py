@@ -9,6 +9,7 @@ from logger import logger
 import coreosBuilder
 from concurrent.futures import ThreadPoolExecutor
 from nfs import NFS
+from ktoolbox.common import unwrap
 
 
 def get_part_table(h: host.Host, drive: str) -> list[str]:
@@ -126,19 +127,18 @@ class ClusterSnapshotter:
 
     def _export_vm(self, config: NodeConfig) -> None:
         lh = host.LocalHost()
-        src = config.image_path
+        src = unwrap(config.image_path)
         dst = os.path.join(self._snapshot_dir(), os.path.basename(src))
         logger.info(f"Copying {src} to {dst}")
         lh.copy_to(src, dst)
 
     def _import_vm(self, config: NodeConfig) -> None:
         lh = host.LocalHost()
-        src = config.image_path
+        src = unwrap(config.image_path)
         os.makedirs(os.path.dirname(src), exist_ok=True)
         dst = os.path.join(self._snapshot_dir(), os.path.basename(src))
         logger.info(f"Copying {dst} to {src}")
-        lh.copy_to(dst, src)
-        VmClusterNode(lh, config).setup_vm(config.image_path)
+        VmClusterNode(lh, config).setup_vm(src)
         ClusterDeployer(self._cc, self._ai, [], "").update_etc_hosts()
 
     def _snapshot_dir(self) -> str:

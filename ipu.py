@@ -17,6 +17,7 @@ from typing import Optional
 import json
 import requests
 import re
+from ktoolbox.common import unwrap
 
 
 def is_http_url(url: str) -> bool:
@@ -63,8 +64,7 @@ class IPUClusterNode(ClusterNode):
             timeout -= 20
             if timeout <= 0:
                 logger.info("ACC has not responded in a reasonable amount of time, rebooting IMC")
-                imc = host.RemoteHost(self.config.bmc)
-                imc.ssh_connect(self.config.bmc_user, self.config.bmc_password)
+                imc = self.config.create_rhost_bmc()
                 imc.run("reboot")
                 timeout = 240
 
@@ -83,7 +83,7 @@ class IPUClusterNode(ClusterNode):
         # configure_iso_network_port(self.network_api_port, self.config.ip)
 
     def start(self, iso_or_image_path: str, executor: ThreadPoolExecutor) -> None:
-        ipu_bmc = IPUBMC(self.config.bmc)
+        ipu_bmc = IPUBMC(unwrap(self.config.bmc))
         if ipu_bmc.version() != "1.8.0":
             logger.error_and_exit(f"Unexpected version {ipu_bmc.version()}, should be 1.8.0")
         self.future = executor.submit(self._boot_iso, iso_or_image_path)
@@ -94,7 +94,7 @@ class IPUClusterNode(ClusterNode):
     def _redfish_boot_ipu(self, external_port: str, node: NodeConfig, iso: str) -> None:
         def helper(node: NodeConfig, iso_address: str) -> str:
             logger.info(f"Booting {node.bmc} with {iso_address}")
-            bmc = IPUBMC(node.bmc)
+            bmc = IPUBMC(unwrap(node.bmc))
             bmc.boot_iso_with_redfish(iso_path=iso_address)
             return "Boot command sent"
 
@@ -123,7 +123,7 @@ class IPUClusterNode(ClusterNode):
             return ipu_host
 
         node = self.config
-        ipu_host_name = host_from_imc(node.bmc)
+        ipu_host_name = host_from_imc(unwrap(node.bmc))
         ipu_host_url = f"{ipu_host_name}-drac.anl.eng.bos2.dc.redhat.com"
         ipu_host_bmc = BMC.from_bmc(ipu_host_url, "root", "calvin")
         return host.Host(ipu_host_name, ipu_host_bmc)

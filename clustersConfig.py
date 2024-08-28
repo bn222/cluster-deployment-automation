@@ -9,16 +9,19 @@ import xml.etree.ElementTree as et
 import jinja2
 from yaml import safe_load
 import host
+from bmc import BMC
 from logger import logger
 import secrets
+import hashlib
 import common
 import collections.abc
 from clusterInfo import ClusterInfo
 from clusterInfo import load_all_cluster_info
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 import ktoolbox.common as kcommon
 import ktoolbox.netdev as knetdev
+from ktoolbox.common import unwrap
 
 
 def _show_secret(secret: Optional[str], *, show: bool) -> Optional[str]:
@@ -44,8 +47,29 @@ def _normalize_network_api_port(network_api_port: Optional[str]) -> Optional[str
     return network_api_port
 
 
-def random_mac() -> str:
-    return "52:54:" + ":".join(re.findall("..", secrets.token_hex()[:8]))
+def _normalize_etheraddr(ethaddr: str) -> tuple[bool, str]:
+    ethaddr2 = knetdev.validate_ethaddr_or_none(ethaddr)
+    if ethaddr2 is None:
+        return False, ethaddr
+    return True, ethaddr2
+
+
+def _rnd_seed_join(*parts: str) -> str:
+    return "".join(f"{len(s)}={{{s}}}" for s in parts)
+
+
+def random_mac(*, rnd_seed: Optional[str] = None) -> str:
+    if rnd_seed is None:
+        hexstr = secrets.token_hex()
+    else:
+        hexstr = hashlib.sha256(f"cda-random-mac:{rnd_seed}".encode()).hexdigest()
+    mac = "52:54:" + ":".join(re.findall("..", hexstr[:8]))
+    assert _normalize_etheraddr(mac) == (True, mac)
+    return mac
+
+
+def is_openshift_like(cluster_kind: str) -> bool:
+    return cluster_kind in ("openshift", "microshift")
 
 
 @dataclass
@@ -105,51 +129,239 @@ class ExtraConfigArgs:
             return os.path.normpath(os.path.join(self.base_path, self.dpu_operator_path))
 
 
-@dataclass
-class NodeConfig:
-    cluster_name: str
-    name: str
+@kcommon.strict_dataclass
+@dataclass(frozen=True, kw_only=True)
+class NodeConfig(kcommon.StructParseBaseNamed):
+    kind: str
     node: str
-    image_path: str = field(init=False)
-    mac: str = field(default_factory=random_mac)
-    bmc: str = ""
-    bmc_user: str = "root"
-    bmc_password: str = "calvin"
-    ip: Optional[str] = None
-    kind: Optional[str] = None  # optional to allow 'type'
-    type: Optional[str] = None
-    preallocated: str = "true"
-    os_variant: str = "rhel8.6"
-    disk_size: str = "48"
-    ram: str = "32768"
-    cpu: str = "8"
-    disk_kind: str = "qcow2"
+    ip: Optional[str]
+    mac_explicit: Optional[str]
+    mac_random: str
+    image_path: Optional[str]
+    bmc: Optional[str]
+    bmc_user: Optional[str]
+    bmc_password: Optional[str]
+    os_variant: Optional[str]
+    preallocated: Optional[bool]
+    disk_size: Optional[int]
+    ram: Optional[int]
+    cpu: Optional[int]
 
-    def __post_init__(self) -> None:
-        if self.type:
-            logger.warning("Deprecated 'type' in node config. Use 'kind' instead")
-            self.kind = self.type
+    @property
+    def mac(self) -> str:
+        if self.mac_explicit is not None:
+            return self.mac_explicit
+        return self.mac_random
 
-        delattr(self, 'type')
+    def create_bmc(self) -> BMC:
+        if self.bmc is None:
+            raise ValueError(f"The node {self.name} has no BMC")
+        return BMC.from_bmc(self.bmc, unwrap(self.bmc_user), unwrap(self.bmc_password))
 
-        if self.kind is None:
-            raise ValueError("NodeConfig: kind not provided")
+    def create_rhost_bmc(self) -> host.Host:
+        if self.bmc is None:
+            raise ValueError(f"The node {self.name} has no BMC")
+        rsh = host.RemoteHost(self.bmc)
+        rsh.ssh_connect(unwrap(self.bmc_user), unwrap(self.bmc_password))
+        return rsh
 
-        # bmc ip is mandatory for physical, not for vm
-        if self.kind == "physical" or self.kind == "bf" or self.kind == "ipu":
-            if self.bmc == "":
-                raise ValueError("NodeConfig: bmc not provided")
-        else:
-            delattr(self, "bmc")
-            delattr(self, "bmc_user")
-            delattr(self, "bmc_password")
+    def serialize(self, *, show_secrets: bool = False) -> dict[str, Any]:
+        extra_1: dict[str, Any] = {}
+        kcommon.dict_add_optional(extra_1, "ip", self.ip)
+        kcommon.dict_add_optional(extra_1, "mac", self.mac_explicit)
+        extra_2: dict[str, Any] = {}
+        kcommon.dict_add_optional(extra_2, "image_path", self.image_path)
+        kcommon.dict_add_optional(extra_2, "bmc", self.bmc)
+        kcommon.dict_add_optional(extra_2, "bmc_user", self.bmc_user)
+        kcommon.dict_add_optional(extra_2, "bmc_password", _show_secret(self.bmc_password, show=show_secrets))
+        kcommon.dict_add_optional(extra_2, "os_variant", self.os_variant)
+        kcommon.dict_add_optional(extra_2, "preallocated", self.preallocated)
+        kcommon.dict_add_optional(extra_2, "disk_size", self.disk_size)
+        kcommon.dict_add_optional(extra_2, "ram", self.ram)
+        kcommon.dict_add_optional(extra_2, "cpu", self.cpu)
+        return {
+            **super().serialize(),
+            "node": self.node,
+            "kind": self.kind,
+            **extra_1,
+            "mac_random": self.mac_random,
+            **extra_2,
+        }
 
-        base_path = f'/home/{self.cluster_name}_guests_images'
-        qemu_img_name = f'{self.name}.qcow2'
-        self.image_path = os.path.join(base_path, qemu_img_name)
+    @staticmethod
+    def parse(
+        yamlidx: int,
+        yamlpath: str,
+        arg: Any,
+        *,
+        cluster_kind: str,
+        cluster_name: str,
+        rnd_seed: Optional[str] = None,
+    ) -> "NodeConfig":
+        with kcommon.structparse_with_strdict(arg, yamlpath) as varg:
 
-    def is_preallocated(self) -> bool:
-        return self.preallocated == "true"
+            name = kcommon.structparse_pop_str_name(*varg.for_name())
+
+            kind_type = kcommon.structparse_pop_str(
+                *varg.for_key("type"),
+                default=None,
+            )
+            kind = kcommon.structparse_pop_str(
+                *varg.for_key("kind"),
+                default=None,
+            )
+            kind_property = "kind"
+            if kind_type is not None:
+                if kind is not None:
+                    if kind != kind_type:
+                        raise ValueError(f"\"{yamlpath}.kind\": the value {repr(kind)} differs from the deprected {yamlpath}.type ({repr(kind_type)})")
+                else:
+                    kind = kind_type
+                    kind_property = "type"
+            else:
+                if kind is None:
+                    raise ValueError(f"\"{yamlpath}.kind\": mandatory value missing")
+            valid_kinds = ("physical", "vm", "bf", "marvell-dpu", "ipu")
+            if kind not in valid_kinds:
+                raise ValueError(f"\"{yamlpath}.{kind_property}\": invalid value {repr(kind)} (must be one of {repr(list(valid_kinds))})")
+
+            node = kcommon.structparse_pop_str(
+                *varg.for_key("node"),
+            )
+
+            mac_random = kcommon.structparse_pop_str(
+                *varg.for_key("mac_random"),
+                default=None,
+            )
+            if mac_random is None:
+                s = _rnd_seed_join(
+                    "random_mac",
+                    yamlpath,
+                    cluster_name,
+                    name,
+                    rnd_seed if rnd_seed is not None else secrets.token_hex(),
+                )
+                mac_random = random_mac(rnd_seed=s)
+            else:
+                val_valid, mac_random = _normalize_etheraddr(mac_random)
+                if not val_valid:
+                    raise ValueError(f"\"{yamlpath}.mac_random\": invalid MAC address {repr(mac_random)}")
+
+            mac_explicit = kcommon.structparse_pop_str(
+                *varg.for_key("mac"),
+                default=None,
+            )
+            if mac_explicit is not None:
+                val_valid, mac_explicit = _normalize_etheraddr(mac_explicit)
+                if not val_valid:
+                    raise ValueError(f"\"{yamlpath}.mac\": invalid MAC address {repr(mac_explicit)}")
+
+            bmc = kcommon.structparse_pop_str(
+                *varg.for_key("bmc"),
+                default=None,
+            )
+
+            bmc_user = kcommon.structparse_pop_str(
+                *varg.for_key("bmc_user"),
+                default="root" if bmc is not None else None,
+            )
+
+            bmc_password = kcommon.structparse_pop_str(
+                *varg.for_key("bmc_password"),
+                default="calvin" if bmc_user is not None else None,
+            )
+
+            if bmc is None:
+                if kind in ("physical", "bf", "ipu"):
+                    raise ValueError(f"\"{yamlpath}.bmc\": BMC is mandatory for node kind {repr(kind)}")
+
+                # We allow the YAML to contain "bmc_user" and "bmc_password". However,
+                # they are unused. Normalize them to NULL.
+                bmc_user = None
+                bmc_password = None
+
+            ip = kcommon.structparse_pop_str(
+                *varg.for_key("ip"),
+                default=None,
+            )
+            if ip is not None:
+                try:
+                    ip, _ = knetdev.validate_ipaddr(ip)
+                except Exception:
+                    raise ValueError(f"\"{yamlpath}.ip\": invalid IP address {repr(ip)}") from None
+
+            image_path = kcommon.structparse_pop_str(
+                *varg.for_key("image_path"),
+                default=None,
+            )
+            has_image_path = is_openshift_like(cluster_kind)
+            if image_path is None:
+                if has_image_path:
+                    image_path = f"/home/{cluster_name}_guests_images/{name}.qcow2"
+            else:
+                if not has_image_path:
+                    raise ValueError(f"\"{yamlpath}.image_path\": not allowed for cluster kind {repr(cluster_kind)}") from None
+
+            os_variant: Optional[str] = kcommon.structparse_pop_str(
+                *varg.for_key("os_variant"),
+                default="rhel8.6",
+                # flag for "virsh --os-variant" option with VMs
+            )
+
+            preallocated: Optional[bool] = kcommon.structparse_pop_bool(
+                *varg.for_key("preallocated"),
+                default=True,
+                description="flag for \"qemu-img -o preallocated\" with VMs",
+            )
+
+            disk_size: Optional[int] = kcommon.structparse_pop_int(
+                *varg.for_key("disk_size"),
+                default=48,
+                description="the disk size in GB",
+                check=lambda x: x > 0,
+            )
+
+            ram: Optional[int] = kcommon.structparse_pop_int(
+                *varg.for_key("ram"),
+                default=32768,
+                description="the RAM memory in MB",
+                check=lambda x: x > 0,
+            )
+
+            cpu: Optional[int] = kcommon.structparse_pop_int(
+                *varg.for_key("cpu"),
+                default=8,
+                description="the number of CPU cores for VM",
+                check=lambda x: x > 0,
+            )
+
+        if kind != "vm":
+            # Those value are normalized away unless for VM.
+            os_variant = None
+            preallocated = None
+            disk_size = None
+            ram = None
+            cpu = None
+
+        return NodeConfig(
+            yamlidx=yamlidx,
+            yamlpath=yamlpath,
+            name=name,
+            node=node,
+            kind=kind,
+            mac_explicit=mac_explicit,
+            mac_random=mac_random,
+            image_path=image_path,
+            bmc=bmc,
+            bmc_user=bmc_user,
+            bmc_password=bmc_password,
+            ip=ip,
+            os_variant=os_variant,
+            preallocated=preallocated,
+            disk_size=disk_size,
+            ram=ram,
+            cpu=cpu,
+        )
 
 
 @kcommon.strict_dataclass
@@ -287,6 +499,7 @@ class ClustersConfig:
         *,
         secrets_path: str = "",
         worker_range: common.RangeList = common.RangeList.UNLIMITED,
+        rnd_seed: Optional[str] = None,
         test_only: bool = False,
     ):
         self.external_port = "auto"
@@ -337,11 +550,30 @@ class ClustersConfig:
         if "kubeconfig" in cc:
             self.kubeconfig = cc["kubeconfig"]
 
-        for n in cc["masters"]:
-            self.masters.append(NodeConfig(self.name, **n))
+        for yamlidx2, n in enumerate(cc["masters"]):
+            self.masters.append(
+                NodeConfig.parse(
+                    yamlidx2,
+                    f"{yamlpath}.masters[{yamlidx2}]",
+                    n,
+                    cluster_kind=self.kind,
+                    cluster_name=self.name,
+                    rnd_seed=rnd_seed,
+                )
+            )
+        for yamlidx2, n in enumerate(cc["workers"]):
+            self.configured_workers.append(
+                NodeConfig.parse(
+                    yamlidx2,
+                    f"{yamlpath}.workers[{yamlidx2}]",
+                    n,
+                    cluster_kind=self.kind,
+                    cluster_name=self.name,
+                    rnd_seed=rnd_seed,
+                )
+            )
 
-        self.configured_workers = [NodeConfig(self.name, **w) for w in cc["workers"]]
-        self.workers = [NodeConfig(self.name, **w) for w in worker_range.filter(cc["workers"])]
+        self.workers = worker_range.filter(self.configured_workers)
 
         self.hosts = self.parse_hosts(
             yamlpath,
