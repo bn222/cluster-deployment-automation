@@ -4,7 +4,6 @@ import time
 from concurrent.futures import Future, ThreadPoolExecutor
 from logger import logger
 from typing import Optional, Dict, Callable
-
 import common
 import coreosBuilder
 import host
@@ -12,6 +11,7 @@ from clustersConfig import BridgeConfig, ClustersConfig, HostConfig, NodeConfig
 from clusterNode import ClusterNode, X86ClusterNode, VmClusterNode, BFClusterNode
 from virtualBridge import VirBridge
 from virshPool import VirshPool
+from ktoolbox.common import unwrap
 
 
 class ClusterHost:
@@ -93,7 +93,7 @@ class ClusterHost:
         if not self.hosts_vms:
             return
 
-        image_paths = {os.path.dirname(node.config.image_path) for node in nodes}
+        image_paths = {os.path.dirname(unwrap(node.config.image_path)) for node in nodes}
         for image_path in image_paths:
             self.hostconn.run(f"mkdir -p {image_path}")
             self.hostconn.run(f"chmod a+rw {image_path}")
@@ -202,7 +202,7 @@ class ClusterHost:
         self._ensure_images(iso_path, infra_env, nodes)
         futures = []
         for node in nodes:
-            remote_iso_path = os.path.join(os.path.dirname(node.config.image_path), f"{infra_env}.iso")
+            remote_iso_path = os.path.join(os.path.dirname(unwrap(node.config.image_path)), f"{infra_env}.iso")
             node.start(remote_iso_path, executor)
             futures.append(node.future)
         return futures

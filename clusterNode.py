@@ -6,12 +6,11 @@ import time
 from concurrent.futures import Future, ThreadPoolExecutor
 from logger import logger
 from typing import Optional
-
 import common
 import host
 from clustersConfig import NodeConfig
-from bmc import BMC
 from nfs import NFS
+from ktoolbox.common import unwrap
 
 
 class ClusterNode:
@@ -119,16 +118,17 @@ class VmClusterNode(ClusterNode):
 
     def setup_vm(self, iso_or_image_path: str) -> host.Result:
         disk_size_gb = self.config.disk_size
+        image_path = unwrap(self.config.image_path)
         if iso_or_image_path.endswith(".iso"):
             options = "-o preallocation="
-            if self.config.is_preallocated():
+            if self.config.preallocated:
                 options += "full"
             else:
                 options += "off"
 
-            os.makedirs(os.path.dirname(self.config.image_path), exist_ok=True)
-            logger.info(f"creating {disk_size_gb}GB storage for VM {self.config.name} at {self.config.image_path}")
-            self.hostconn.run_or_die(f'qemu-img create -f qcow2 {options} {self.config.image_path} {disk_size_gb}G')
+            os.makedirs(os.path.dirname(image_path), exist_ok=True)
+            logger.info(f"creating {disk_size_gb}GB storage for VM {self.config.name} at {image_path}")
+            self.hostconn.run_or_die(f'qemu-img create -f qcow2 {options} {image_path} {disk_size_gb}G')
 
             cdrom_line = f"--cdrom {iso_or_image_path}"
             append = "--wait=-1"
@@ -154,7 +154,7 @@ class VmClusterNode(ClusterNode):
             --network {network},mac={self.config.mac}
             --events on_reboot=restart
             {cdrom_line}
-            --disk path={self.config.image_path}
+            --disk path={image_path}
             {append}
         """
 
@@ -186,7 +186,7 @@ class VmClusterNode(ClusterNode):
 
     def teardown(self) -> None:
         # remove the image only if it really exists
-        image_path = self.config.image_path
+        image_path = unwrap(self.config.image_path)
         self.hostconn.remove(image_path.replace(".qcow2", ".img"))
         self.hostconn.remove(image_path)
 
@@ -215,7 +215,7 @@ class X86ClusterNode(ClusterNode):
         lh = host.LocalHost()
         nfs = NFS(lh, self.external_port)
 
-        bmc = BMC.from_bmc(self.config.bmc, self.config.bmc_user, self.config.bmc_password)
+        bmc = self.config.create_bmc()
         h = host.HostWithBF2(self.config.node, bmc)
 
         iso = nfs.host_file(os.path.join(os.getcwd(), iso))
@@ -264,7 +264,7 @@ class BFClusterNode(ClusterNode):
         nfs = NFS(lh, self.external_port)
 
         logger.info(f"Preparing BF on host {self.config.node}")
-        bmc = BMC.from_bmc(self.config.bmc, self.config.bmc_user, self.config.bmc_password)
+        bmc = self.config.create_bmc()
         h = host.HostWithBF2(self.config.node, bmc)
         skip_boot = False
         if h.ping():
