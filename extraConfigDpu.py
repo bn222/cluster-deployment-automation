@@ -186,14 +186,14 @@ def copy_local_registry_certs(host: host.Host, path: str) -> None:
         host.copy_to(f"{directory}/{file}", f"{path}/{file}")
 
 
-def dpu_operator_build_push() -> None:
+def dpu_operator_build_push(repo: Optional[str]) -> None:
     h = host.LocalHost()
-    logger.info(f"Building dpu operator images in {REPO_DIR} on {h.hostname()}")
-    h.run_or_die(f"make -C {REPO_DIR} local-buildx")
-    h.run_or_die(f"make -C {REPO_DIR} local-pushx")
+    logger.info(f"Building dpu operator images in {repo} on {h.hostname()}")
+    h.run_or_die(f"make -C {repo} local-buildx")
+    h.run_or_die(f"make -C {repo} local-pushx")
 
 
-def dpu_operator_start(client: K8sClient) -> None:
+def dpu_operator_start(client: K8sClient, repo: Optional[str]) -> None:
     h = host.LocalHost()
     logger.info(f"Deploying dpu operator from {h.hostname()}")
 
@@ -202,8 +202,8 @@ def dpu_operator_start(client: K8sClient) -> None:
     ensure_go_installed(h)
     env = os.environ.copy()
     env["KUBECONFIG"] = client._kc
-    h.run(f"make -C {REPO_DIR} undeploy", env=env)
-    ret = h.run(f"make -C {REPO_DIR} local-deploy", env=env)
+    h.run(f"make -C {repo} undeploy", env=env)
+    ret = h.run(f"make -C {repo} local-deploy", env=env)
     if not ret.success():
         logger.error_and_exit("Failed to deploy dpu operator")
     logger.info("Waiting for all dpu operator pods to become ready")
@@ -215,7 +215,7 @@ def ExtraConfigDpu(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, 
     [f.result() for (_, f) in futures.items()]
     logger.info("Running post config step to start DPU operator on IPU")
 
-    branch = cfg.dpu_operator_branch
+    repo = cfg.dpu_operator_path
     dpu_node = cc.masters[0]
     assert dpu_node.ip is not None
     acc = host.Host(dpu_node.ip)
@@ -241,18 +241,18 @@ def ExtraConfigDpu(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, 
         acc.run_or_die(cmd)
     vendor_plugin.build_and_start(lh, client, imgReg.url())
 
-    git_repo_setup(REPO_DIR, repo_wipe=True, url=DPU_OPERATOR_REPO, branch=branch)
+    git_repo_setup(repo, repo_wipe=False, url=DPU_OPERATOR_REPO)
     if cfg.rebuild_dpu_operators_images:
-        dpu_operator_build_push()
+        dpu_operator_build_push(repo)
     else:
         logger.info("Will not rebuild dpu-operator images")
-    dpu_operator_start(client)
+    dpu_operator_start(client, repo)
 
     # Deploy dpu daemon
     client.oc_run_or_die(f"label no {dpu_node.name} dpu=true")
     logger.info("Waiting for all pods to become ready")
     client.oc_run_or_die("wait --for=condition=Ready pod --all --all-namespaces --timeout=2m")
-    client.oc_run_or_die(f"create -f {REPO_DIR}/examples/dpu.yaml")
+    client.oc_run_or_die(f"create -f {repo}/examples/dpu.yaml")
     time.sleep(30)
 
     # TODO: remove wa once fixed in future versions of MeV
@@ -275,7 +275,7 @@ def ExtraConfigDpuHost(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[s
     logger.info("Running post config step to start DPU operator on Host")
     lh = host.LocalHost()
     client = K8sClient(cc.kubeconfig)
-    branch = cfg.dpu_operator_branch
+    repo = cfg.dpu_operator_path
 
     imgReg = _ensure_local_registry_running(lh, delete_all=False)
     # Need to trust the registry in OCP / Microshift
@@ -286,12 +286,12 @@ def ExtraConfigDpuHost(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[s
     vendor_plugin = init_vendor_plugin(h, node.kind or "")
     vendor_plugin.build_and_start(lh, client, imgReg.url())
 
-    git_repo_setup(REPO_DIR, repo_wipe=True, url=DPU_OPERATOR_REPO, branch=branch)
+    git_repo_setup(repo, repo_wipe=False, url=DPU_OPERATOR_REPO)
     if cfg.rebuild_dpu_operators_images:
-        dpu_operator_build_push()
+        dpu_operator_build_push(repo)
     else:
         logger.info("Will not rebuild dpu-operator images")
-    dpu_operator_start(client)
+    dpu_operator_start(client, repo)
 
     def helper(h: host.Host, node: NodeConfig) -> Optional[host.Result]:
         # Temporary workaround, remove once 4.16 installations are working
@@ -340,7 +340,7 @@ def ExtraConfigDpuHost(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[s
     client.oc_run_or_die("create -f manifests/dpu/dpu_nad.yaml")
     # Deploy dpu daemon and wait for dpu pods to come up
     logger.info("Creating dpu operator config")
-    client.oc_run_or_die(f"create -f {REPO_DIR}/examples/host.yaml")
+    client.oc_run_or_die(f"create -f {repo}/examples/host.yaml")
     time.sleep(30)
     client.oc_run_or_die("wait --for=condition=Ready pod --all -n openshift-dpu-operator --timeout=5m")
     logger.info("Finished setting up dpu operator on host")
