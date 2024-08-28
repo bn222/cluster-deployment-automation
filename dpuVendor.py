@@ -13,16 +13,6 @@ class VendorPlugin(ABC):
     def build_and_start(self, _: host.Host, client: K8sClient, imgReg: ImageRegistry) -> None:
         raise NotImplementedError("Must implement build_and_start() for VSP")
 
-    @staticmethod
-    def render_dpu_vsp_ds(vsp_ds_manifest: str, ipu_plugin_image: str, outfilename: str) -> None:
-        with open(vsp_ds_manifest) as f:
-            j2_template = jinja2.Template(f.read())
-            rendered = j2_template.render(ipu_plugin_image=ipu_plugin_image)
-            logger.info(rendered)
-
-        with open(outfilename, "w") as outFile:
-            outFile.write(rendered)
-
 
 class IpuPlugin(VendorPlugin):
     def __init__(self) -> None:
@@ -90,6 +80,7 @@ class MarvellDpuPlugin(VendorPlugin):
     def build_and_start(self, _: host.Host, client: K8sClient, imgReg: ImageRegistry) -> None:
         # TODO: https://github.com/openshift/dpu-operator/pull/82
         logger.warning("Setting up Marvell DPU not yet implemented")
+
 
 def init_vendor_plugin(h: host.Host, node_kind: str) -> VendorPlugin:
     # TODO: Autodetect the vendor hardware and return the proper implementation.
