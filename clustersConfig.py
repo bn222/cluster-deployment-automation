@@ -12,10 +12,36 @@ import host
 from logger import logger
 import secrets
 import common
+import collections.abc
 from clusterInfo import ClusterInfo
 from clusterInfo import load_all_cluster_info
 from dataclasses import dataclass, field
+from typing import Any
 import ktoolbox.common as kcommon
+import ktoolbox.netdev as knetdev
+
+
+def _show_secret(secret: Optional[str], *, show: bool) -> Optional[str]:
+    if secret is None:
+        return None
+    if not show:
+        return "***"
+    return secret
+
+
+def _normalize_ifname(ifname: str) -> tuple[bool, str]:
+    ifname2 = knetdev.validate_ifname_or_none(ifname)
+    if ifname2 is None:
+        return False, ifname
+    return True, ifname2
+
+
+def _normalize_network_api_port(network_api_port: Optional[str]) -> Optional[str]:
+    # in YAML, the auto port is represented with the string "auto" or "".
+    # In HostConfig.network_api_port we map that to None.
+    if network_api_port is None or network_api_port in ("auto", ""):
+        return None
+    return network_api_port
 
 
 def random_mac() -> str:
@@ -126,16 +152,89 @@ class NodeConfig:
         return self.preallocated == "true"
 
 
-@dataclass
-class HostConfig:
-    name: str
-    network_api_port: str
-    username: str = "core"
-    password: Optional[str] = None
-    pre_installed: str = "true"
+@kcommon.strict_dataclass
+@dataclass(frozen=True, kw_only=True)
+class HostConfig(kcommon.StructParseBaseNamed):
+    # In YAML, if the value is set explicitly to "auto" or "", it
+    # gets mapped to None here. It means to autodetect it.
+    # See also _normalize_network_api_port().
+    network_api_port: Optional[str]
 
-    def is_preinstalled(self) -> bool:
-        return self.pre_installed == "true"
+    # If True, it means that the host entry did not have a network_api_port
+    # key. Instead, network_api_port value is inherited from the default.
+    network_api_port_is_default: bool
+
+    username: str
+    password: Optional[str]
+    pre_installed: bool
+
+    def serialize(self, *, show_secrets: bool = False) -> dict[str, Any]:
+        extra_1 = {}
+        extra_2: dict[str, Any] = {}
+        if not self.network_api_port_is_default:
+            extra_1["network_api_port"] = self.network_api_port or "auto"
+        kcommon.dict_add_optional(extra_2, "password", _show_secret(self.password, show=show_secrets))
+        return {
+            **super().serialize(),
+            **extra_1,
+            "username": self.username,
+            **extra_2,
+            "pre_installed": self.pre_installed,
+        }
+
+    @staticmethod
+    def parse(
+        yamlidx: int,
+        yamlpath: str,
+        arg: Any,
+        *,
+        default_network_api_port: Optional[str] = None,
+    ) -> "HostConfig":
+        with kcommon.structparse_with_strdict(arg, yamlpath) as varg:
+
+            name = kcommon.structparse_pop_str_name(*varg.for_name())
+
+            network_api_port_is_default = False
+            network_api_port = kcommon.structparse_pop_str(
+                *varg.for_key("network_api_port"),
+                default=None,
+            )
+            if network_api_port is None:
+                network_api_port_is_default = True
+                network_api_port = default_network_api_port
+            network_api_port = _normalize_network_api_port(network_api_port)
+            if network_api_port is not None:
+                val_valid, network_api_port = _normalize_ifname(network_api_port)
+                if not val_valid:
+                    if network_api_port_is_default:
+                        raise ValueError(f'"{yamlpath}.network_api_port": default {repr(network_api_port)} is not a valid interface name')
+                    raise ValueError(f'"{yamlpath}.network_api_port": {repr(network_api_port)} is not a valid interface name')
+
+            username = kcommon.structparse_pop_str(
+                *varg.for_key("username"),
+                default="core",
+            )
+
+            password = kcommon.structparse_pop_str(
+                *varg.for_key("password"),
+                default=None,
+            )
+
+            pre_installed = kcommon.structparse_pop_bool(
+                *varg.for_key("pre_installed"),
+                default=True,
+            )
+
+        return HostConfig(
+            yamlidx=yamlidx,
+            yamlpath=yamlpath,
+            name=name,
+            network_api_port=network_api_port,
+            network_api_port_is_default=network_api_port_is_default,
+            username=username,
+            password=password,
+            pre_installed=pre_installed,
+        )
 
 
 @kcommon.strict_dataclass
@@ -168,7 +267,7 @@ class ClustersConfig:
     remote_bridge_config: BridgeConfig
     full_ip_range: tuple[str, str]
     ip_range: tuple[str, str]
-    hosts: list[HostConfig]
+    hosts: tuple[HostConfig, ...]
     proxy: Optional[str]
     noproxy: Optional[str]
     preconfig: list[ExtraConfigArgs]
@@ -197,7 +296,6 @@ class ClustersConfig:
         self.masters: list[NodeConfig] = []
         self.workers: list[NodeConfig] = []
         self.configured_workers: list[NodeConfig] = []
-        self.hosts: list[HostConfig] = []
         self.proxy: Optional[str] = None
         self.noproxy: Optional[str] = None
         self.preconfig: list[ExtraConfigArgs] = []
@@ -209,6 +307,8 @@ class ClustersConfig:
         self._cluster_info: Optional[ClusterInfo] = None
         self._load_full_config(yaml_path)
         self._check_deprecated_config()
+
+        yamlpath = ".clusters[0]"
 
         cc = self.fullConfig
         self.secrets_path = secrets_path
@@ -243,14 +343,16 @@ class ClustersConfig:
         self.configured_workers = [NodeConfig(self.name, **w) for w in cc["workers"]]
         self.workers = [NodeConfig(self.name, **w) for w in worker_range.filter(cc["workers"])]
 
-        self.set_cc_hosts_defaults(cc)
+        self.hosts = self.parse_hosts(
+            yamlpath,
+            cc,
+            node_names=(n.node for n in self.all_nodes()),
+            default_network_api_port=self.network_api_port,
+        )
 
         if not self.is_sno():
             self.api_vip = {'ip': cc["api_vip"]}
             self.ingress_vip = {'ip': cc["ingress_vip"]}
-
-        for e in cc["hosts"]:
-            self.hosts.append(HostConfig(**e))
 
         base_path = os.path.dirname(yaml_path)
         for c in cc["preconfig"]:
@@ -333,24 +435,52 @@ class ClustersConfig:
             cc["postconfig"] = []
         if "proxy" not in cc:
             cc["proxy"] = None
-        if "hosts" not in cc:
-            cc["hosts"] = [{"name": "localhost"}]
         if "ip_range" not in cc:
             cc["ip_range"] = "192.168.122.1-192.168.122.254"
         if "ip_mask" not in cc:
             cc["ip_mask"] = "255.255.0.0"
 
-    def set_cc_hosts_defaults(self, cc: dict[str, list[dict[str, str]]]) -> None:
-        # creates hosts entries for each referenced node name
-        node_names = {x["name"] for x in cc["hosts"]}
-        for node in self.all_nodes():
-            if node.node not in node_names:
-                cc["hosts"].append({"name": node.node})
-                node_names.add(node.node)
-
-        for e in cc["hosts"]:
-            if "network_api_port" not in e:
-                e["network_api_port"] = self.network_api_port
+    @staticmethod
+    def parse_hosts(
+        yamlpath: str,
+        cc: dict[str, Any],
+        *,
+        node_names: collections.abc.Iterable[str],
+        default_network_api_port: Optional[str],
+    ) -> tuple[HostConfig, ...]:
+        hosts_lst: list[HostConfig] = []
+        lst1 = cc.get("hosts", None)
+        if lst1 is None:
+            pass
+        elif not isinstance(lst1, list):
+            raise ValueError(f"\"{yamlpath}.hosts\": this must be a list but is {type(lst1)}")
+        else:
+            for yamlidx2, e in enumerate(lst1):
+                host = HostConfig.parse(
+                    yamlidx2,
+                    f"{yamlpath}.hosts[{yamlidx2}]",
+                    e,
+                    default_network_api_port=default_network_api_port,
+                )
+                for h in hosts_lst:
+                    if h.name == host.name:
+                        raise ValueError(f"\"{host.yamlpath}.name\": dupliate name {repr(host.name)} with {h.yamlpath}.name.")
+                hosts_lst.append(host)
+        node_names2 = set(node_names)
+        node_names2.discard("localhost")
+        for node_name in ["localhost"] + sorted(node_names2):
+            if not any(h.name == node_name for h in hosts_lst):
+                # artificially create an entry for this host.
+                yamlidx2 = len(hosts_lst)
+                hosts_lst.append(
+                    HostConfig.parse(
+                        yamlidx2,
+                        f"{yamlpath}.hosts[{yamlidx2}]",
+                        {"name": node_name},
+                        default_network_api_port=default_network_api_port,
+                    )
+                )
+        return tuple(hosts_lst)
 
     def _load_full_config(self, yaml_path: str) -> None:
         if not path.exists(yaml_path):

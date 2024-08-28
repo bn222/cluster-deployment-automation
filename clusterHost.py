@@ -78,12 +78,12 @@ class ClusterHost:
         # than one physical host in the deployment.
         self.needs_api_network = self.hosts_vms and any(node_config.node != c.name for node_config in cc.all_nodes())
         if self.needs_api_network:
-            if self.config.network_api_port == "auto":
+            if self.config.network_api_port is None:
                 self.api_port = common.get_auto_port(self.hostconn)
+                if self.api_port is None:
+                    logger.error_and_exit("Can't find a valid network API port")
             else:
                 self.api_port = self.config.network_api_port
-            if self.api_port is None:
-                logger.error_and_exit(f"Can't find a valid network API port, config is {self.config.network_api_port}")
             logger.info(f"Using {self.api_port} as network API port")
 
     def _k8s_nodes(self) -> list[ClusterNode]:
@@ -184,7 +184,7 @@ class ClusterHost:
 
     def preinstall(self, external_port: str, executor: ThreadPoolExecutor) -> Future[host.Result]:
         def _preinstall() -> host.Result:
-            if self.config.is_preinstalled():
+            if self.config.pre_installed:
                 return host.Result.result_success()
 
             iso = "fedora-coreos.iso"

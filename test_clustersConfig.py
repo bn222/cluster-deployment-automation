@@ -30,20 +30,70 @@ def _test_parse_1(tfile: TFileConfig) -> None:
     )
     assert isinstance(cc, clustersConfig.ClustersConfig)
 
-    assert isinstance(cc.hosts, list)
+    assert isinstance(cc.hosts, tuple)
     assert all(isinstance(host, clustersConfig.HostConfig) for host in cc.hosts)
 
     if tfile.check is not None:
         tfile.check(tfile, cc)
 
+    for yamlidx2, host in enumerate(cc.hosts):
+        vdict = host.serialize(show_secrets=True)
+        if host.network_api_port_is_default:
+            default_network_api_port = host.network_api_port
+        else:
+            default_network_api_port = None
+        host2 = clustersConfig.HostConfig.parse(
+            yamlidx2,
+            f".clusters[0].hosts[{yamlidx2}]",
+            vdict,
+            default_network_api_port=default_network_api_port,
+        )
+        assert host == host2
+
 
 def check_test5(tfile: TFileConfig, cc: clustersConfig.ClustersConfig) -> None:
-    assert sorted(h.name for h in cc.hosts) == [
-        '...',
-        'foo',
-        'localhost',
-        'mycluster-worker-1',
-    ]
+    assert cc.hosts == (
+        clustersConfig.HostConfig(
+            yamlpath=".clusters[0].hosts[0]",
+            yamlidx=0,
+            name="mycluster-worker-1",
+            network_api_port=None,
+            network_api_port_is_default=False,
+            username="core",
+            password=None,
+            pre_installed=True,
+        ),
+        clustersConfig.HostConfig(
+            yamlpath=".clusters[0].hosts[1]",
+            yamlidx=1,
+            name="foo",
+            network_api_port="xxxx",
+            network_api_port_is_default=False,
+            username="core",
+            password=None,
+            pre_installed=True,
+        ),
+        clustersConfig.HostConfig(
+            yamlpath=".clusters[0].hosts[2]",
+            yamlidx=2,
+            name="localhost",
+            network_api_port=None,
+            network_api_port_is_default=True,
+            username="core",
+            password=None,
+            pre_installed=True,
+        ),
+        clustersConfig.HostConfig(
+            yamlpath=".clusters[0].hosts[3]",
+            yamlidx=3,
+            name="...",
+            network_api_port=None,
+            network_api_port_is_default=True,
+            username="core",
+            password=None,
+            pre_installed=True,
+        ),
+    )
 
 
 TFILES = (
