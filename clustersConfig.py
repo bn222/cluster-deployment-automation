@@ -54,7 +54,7 @@ class ExtraConfigArgs:
 
     activation_key: Optional[str] = None
 
-    dpu_operator_branch: Optional[str] = "main"
+    dpu_operator_path: Optional[str] = "/root/dpu-operator"
 
     rebuild_dpu_operators_images: bool = True
 
