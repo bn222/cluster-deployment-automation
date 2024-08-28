@@ -1,0 +1,38 @@
+clusters:
+  - name : "mycluster"
+    api_vip: "192.168.122.99"
+    ingress_vip: "192.168.122.101"
+    masters:
+    - name: "mycluster-master-1"
+      kind: "vm"
+      node: "localhost"
+      ip: "192.168.122.41"
+    - name: "mycluster-master-2"
+      kind: "vm"
+      node: "localhost"
+      ip: "192.168.122.42"
+    - name: "mycluster-master-3"
+      kind: "vm"
+      node: "localhost"
+      ip: "192.168.122.43"
+    workers:
+    - name: "mycluster-worker-1"
+      kind: "physical"
+      node: "..."
+      bmc_user: "root"
+      bmc_password: "..."
+      bmc: "hostname or ip"
+    hosts:
+    - name: "mycluster-worker-1"
+      network_api_port: auto
+    - name: "foo"
+      network_api_port: xxxx
+    postconfig:
+    - name: "dpu_tenant"
+      mapping:
+        worker: xworker
+        bf: xbf
+        foo: xfoo
+    - name: "dpu_operator_host"
+      dpu_net_interface: eth0
+    - name: "dpu_operator_dpu"

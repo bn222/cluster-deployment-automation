@@ -1,0 +1,9 @@
+clusters:
+  - name : "vm-sno"
+    api_vip: "192.168.122.99"
+    ingress_vip: "192.168.122.101"
+    masters:
+    - name: "sno-master"
+      kind: "vm"
+      node: "localhost"
+      ip: "192.168.122.41"
