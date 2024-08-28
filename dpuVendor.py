@@ -41,10 +41,9 @@ class IpuPlugin:
         logger.info("Building ipu-opi-plugin")
         h.run("rm -rf /root/ipu-opi-plugins")
         h.run_or_die(f"git clone {self.repo} /root/ipu-opi-plugins")
-        ret = h.run_or_die("cat /root/ipu-opi-plugins/ipu-plugin/images/Dockerfile")
-        golang_img = extractContainerImage(ret.out)
+        fn = "/root/ipu-opi-plugins/ipu-plugin/images/Dockerfile"
+        golang_img = extractContainerImage(h.read_file(fn))
         h.run_or_die(f"podman pull docker.io/library/{golang_img}")
-        os.chdir("/root/ipu-opi-plugins/ipu-plugin")
         env = os.environ.copy()
         env["IMGTOOL"] = "podman"
         ret = h.run("make -C /root/ipu-opi-plugins/ipu-plugin image", env=env)
