@@ -250,7 +250,8 @@ def ExtraConfigDpu(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, 
         cmd = f"podman run --network host -d --privileged --entrypoint='[\"/bin/sh\", \"-c\", \"sleep 5; sh /entrypoint.sh\"]' -v /lib/modules/{uname}:/lib/modules/{uname} -v data1:/opt/p4 {img}"
         logger.info("Manually starting P4 container")
         acc.run_or_die(cmd)
-    vendor_plugin.build_and_start(lh, client, imgReg)
+    else:
+        vendor_plugin.build_and_start(lh, client, imgReg)
 
     git_repo_setup(repo, repo_wipe=False, url=DPU_OPERATOR_REPO)
     if cfg.rebuild_dpu_operators_images:

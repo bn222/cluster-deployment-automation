@@ -6,6 +6,7 @@ from clustersConfig import ClustersConfig
 from clustersConfig import ExtraConfigArgs
 import host
 import yaml
+import time
 
 
 def early_access_microshift() -> str:
@@ -114,4 +115,11 @@ def ExtraConfigMicroshift(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dic
     def cb() -> None:
         acc.run("ip r del default via 192.168.0.1")
 
-    K8sClient(kubeconfig).wait_ready_all(cb)
+    logger.info("Connecting and waiting for all nodes to be ready")
+    for _ in range(3):
+        try:
+            K8sClient(kubeconfig).wait_ready_all(cb)
+            break
+        except Exception:
+            time.sleep(30)
+            pass
