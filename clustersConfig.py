@@ -2,6 +2,7 @@ from os import path, getcwd
 import io
 import sys
 import re
+import functools
 import ipaddress
 from typing import Optional, Union
 import xml.etree.ElementTree as et
@@ -14,8 +15,7 @@ import secrets
 import hashlib
 import common
 import collections.abc
-from clusterInfo import ClusterInfo
-from clusterInfo import load_all_cluster_info
+import clusterInfo
 from dataclasses import dataclass
 from typing import Any
 import ktoolbox.common as kcommon
@@ -440,12 +440,6 @@ class BridgeConfig:
     dynamic_ip_range: Optional[tuple[str, str]] = None
 
 
-# Run the full hostname command
-def current_host() -> str:
-    lh = host.LocalHost()
-    return lh.run("hostname -f").out.strip()
-
-
 class ClustersConfig:
     name: str
     kubeconfig: str
@@ -500,7 +494,6 @@ class ClustersConfig:
         self.base_dns_domain = "redhat.com"
         self.install_iso = ""
 
-        self._cluster_info: Optional[ClusterInfo] = None
         self._load_full_config(yaml_path)
         self._check_deprecated_config()
 
@@ -747,11 +740,18 @@ class ClustersConfig:
     def validate_external_port(self) -> bool:
         return bool(common.ip_links(host.LocalHost(), ifname=self.external_port))
 
-    def _apply_jinja(self, contents: str, cluster_name: str) -> str:
+    @staticmethod
+    def _apply_jinja(contents: str, cluster_name: str) -> str:
+        cluster_info_loader = clusterInfo.ClusterInfoLoader()
+
+        @functools.cache
+        def _ci() -> clusterInfo.ClusterInfo:
+            lh = host.LocalHost()
+            current_host = lh.run("hostname -f").out.strip()
+            return cluster_info_loader.get(current_host, required=True)
+
         def worker_number(a: int) -> str:
-            self._ensure_clusters_loaded()
-            assert self._cluster_info is not None
-            name = self._cluster_info.workers[a]
+            name = _ci().workers[a]
             lab_match = re.search(r"lab(\d+)", name)
             if lab_match:
                 return lab_match.group(1)
@@ -759,44 +759,28 @@ class ClustersConfig:
                 return re.sub("[^0-9]", "", name)
 
         def worker_name(a: int) -> str:
-            self._ensure_clusters_loaded()
-            assert self._cluster_info is not None
-            return self._cluster_info.workers[a]
+            return _ci().workers[a]
 
         def bmc(a: int) -> str:
-            self._ensure_clusters_loaded()
-            assert self._cluster_info is not None
-            return self._cluster_info.bmcs[a]
+            return _ci().bmcs[a]
 
         def api_network() -> str:
-            self._ensure_clusters_loaded()
-            assert self._cluster_info is not None
-            return self._cluster_info.network_api_port
+            return _ci().network_api_port
 
         def iso_server() -> str:
-            self._ensure_clusters_loaded()
-            assert self._cluster_info is not None
-            return self._cluster_info.iso_server
+            return _ci().iso_server
 
         def activation_key() -> str:
-            self._ensure_clusters_loaded()
-            assert self._cluster_info is not None
-            return self._cluster_info.activation_key
+            return _ci().activation_key
 
         def organization_id() -> str:
-            self._ensure_clusters_loaded()
-            assert self._cluster_info is not None
-            return self._cluster_info.organization_id
+            return _ci().organization_id
 
         def imc_hostname(a: int) -> str:
-            self._ensure_clusters_loaded()
-            assert self._cluster_info is not None
-            return self._cluster_info.bmc_imc_hostnames[a]
+            return _ci().bmc_imc_hostnames[a]
 
         def ipu_mac_address(a: int) -> str:
-            self._ensure_clusters_loaded()
-            assert self._cluster_info is not None
-            return self._cluster_info.ipu_mac_addresses[a]
+            return _ci().ipu_mac_addresses[a]
 
         format_string = contents
 
@@ -816,19 +800,6 @@ class ClustersConfig:
 
         t: str = template.render(**kwargs)
         return t
-
-    def _ensure_clusters_loaded(self) -> None:
-        if self._cluster_info is not None:
-            return
-        all_cluster_info = load_all_cluster_info()
-        ch = current_host()
-        if ch in all_cluster_info:
-            self._cluster_info = all_cluster_info[ch]
-        elif ch.split(".")[0] in all_cluster_info:
-            self._cluster_info = all_cluster_info[ch.split(".")[0]]
-        else:
-            logger.error(f"Hostname {ch} not found in {all_cluster_info}")
-            sys.exit(-1)
 
     # def __getitem__(self, key):
     #     return self.fullConfig[key]
