@@ -289,6 +289,7 @@ def ExtraConfigDpuHost(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[s
     repo = cfg.dpu_operator_path
 
     imgReg = _ensure_local_registry_running(lh, delete_all=False)
+    imgReg.ocp_trust(client)
     # Need to trust the registry in OCP / Microshift
     logger.info("Ensuring local registry is trusted in OCP")
 
