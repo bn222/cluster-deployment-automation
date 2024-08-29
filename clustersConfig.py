@@ -511,13 +511,13 @@ class ClustersConfig:
         self.base_dns_domain = "redhat.com"
         self.install_iso = ""
 
-        self._load_full_config(yaml_path)
-        self._check_deprecated_config()
+        self.secrets_path = secrets_path
+
+        cc = self._load_full_config(yaml_path)
+        self._check_deprecated_config(cc)
 
         yamlpath = ".clusters[0]"
 
-        cc = self.fullConfig
-        self.secrets_path = secrets_path
         self.set_cc_defaults(cc)
         if "proxy" in cc:
             self.proxy = cc["proxy"]
@@ -594,15 +594,14 @@ class ClustersConfig:
             return
 
         if self.kind == "openshift":
-            self.configure_ip_range()
+            self.configure_ip_range(cc)
 
         for c in self.preconfig:
             c.pre_check()
         for c in self.postconfig:
             c.pre_check()
 
-    def configure_ip_range(self) -> None:
-        cc = self.fullConfig
+    def configure_ip_range(self, cc: dict[str, Any]) -> None:
         # Reserve IPs for AI, masters and workers.
         ip_mask = cc["ip_mask"]
         ip_range = cc["ip_range"].split("-")
@@ -707,21 +706,26 @@ class ClustersConfig:
                 )
         return tuple(hosts_lst)
 
-    def _load_full_config(self, yaml_path: str) -> None:
+    @staticmethod
+    def _load_full_config(yaml_path: str) -> dict[str, Any]:
         if not path.exists(yaml_path):
             logger.error(f"could not find config in path: '{yaml_path}'")
             sys.exit(1)
 
         with open(yaml_path, 'r') as f:
             contents = f.read()
-            # load it twice, to get the name of the cluster so
-            # that that can be used as a var
-            loaded = safe_load(io.StringIO(contents))["clusters"][0]
-            contents = self._apply_jinja(contents, loaded["name"])
-            self.fullConfig = safe_load(io.StringIO(contents))["clusters"][0]
 
-    def _check_deprecated_config(self) -> None:
-        deprecated = self.deprecated_configs.keys() & self.fullConfig.keys()
+        # load it twice, to get the name of the cluster so
+        # that that can be used as a var
+        loaded = safe_load(io.StringIO(contents))["clusters"][0]
+        contents = ClustersConfig._apply_jinja(contents, loaded["name"])
+        cc = safe_load(io.StringIO(contents))["clusters"][0]
+        if not isinstance(cc, dict) or not all(isinstance(k, str) for k in cc):
+            raise RuntimeError(f"YAML {yaml_path} does not contain a usable dictionary")
+        return cc
+
+    def _check_deprecated_config(self, cc: dict[str, Any]) -> None:
+        deprecated = self.deprecated_configs.keys() & cc.keys()
 
         for key in deprecated:
             value = self.deprecated_configs[key]
@@ -818,12 +822,6 @@ class ClustersConfig:
 
         t: str = template.render(**kwargs)
         return t
-
-    # def __getitem__(self, key):
-    #     return self.fullConfig[key]
-
-    # def __setitem__(self, key, value) -> None:
-    #     self.fullConfig[key] = value
 
     def all_nodes(self) -> list[NodeConfig]:
         return self.masters + self.workers
