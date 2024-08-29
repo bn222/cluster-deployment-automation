@@ -133,6 +133,8 @@ class ImageRegistry:
 
         crt_file = os.path.join(self._registry_base_directory, 'certs/domain.crt')
         crt_file = self.rsh.read_file(crt_file)
+        lh = host.LocalHost()
+        lh.write("/tmp/crt", crt_file)
         logger.info(f"trusting in ocp {crt_file}")
         client.oc(f"delete configmap -n openshift-config {shlex.quote(cm_name)}")
         with tempfile.TemporaryFile(mode='w+') as tmp:
@@ -146,7 +148,7 @@ class ImageRegistry:
                         "-n",
                         "openshift-config",
                         cm_name,
-                        f"--from-file={self.hostname}..{self.listen_port}={crt_file}",
+                        f"--from-file={self.hostname}..{self.listen_port}=/tmp/crt",
                     ]
                 ),
             )
