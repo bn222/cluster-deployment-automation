@@ -176,6 +176,7 @@ class ClustersConfig:
         *,
         secrets_path: str = "",
         worker_range: common.RangeList = common.RangeList.UNLIMITED,
+        test_only: bool = False,
     ):
         self.external_port = "auto"
         self.kind = "openshift"
@@ -230,10 +231,8 @@ class ClustersConfig:
         self.configured_workers = [NodeConfig(self.name, **w) for w in cc["workers"]]
         self.workers = [NodeConfig(self.name, **w) for w in worker_range.filter(cc["workers"])]
 
-        if self.kind == "openshift":
-            self.configure_ip_range()
-
         self.set_cc_hosts_defaults(cc)
+
         if not self.is_sno():
             self.api_vip = {'ip': cc["api_vip"]}
             self.ingress_vip = {'ip': cc["ingress_vip"]}
@@ -245,6 +244,17 @@ class ClustersConfig:
             self.preconfig.append(ExtraConfigArgs(**c))
         for c in cc["postconfig"]:
             self.postconfig.append(ExtraConfigArgs(**c))
+
+        if test_only:
+            # Skip the remaining steps. They access the system, which makes them
+            # unsuitable for unit tests.
+            #
+            # TODO: this flag will go away, and instead the test can inject the pieces
+            # that are needed.
+            return
+
+        if self.kind == "openshift":
+            self.configure_ip_range()
 
         for c in self.preconfig:
             c.pre_check()
