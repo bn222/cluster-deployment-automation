@@ -76,7 +76,7 @@ def enable_acc_connectivity(node: NodeConfig) -> None:
     else:
         ipu_imc = host.RemoteHost(node.bmc)
         ipu_imc.ssh_connect(node.bmc_user, node.bmc_password)
-        # ipu_imc.run_or_die("/usr/bin/scripts/cfg_acc_apf_x2.py")
+
         # """
         # We need to ensure the ACC physical port connectivity is enabled during reboot to ensure dhcp gets an ip.
         # Trigger an acc reboot and try to run python /usr/bin/scripts/cfg_acc_apf_x2.py. This will fail until the
@@ -85,19 +85,19 @@ def enable_acc_connectivity(node: NodeConfig) -> None:
         logger.info("Rebooting IMC to trigger ACC reboot")
         ipu_imc.run("systemctl reboot")
         time.sleep(30)
-        # ipu_imc.ssh_connect(node.bmc_user, node.bmc_password)
-        # logger.info(f"Attempting to enable ACC connectivity from IMC {node.bmc} on reboot")
-        # retries = 30
-        # for _ in range(retries):
-        #     ret = ipu_imc.run("/usr/bin/scripts/cfg_acc_apf_x2.py")
-        #     if ret.returncode == 0:
-        #         logger.info("Enabled ACC physical port connectivity")
-        #         break
-        #     logger.debug(f"ACC SPF script failed with returncode {ret.returncode}")
-        #     logger.debug(f"out: {ret.out}\n err: {ret.err}")
-        #     time.sleep(15)
-        # else:
-        #     logger.error_and_exit("Failed to enable ACC connectivity")
+        ipu_imc.ssh_connect(node.bmc_user, node.bmc_password)
+        logger.info(f"Attempting to enable ACC connectivity from IMC {node.bmc} on reboot")
+        retries = 30
+        for _ in range(retries):
+            ret = ipu_imc.run("/usr/bin/scripts/cfg_acc_apf_x2.py")
+            if ret.returncode == 0:
+                logger.info("Enabled ACC physical port connectivity")
+                break
+            logger.debug(f"ACC SPF script failed with returncode {ret.returncode}")
+            logger.debug(f"out: {ret.out}\n err: {ret.err}")
+            time.sleep(15)
+        else:
+            logger.error_and_exit("Failed to enable ACC connectivity")
 
     ipu_acc = host.RemoteHost(str(node.ip))
     ipu_acc.ping()
@@ -122,6 +122,7 @@ def _redfish_boot_ipu(cc: ClustersConfig, node: NodeConfig, iso: str) -> None:
         imc = host.Host(node.bmc)
         imc.ssh_connect(node.bmc_user, node.bmc_password)
         # TODO: Remove once https://issues.redhat.com/browse/RHEL-32696 is solved
+        logger.info("Waiting for 25m (workaround)")
         time.sleep(25 * 60)
         return f"Finished booting imc {node.bmc}"
 
