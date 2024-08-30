@@ -18,7 +18,7 @@ class K8sClient:
         self._host = host
         self._ensure_oc_installed()
 
-    def _ensure_oc_installed(self):
+    def _ensure_oc_installed(self) -> None:
         if self._host.run("which oc").returncode == 0:
             return
         uname = self._host.run_or_die("uname -m").out
