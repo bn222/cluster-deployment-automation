@@ -103,7 +103,7 @@ def enable_acc_connectivity(node: NodeConfig) -> None:
     ipu_acc.ping()
     ipu_acc.ssh_connect("root", "redhat")
     ipu_acc.run("nmcli con mod enp0s1f0 ipv4.route-metric 0")
-    ipu_acc.run("ip route delete default via 192.168.0.1") # remove imc default route to avoid conflict
+    ipu_acc.run("ip route delete default via 192.168.0.1")  # remove imc default route to avoid conflict
     logger.info(f"{node.name} connectivity established")
 
 

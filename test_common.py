@@ -212,3 +212,37 @@ def test_ip_routes() -> None:
     # We expect to have at least one route configured on the system and that
     # `ip -json route` works. The unit test requires that.
     assert common.ip_routes(host.LocalHost())
+
+
+def test_rangelist() -> None:
+    RangeList = common.RangeList
+
+    rl = RangeList(include=RangeList.parse_list(["1", 5, "7-9"]))
+    include_lst = [1, 5, 7, 8, 9]
+    assert rl._include == set(include_lst)
+    assert rl._exclude is None
+    assert rl.filter(str(i) for i in range(20)) == [str(i) for i in include_lst]
+
+    rl = RangeList(exclude=RangeList.parse_list([5, 5, 7, "1-2,9"]))
+    exclude_lst = [1, 2, 5, 7, 9]
+    assert rl._include is None
+    assert rl._exclude == set(exclude_lst)
+    assert rl.filter(str(i) for i in range(20)) == [str(i) for i in range(20) if i not in exclude_lst]
+
+    rl = RangeList(
+        include=RangeList.parse_list(["1", 5, "7-9", [13, 14, 15]]),
+        exclude=RangeList.parse_list("7-8"),
+    )
+    include_lst = [1, 5, 7, 8, 9, 13, 14, 15]
+    exclude_lst = [7, 8]
+    combined_lst = [1, 5, 9, 13, 14, 15]
+    assert rl._include == set(include_lst)
+    assert rl._exclude == set(exclude_lst)
+    assert rl.filter(str(i) for i in range(20)) == [str(i) for i in combined_lst]
+
+    rl = RangeList()
+    assert (rl._include, rl._exclude) == (None, None)
+    rl._accumulate(True, "1-4")
+    assert (rl._include, rl._exclude) == ({1, 2, 3, 4}, None)
+    rl._accumulate(False, "3")
+    assert (rl._include, rl._exclude) == ({1, 2, 4}, {3})
