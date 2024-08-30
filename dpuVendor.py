@@ -81,6 +81,8 @@ class IpuPlugin(VendorPlugin):
             j2_template = jinja2.Template(f.read())
             rendered = j2_template.render(ipu_plugin_image=ipu_plugin_image)
             logger.info(rendered)
+        lh = host.LocalHost()
+        lh.write(outfilename, rendered)
 
 
 class MarvellDpuPlugin(VendorPlugin):
