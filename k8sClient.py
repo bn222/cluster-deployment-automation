@@ -8,8 +8,6 @@ from typing import Callable
 from logger import logger
 from common import calculate_elapsed_time
 
-oc_url = "https://mirror.openshift.com/pub/openshift-v4/clients/ocp/latest/"
-
 
 class K8sClient:
     def __init__(self, kubeconfig: str, host: host.Host = host.LocalHost()):
@@ -18,6 +16,14 @@ class K8sClient:
         self._api_client = kubernetes.config.new_client_from_config_dict(c)
         self._client = kubernetes.client.CoreV1Api(self._api_client)
         self._host = host
+        self._ensure_oc_installed()
+
+    def _ensure_oc_installed(self):
+        if self._host.run("which oc").returncode == 0:
+            return
+        uname = self._host.run_or_die("uname -m").out
+        url = f"https://mirror.openshift.com/pub/openshift-v4/${uname}/clients/ocp/stable/openshift-client-linux.tar.gz"
+        self._host.run_or_die(f"curl {url} | sudo tar -U -C /usr/local/bin -xzf -")
 
     def is_ready(self, name: str) -> bool:
         for e in self._client.list_node().items:
