@@ -3,7 +3,6 @@ import shlex
 import os
 import host
 import k8sClient
-import tempfile
 from logger import logger
 
 
@@ -135,7 +134,7 @@ class ImageRegistry:
         crt_file = self.rsh.read_file(crt_file)
         lh = host.LocalHost()
         lh.write("/tmp/crt", crt_file)
-        logger.info(f"trusting registry running on {self.rsh.hostname()} in ocp with file {crt_file}")
+        logger.info(f"trusting registry running on {self.rsh.hostname()} in ocp with file /tmp/crt")
         client.oc(f"delete cm -n openshift-config {shlex.quote(cm_name)}")
         client.oc(f"create cm -n openshift-config {cm_name} --from-file={self.hostname}..{self.listen_port}=/tmp/crt")
         lh.remove("/tmp/crt")
