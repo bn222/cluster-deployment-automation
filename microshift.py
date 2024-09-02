@@ -63,8 +63,8 @@ def cleanup_compose_cli(h: host.Host) -> None:
 
 
 # uses jinja to generate a kickstart file
-def generate_kickstart(rhel_number: str, uname_m: str) -> None:
-    with open('pull_secret.json', 'r') as f_in:
+def generate_kickstart(rhel_number: str, uname_m: str, secrets_path: str) -> None:
+    with open(secrets_path, 'r') as f_in:
         file_contents = f_in.read()
 
     ssh_pub, _, _ = next(common.iterate_ssh_keys(), (None, None, None))
@@ -143,13 +143,13 @@ def wait_for_build_to_finish(h: host.Host, build_id_two: Optional[str] = None) -
 
 
 # generates an iso file that builds microshift
-def iso_builder(h: host.Host, name_of_final_iso: str, version: str) -> None:
+def iso_builder(h: host.Host, name_of_final_iso: str, secrets_path: str, version: str) -> None:
     rhel_number = '9'
     cmd = "uname -m"
     uname_m = h.run(cmd).out.strip()
 
     cleanup_microshift(h, version)
-    generate_kickstart(rhel_number, uname_m)
+    generate_kickstart(rhel_number, uname_m, secrets_path)
 
     rhel_version = 'rhel9'
     rhel_name = 'RHEL 9'
@@ -216,14 +216,14 @@ rhsm = true'''.strip()
     shutil.rmtree("/var/cache/osbuild-worker/osbuild-store/stage/")
 
 
-def deploy(cluster_name: str, node: NodeConfig, external_port: str, version: str) -> None:
+def deploy(secrets_path: str, node: NodeConfig, external_port: str, version: str) -> None:
     lh = host.LocalHost()
     bmc = BMC.from_bmc(node.bmc, node.bmc_user, node.bmc_password)
     h = Host(node.node, bmc)
     name_of_final_iso = os.path.join(os.getcwd(), 'final.iso')
     login_uname = "redhat"
 
-    iso_builder(lh, name_of_final_iso, version)
+    iso_builder(lh, name_of_final_iso, secrets_path, version)
 
     if os.path.exists(f"{name_of_final_iso}"):
         logger.info(f"The file {name_of_final_iso} exists.")

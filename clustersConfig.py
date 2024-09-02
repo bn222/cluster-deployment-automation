@@ -164,21 +164,19 @@ class ClustersConfig:
     ntp_source: str = "clock.redhat.com"
     base_dns_domain: str = "redhat.com"
     install_iso: str = ""
+    secrets_path: str = ""
 
     # All configurations that used to be supported but are not anymore.
     # Used to warn the user to change their config.
     deprecated_configs: dict[str, Optional[str]] = {"api_ip": "api_vip", "ingress_ip": "ingress_vip"}
 
-    def __init__(
-        self,
-        yaml_path: str,
-        worker_range: common.RangeList = common.RangeList.UNLIMITED,
-    ):
+    def __init__(self, yaml_path: str, secrets_path: str, worker_range: common.RangeList = common.RangeList.UNLIMITED):
         self._cluster_info: Optional[ClusterInfo] = None
         self._load_full_config(yaml_path)
         self._check_deprecated_config()
 
         cc = self.fullConfig
+        self.secrets_path = secrets_path
         self.set_cc_defaults(cc)
         if "proxy" in cc:
             self.proxy = cc["proxy"]

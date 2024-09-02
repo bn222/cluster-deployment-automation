@@ -76,7 +76,7 @@ def ExtraConfigMicroshift(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dic
     # Set up pull secret
     logger.info(f"Copying pull secret to {acc.hostname()}:/etc/crio/openshift-pull-secret")
     acc.run("mkdir -p /etc/crio")
-    acc.copy_to("pull_secret.json", "/etc/crio/openshift-pull-secret")
+    acc.copy_to(cc.secrets_path, "/etc/crio/openshift-pull-secret")
     acc.run_or_die("chown root:root /etc/crio/openshift-pull-secret")
     acc.run_or_die("chmod 600 /etc/crio/openshift-pull-secret")
 

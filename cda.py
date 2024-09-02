@@ -51,7 +51,7 @@ def main_deploy_iso(cc: ClustersConfig, args: argparse.Namespace) -> None:
 
 
 def main_deploy(args: argparse.Namespace) -> None:
-    cc = ClustersConfig(args.config, args.worker_range)
+    cc = ClustersConfig(args.config, args.secrets_path, args.worker_range)
 
     if cc.kind == "openshift":
         main_deploy_openshift(cc, args)
