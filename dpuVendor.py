@@ -25,9 +25,10 @@ class VendorPlugin(ABC):
 
 
 class IpuPlugin(VendorPlugin):
-    def __init__(self) -> None:
+    def __init__(self, name_suffix: str) -> None:
         self._repo = "https://github.com/intel/ipu-opi-plugins.git"
         self._vsp_ds_manifest = "./manifests/dpu/dpu_vsp_ds.yaml.j2"
+        self.name_suffix = name_suffix
 
     @property
     def repo(self) -> str:
@@ -48,7 +49,7 @@ class IpuPlugin(VendorPlugin):
         lh.run(f"podman push intel-ipuplugin:latest {self.vsp_image_name(img_reg)}")
 
     def vsp_image_name(self, img_reg: ImageRegistry) -> str:
-        return f"{img_reg.url()}/ipu-plugin:dpu"
+        return f"{img_reg.url()}/ipu-plugin:dpu-{self.name_suffix}"
 
     def build_and_start(self, _: host.Host, client: K8sClient, imgReg: ImageRegistry) -> None:
         return self.start(self.build(imgReg), client)
@@ -94,14 +95,14 @@ class MarvellDpuPlugin(VendorPlugin):
         logger.warning("Setting up Marvell DPU not yet implemented")
 
 
-def init_vendor_plugin(h: host.Host, node_kind: str) -> VendorPlugin:
+def init_vendor_plugin(h: host.Host, node_kind: str, uname: str) -> VendorPlugin:
     # TODO: Autodetect the vendor hardware and return the proper implementation.
     if node_kind == "marvell-dpu":
         logger.info(f"Detected Marvell DPU on {h.hostname()}")
         return MarvellDpuPlugin()
     else:
         logger.info(f"Detected Intel IPU hardware on {h.hostname()}")
-        return IpuPlugin()
+        return IpuPlugin(uname)
 
 
 def extractContainerImage(dockerfile: str) -> str:
