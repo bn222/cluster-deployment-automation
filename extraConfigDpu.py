@@ -296,7 +296,7 @@ def ExtraConfigDpuHost(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[s
 
     node = cc.workers[0]
     h = host.Host(node.node)
-    vendor_plugin = init_vendor_plugin(h, node.kind or "")
+    vendor_plugin = init_vendor_plugin(h, node.kind or "", h.run("uname -m").out)
     vendor_plugin.build_and_start(lh, client, imgReg)
 
     git_repo_setup(repo, repo_wipe=False, url=DPU_OPERATOR_REPO)
