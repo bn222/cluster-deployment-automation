@@ -384,10 +384,10 @@ class ClustersConfig:
             assert self._cluster_info is not None
             return self._cluster_info.network_api_port
 
-        def iso() -> str:
+        def iso_server() -> str:
             self._ensure_clusters_loaded()
             assert self._cluster_info is not None
-            return self._cluster_info.iso
+            return self._cluster_info.iso_server
 
         def activation_key() -> str:
             self._ensure_clusters_loaded()
@@ -415,7 +415,7 @@ class ClustersConfig:
         template.globals['worker_number'] = worker_number
         template.globals['worker_name'] = worker_name
         template.globals['api_network'] = api_network
-        template.globals['iso'] = iso
+        template.globals['iso_server'] = iso_server
         template.globals['bmc'] = bmc
         template.globals['activation_key'] = activation_key
         template.globals['organization_id'] = organization_id
