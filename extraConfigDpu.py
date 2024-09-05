@@ -244,14 +244,6 @@ def ExtraConfigDpu(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, 
         # by removing the calls to pip)
         vendor_plugin.build_push(acc, imgReg)
         vendor_plugin.start(vendor_plugin.vsp_image_name(imgReg), client)
-    elif isinstance(vendor_plugin, MarvellDpuPlugin):
-        # TODO: Remove when this container is properly started by the vsp
-        # We need to manually start the p4 sdk container currently for the IPU plugin
-        img = "quay.io/sdaniele/intel-ipu-p4-sdk:temp_wa_5-28-24"
-        uname = acc.run("uname -r").out.strip()
-        cmd = f"podman run --network host -d --privileged --entrypoint='[\"/bin/sh\", \"-c\", \"sleep 5; sh /entrypoint.sh\"]' -v /lib/modules/{uname}:/lib/modules/{uname} -v data1:/opt/p4 {img}"
-        logger.info("Manually starting P4 container")
-        acc.run_or_die(cmd)
     else:
         vendor_plugin.build_push_start(lh, client, imgReg)
 
