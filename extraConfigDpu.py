@@ -300,7 +300,7 @@ def ExtraConfigDpuHost(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[s
     h = host.Host(node.node)
     h.ssh_connect("core")
     vendor_plugin = init_vendor_plugin(h, node.kind or "")
-    vendor_plugin.build_and_start(lh, client, imgReg)
+    vendor_plugin.build_push_start(lh, client, imgReg)
 
     git_repo_setup(repo, repo_wipe=False, url=DPU_OPERATOR_REPO)
     if cfg.rebuild_dpu_operators_images:
