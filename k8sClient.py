@@ -21,9 +21,10 @@ class K8sClient:
     def _ensure_oc_installed(self) -> None:
         if self._host.run("which oc").returncode == 0:
             return
-        uname = self._host.run_or_die("uname -m").out
-        url = f"https://mirror.openshift.com/pub/openshift-v4/${uname}/clients/ocp/stable/openshift-client-linux.tar.gz"
-        self._host.run_or_die(f"curl {url} | sudo tar -U -C /usr/local/bin -xzf -")
+        uname = self._host.run_or_die("uname -m").out.strip()
+        url = f"https://mirror.openshift.com/pub/openshift-v4/{uname}/clients/ocp/stable/openshift-client-linux.tar.gz"
+        self._host.run_or_die(f"curl -L {url} -o /tmp/openshift-client-linux.tar.gz")
+        self._host.run_or_die("sudo tar -U -C /usr/local/bin -xzf /tmp/openshift-client-linux.tar.gz")
 
     def is_ready(self, name: str) -> bool:
         for e in self._client.list_node().items:
