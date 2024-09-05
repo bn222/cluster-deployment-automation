@@ -1,5 +1,4 @@
 import jinja2
-import os
 import re
 import host
 from k8sClient import K8sClient
