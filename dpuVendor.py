@@ -54,7 +54,7 @@ class IpuPlugin(VendorPlugin):
     def build_push_start(self, h: host.Host, client: K8sClient, imgReg: ImageRegistry) -> None:
         return self.start(self.build_push(h, imgReg), client)
 
-    def build_push(self, h: host.Host, imgReg: ImageRegistry):
+    def build_push(self, h: host.Host, imgReg: ImageRegistry) -> str:
         logger.info("Building ipu-opi-plugin")
         h.run("rm -rf /root/ipu-opi-plugins")
         h.run_or_die(f"git clone {self.repo} /root/ipu-opi-plugins")
