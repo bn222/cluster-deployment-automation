@@ -170,7 +170,13 @@ class ClustersConfig:
     # Used to warn the user to change their config.
     deprecated_configs: dict[str, Optional[str]] = {"api_ip": "api_vip", "ingress_ip": "ingress_vip"}
 
-    def __init__(self, yaml_path: str, secrets_path: str, worker_range: common.RangeList = common.RangeList.UNLIMITED):
+    def __init__(
+        self,
+        yaml_path: str,
+        *,
+        secrets_path: str = "",
+        worker_range: common.RangeList = common.RangeList.UNLIMITED,
+    ):
         self._cluster_info: Optional[ClusterInfo] = None
         self._load_full_config(yaml_path)
         self._check_deprecated_config()
