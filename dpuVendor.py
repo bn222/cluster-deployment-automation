@@ -5,6 +5,7 @@ from k8sClient import K8sClient
 from logger import logger
 from abc import ABC, abstractmethod
 from imageRegistry import ImageRegistry
+import os
 
 
 class VendorPlugin(ABC):
@@ -60,7 +61,12 @@ class IpuPlugin(VendorPlugin):
         fn = "/root/ipu-opi-plugins/ipu-plugin/images/Dockerfile"
         golang_img = extractContainerImage(h.read_file(fn))
         h.run_or_die(f"podman pull docker.io/library/{golang_img}")
-        ret = h.run("IMGTOOL=podman make -C /root/ipu-opi-plugins/ipu-plugin image")
+        if h.is_localhost():
+            env = os.environ.copy()
+            env["IMGTOOL"] = "podman"
+            ret = h.run("make -C /root/ipu-opi-plugins/ipu-plugin image", env=env)
+        else:
+            ret = h.run("IMGTOOL=podman make -C /root/ipu-opi-plugins/ipu-plugin image")
         if not ret.success():
             logger.error_and_exit("Failed to build vsp images")
         vsp_image = self.vsp_image_name(imgReg)
