@@ -10,7 +10,7 @@ from imageRegistry import ImageRegistry
 
 class VendorPlugin(ABC):
     @abstractmethod
-    def build_and_start(self, _: host.Host, client: K8sClient, imgReg: ImageRegistry) -> None:
+    def build_push_start(self, h: host.Host, client: K8sClient, imgReg: ImageRegistry) -> None:
         raise NotImplementedError("Must implement build_and_start() for VSP")
 
     @staticmethod
@@ -51,11 +51,10 @@ class IpuPlugin(VendorPlugin):
     def vsp_image_name(self, img_reg: ImageRegistry) -> str:
         return f"{img_reg.url()}/ipu-plugin:dpu-{self.name_suffix}"
 
-    def build_and_start(self, _: host.Host, client: K8sClient, imgReg: ImageRegistry) -> None:
-        return self.start(self.build(imgReg), client)
+    def build_push_start(self, h: host.Host, client: K8sClient, imgReg: ImageRegistry) -> None:
+        return self.start(self.build_push(h, imgReg), client)
 
-    def build(self, imgReg: ImageRegistry) -> str:
-        h = host.LocalHost()
+    def build_push(self, h: host.Host, imgReg: ImageRegistry):
         logger.info("Building ipu-opi-plugin")
         h.run("rm -rf /root/ipu-opi-plugins")
         h.run_or_die(f"git clone {self.repo} /root/ipu-opi-plugins")
@@ -90,7 +89,7 @@ class MarvellDpuPlugin(VendorPlugin):
     def __init__(self) -> None:
         pass
 
-    def build_and_start(self, _: host.Host, client: K8sClient, imgReg: ImageRegistry) -> None:
+    def build_push_start(self, h: host.Host, client: K8sClient, imgReg: ImageRegistry) -> None:
         # TODO: https://github.com/openshift/dpu-operator/pull/82
         logger.warning("Setting up Marvell DPU not yet implemented")
 

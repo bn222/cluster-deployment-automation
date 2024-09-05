@@ -239,8 +239,10 @@ def ExtraConfigDpu(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, 
         logger.info("Manually starting P4 container")
         cmd = f"podman run --network host -d --privileged --entrypoint='[\"/bin/sh\", \"-c\", \"sleep 5; sh /entrypoint.sh\"]' -v /lib/modules/{uname}:/lib/modules/{uname} -v data1:/opt/p4 {img}"
         acc.run_or_die(cmd)
-        vendor_plugin.import_from_url("http://10.26.16.5/ipu-plugin.tar")
-        vendor_plugin.push(imgReg)
+        # Build on the ACC since an aarch based server is needed for the build
+        # (the Dockerfile needs to be fixed to allow layered multi-arch build
+        # by removing the calls to pip)
+        vendor_plugin.build_push(acc, imgReg)
         vendor_plugin.start(vendor_plugin.vsp_image_name(imgReg), client)
     elif isinstance(vendor_plugin, MarvellDpuPlugin):
         # TODO: Remove when this container is properly started by the vsp
@@ -251,7 +253,7 @@ def ExtraConfigDpu(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, 
         logger.info("Manually starting P4 container")
         acc.run_or_die(cmd)
     else:
-        vendor_plugin.build_and_start(lh, client, imgReg)
+        vendor_plugin.build_push_start(lh, client, imgReg)
 
     git_repo_setup(repo, repo_wipe=False, url=DPU_OPERATOR_REPO)
     if cfg.rebuild_dpu_operators_images:
