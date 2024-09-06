@@ -312,7 +312,7 @@ def ExtraConfigDpuHost(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[s
     vendor_plugin.build_push_start(lh, client, imgReg)
     wait_vsp_ds_running(client)
 
-    git_repo_setup(repo, repo_wipe=False, url=DPU_OPERATOR_REPO)
+    git_repo_setup(repo, branch="main", repo_wipe=False, url=DPU_OPERATOR_REPO)
     if cfg.rebuild_dpu_operators_images:
         dpu_operator_build_push(repo)
     else:
