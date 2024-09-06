@@ -11,7 +11,7 @@ from logger import logger
 from clustersConfig import ExtraConfigArgs
 import imageRegistry
 from common import git_repo_setup
-from dpuVendor import init_vendor_plugin, IpuPlugin, MarvellDpuPlugin
+from dpuVendor import init_vendor_plugin, IpuPlugin
 from imageRegistry import ImageRegistry
 
 DPU_OPERATOR_REPO = "https://github.com/openshift/dpu-operator.git"
@@ -211,6 +211,20 @@ def dpu_operator_start(client: K8sClient, repo: Optional[str]) -> None:
     client.oc_run_or_die("wait --for=condition=Ready pod --all -n openshift-dpu-operator --timeout=5m")
 
 
+def ensure_vsp_ds_running(client: K8sClient) -> None:
+    retries = 10
+    for _ in range(retries):
+        desired_pods = int(client.oc_run_or_die("get ds vsp -o jsonpath='{.status.desiredNumberScheduled}'").out)
+        available_pods = int(client.oc_run_or_die("get ds vsp -o jsonpath='{.status.numberAvailable}'").out)
+        if available_pods != desired_pods:
+            logger.info(f"Waiting for VSP ds to scale up. Desired pods: {desired_pods} Available pods: {available_pods}")
+            time.sleep(10)
+        else:
+            break
+    else:
+        logger.error_and_exit("Vsp pods failed to reach ready state")
+
+
 def ExtraConfigDpu(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, Future[Optional[host.Result]]]) -> None:
     [f.result() for (_, f) in futures.items()]
     logger.info("Running post config step to start DPU operator on IPU")
@@ -244,16 +258,9 @@ def ExtraConfigDpu(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, 
         # by removing the calls to pip)
         vendor_plugin.build_push(acc, imgReg)
         vendor_plugin.start(vendor_plugin.vsp_image_name(imgReg), client)
-    elif isinstance(vendor_plugin, MarvellDpuPlugin):
-        # TODO: Remove when this container is properly started by the vsp
-        # We need to manually start the p4 sdk container currently for the IPU plugin
-        img = "quay.io/sdaniele/intel-ipu-p4-sdk:temp_wa_5-28-24"
-        uname = acc.run("uname -r").out.strip()
-        cmd = f"podman run --network host -d --privileged --entrypoint='[\"/bin/sh\", \"-c\", \"sleep 5; sh /entrypoint.sh\"]' -v /lib/modules/{uname}:/lib/modules/{uname} -v data1:/opt/p4 {img}"
-        logger.info("Manually starting P4 container")
-        acc.run_or_die(cmd)
     else:
         vendor_plugin.build_push_start(lh, client, imgReg)
+    ensure_vsp_ds_running(client)
 
     git_repo_setup(repo, repo_wipe=False, url=DPU_OPERATOR_REPO)
     if cfg.rebuild_dpu_operators_images:
@@ -301,6 +308,7 @@ def ExtraConfigDpuHost(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[s
     h.ssh_connect("core")
     vendor_plugin = init_vendor_plugin(h, node.kind or "")
     vendor_plugin.build_push_start(lh, client, imgReg)
+    ensure_vsp_ds_running(client)
 
     git_repo_setup(repo, repo_wipe=False, url=DPU_OPERATOR_REPO)
     if cfg.rebuild_dpu_operators_images:
