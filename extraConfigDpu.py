@@ -211,16 +211,17 @@ def dpu_operator_start(client: K8sClient, repo: Optional[str]) -> None:
     client.oc_run_or_die("wait --for=condition=Ready pod --all -n openshift-dpu-operator --timeout=5m")
 
 
-def ensure_vsp_ds_running(client: K8sClient) -> None:
+def wait_vsp_ds_running(client: K8sClient) -> None:
     retries = 10
     for _ in range(retries):
-        desired_pods = int(client.oc_run_or_die("get ds vsp -o jsonpath='{.status.desiredNumberScheduled}'").out)
-        available_pods = int(client.oc_run_or_die("get ds vsp -o jsonpath='{.status.numberAvailable}'").out)
-        if available_pods != desired_pods:
-            logger.info(f"Waiting for VSP ds to scale up. Desired pods: {desired_pods} Available pods: {available_pods}")
-            time.sleep(10)
-        else:
-            break
+        desired_result = client.oc_run_or_die("get ds vsp -o jsonpath='{.status.desiredNumberScheduled}'")
+        available_result = client.oc_run_or_die("get ds vsp -o jsonpath='{.status.numberAvailable}'")
+        logger.info(f"Waiting for VSP ds to scale up. Desired/Available: {desired_result.out}/{available_result.out}")
+        if desired_result.out.isdigit() and available_result.out.isdigit():
+            desired_pods = int(desired_result.out)
+            available_pods = int(available_result.out)
+            if available_pods == desired_pods:
+                break
     else:
         logger.error_and_exit("Vsp pods failed to reach ready state")
 
@@ -260,7 +261,7 @@ def ExtraConfigDpu(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, 
         vendor_plugin.start(vendor_plugin.vsp_image_name(imgReg), client)
     else:
         vendor_plugin.build_push_start(lh, client, imgReg)
-    ensure_vsp_ds_running(client)
+    wait_vsp_ds_running(client)
 
     git_repo_setup(repo, repo_wipe=False, url=DPU_OPERATOR_REPO)
     if cfg.rebuild_dpu_operators_images:
