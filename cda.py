@@ -51,7 +51,11 @@ def main_deploy_iso(cc: ClustersConfig, args: argparse.Namespace) -> None:
 
 
 def main_deploy(args: argparse.Namespace) -> None:
-    cc = ClustersConfig(args.config, args.secrets_path, args.worker_range)
+    cc = ClustersConfig(
+        args.config,
+        secrets_path=args.secrets_path,
+        worker_range=args.worker_range,
+    )
 
     if cc.kind == "openshift":
         main_deploy_openshift(cc, args)
@@ -61,7 +65,10 @@ def main_deploy(args: argparse.Namespace) -> None:
 
 def main_snapshot(args: argparse.Namespace) -> None:
     args = parse_args()
-    cc = ClustersConfig(args.config, args.worker_range)
+    cc = ClustersConfig(
+        args.config,
+        worker_range=args.worker_range,
+    )
 
     ais = AssistedInstallerService(cc.version, args.url)
     ai = AssistedClientAutomation(f"{args.url}:8090")
