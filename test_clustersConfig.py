@@ -1,5 +1,6 @@
 import dataclasses
 import os
+import pathlib
 import pytest
 import typing
 
@@ -22,22 +23,35 @@ def get_filepath(*components: str) -> str:
 
 
 def _test_parse_1(tfile: TFileConfig) -> None:
+    basedir = "/tmp"
     rnd_seed = f"rnd_seed:{tfile}"
     yamlpath = get_filepath(tfile.filename)
 
     cc = clustersConfig.ClustersConfig(
         yamlpath,
         secrets_path="/secrets/path",
-        test_only=True,
+        basedir=basedir,
         rnd_seed=rnd_seed,
+        test_only=True,
     )
     assert isinstance(cc, clustersConfig.ClustersConfig)
 
     assert isinstance(cc.hosts, dict)
     assert all(isinstance(host, clustersConfig.HostConfig) and host.name == name for name, host in cc.hosts.items())
 
+    main_config = clustersConfig.MainConfig.load(
+        yamlpath,
+        basedir=basedir,
+        rnd_seed=rnd_seed,
+    )
+    assert isinstance(main_config, clustersConfig.MainConfig)
+    assert main_config == cc.main_config
+
     if tfile.check is not None:
         tfile.check(tfile, cc)
+
+    assert cc.main_config.yamlpath == ""
+    assert cc.main_config.clusters[0].yamlpath == ".clusters[0]"
 
     vdict = cc.cluster_config.serialize(show_secrets=True)
     cluster_config2 = clustersConfig.ClusterConfig.parse(0, ".clusters[0]", vdict)
@@ -166,3 +180,47 @@ TFILES = (
 @pytest.mark.parametrize("tfile", TFILES)
 def test_parse_1(tfile: TFileConfig) -> None:
     _test_parse_1(tfile)
+
+
+def test_parse_2(tmp_path: pathlib.Path) -> None:
+    def _load(yaml: str) -> clustersConfig.MainConfig:
+        yamlpath = str(tmp_path / "testfile1")
+        with open(yamlpath, "w") as f:
+            f.write(yaml)
+        return clustersConfig.MainConfig.load(
+            yamlpath,
+            basedir="/tmp",
+            rnd_seed="rndseed:test_parse_2",
+        )
+
+    with pytest.raises(ValueError):
+        _load("")
+
+    with pytest.raises(ValueError):
+        _load("clusters:\n")
+
+    with pytest.raises(ValueError):
+        _load("clusters: []")
+
+    main_config = _load(
+        """clusters:
+    - name: mycluster1
+      api_vip: "192.168.122.99"
+      ingress_vip: "192.168.122.101"
+"""
+    )
+    assert main_config
+    assert main_config.clusters[0].name == "mycluster1"
+
+    with pytest.raises(ValueError) as ex:
+        _load(
+            """clusters:
+    - name: mycluster1
+      api_vip: "192.168.122.99"
+      ingress_vip: "192.168.122.101"
+    - name: mycluster2
+      api_vip: "192.168.122.99"
+      ingress_vip: "192.168.122.101"
+"""
+        )
+    assert "currently only one entry in the clusters list is supported" in str(ex.value)
