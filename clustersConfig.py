@@ -1,6 +1,7 @@
 import os
 import io
 import sys
+import logging
 import re
 import functools
 import ipaddress
@@ -9,6 +10,7 @@ from typing import Optional
 import xml.etree.ElementTree as et
 import jinja2
 from yaml import safe_load
+import yaml
 import json
 import host
 from bmc import BMC
@@ -1454,9 +1456,60 @@ class ClustersConfig:
             return path
         return os.path.join(self.base_path, path)
 
+    def log_config(self, *, log_level: int = logging.DEBUG, show_secrets: bool = False) -> None:
+        logger.log(log_level, f"config: {self.main_config.serialize_json(show_secrets=show_secrets)}")
+        if self.cluster_config.real_ip_range is not None:
+            logger.log(log_level, f"config: ip-range={self.cluster_config.real_ip_range}, local_bridge_config={self.cluster_config.local_bridge_config}, remote_bridge_config={self.cluster_config.remote_bridge_config}")
+
 
 def main() -> None:
-    pass
+    import argparse
+
+    parser = argparse.ArgumentParser(description='Cluster Deployment Automation Config')
+    parser.add_argument("-S", '--no-system-check', dest='with_system_check', action='store_false', help="Disable system checks.")
+    parser.add_argument('--system-check', dest='with_system_check', action='store_true', help=argparse.SUPPRESS)
+    parser.add_argument('-v', "--verbose", action='store_true', help='Enable debug logs')
+    parser.add_argument("--show-secrets", action='store_true', help='Show secrets that would be hidden otherwise')
+    parser.add_argument('filenames', nargs='+', help="List of filenames")
+    parser.set_defaults(with_system_check=True)
+
+    args = parser.parse_args()
+
+    import logger as logger_module
+
+    logger_module.configure_logger(logging.DEBUG if args.verbose else logging.ERROR)
+
+    for idx, f in enumerate(args.filenames):
+        logger.info(f"Check file {repr(f)}")
+        cc = ClustersConfig(
+            f,
+            with_system_check=False,
+        )
+        cc.log_config(
+            log_level=logging.INFO,
+            show_secrets=args.show_secrets,
+        )
+
+        if idx > 0:
+            print("---")
+        print(f"# file: {f}")
+        print(f"# secrets_path: {cc.secrets_path}")
+        print(f"# ip_range: {cc.cluster_config.real_ip_range}")
+        print(f"# local_bridge_config: {cc.cluster_config.local_bridge_config}")
+        print(f"# remote_bridge_config: {cc.cluster_config.remote_bridge_config}")
+        print(
+            yaml.dump(
+                cc.main_config.serialize(show_secrets=args.show_secrets),
+                default_flow_style=False,
+                sort_keys=False,
+            )
+        )
+
+        if args.with_system_check:
+            try:
+                cc.system_check()
+            except ValueError as e:
+                raise ValueError(f"Failure checking {repr(f)}: {e}. Run with \"--no-system-check\" to skip this check")
 
 
 if __name__ == "__main__":

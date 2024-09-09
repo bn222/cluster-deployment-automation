@@ -63,6 +63,7 @@ def main_deploy(args: argparse.Namespace) -> None:
         secrets_path=args.secrets_path,
         worker_range=args.worker_range,
     )
+    cc.log_config()
 
     if cc.kind == "openshift":
         main_deploy_openshift(cc, args)
@@ -76,6 +77,7 @@ def main_snapshot(args: argparse.Namespace) -> None:
         args.config,
         worker_range=args.worker_range,
     )
+    cc.log_config()
 
     ais = AssistedInstallerService(cc.version, args.url)
     ai = AssistedClientAutomation(f"{args.url}:8090")
