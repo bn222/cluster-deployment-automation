@@ -12,15 +12,16 @@ import host
 from logger import logger
 from clusterSnapshotter import ClusterSnapshotter
 from virtualBridge import VirBridge
+from ktoolbox.common import unwrap
 
 
 def main_deploy_openshift(cc: ClustersConfig, args: argparse.Namespace) -> None:
     # Make sure the local virtual bridge base configuration is correct.
-    local_bridge = VirBridge(host.LocalHost(), cc.local_bridge_config)
+    local_bridge = VirBridge(host.LocalHost(), unwrap(cc.cluster_config.local_bridge_config))
     local_bridge.configure(api_port=None)
 
     # microshift does not use assisted installer so we don't need this check
-    if args.url == cc.ip_range[0]:
+    if args.url == cc.real_ip_range[0]:
         ais = AssistedInstallerService(
             cc.version,
             args.url,

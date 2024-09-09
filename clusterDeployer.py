@@ -51,8 +51,8 @@ class ClusterDeployer(BaseDeployer):
         if self.need_external_network():
             self._cc.prepare_external_port()
 
-        self._local_host = ClusterHost(host.LocalHost(), self._cc.hosts["localhost"], cc, cc.local_bridge_config)
-        self._remote_hosts = {bm.name: ClusterHost(host.RemoteHost(bm.name), bm, cc, cc.remote_bridge_config) for bm in self._cc.hosts.values() if bm.name != "localhost"}
+        self._local_host = ClusterHost(host.LocalHost(), self._cc.hosts["localhost"], cc, unwrap(cc.cluster_config.local_bridge_config))
+        self._remote_hosts = {bm.name: ClusterHost(host.RemoteHost(bm.name), bm, cc, unwrap(cc.cluster_config.remote_bridge_config)) for bm in self._cc.hosts.values() if bm.name != "localhost"}
         self._all_hosts = [self._local_host] + list(self._remote_hosts.values())
         self._futures.update((k8s_node.config.name, k8s_node.future) for h in self._all_hosts for k8s_node in h._k8s_nodes())
         self._all_nodes = {k8s_node.config.name: k8s_node for h in self._all_hosts for k8s_node in h._k8s_nodes()}
@@ -355,7 +355,7 @@ class ClusterDeployer(BaseDeployer):
 
         # Wait for masters to have booted.
         for h in hosts_with_masters:
-            h.wait_for_masters_boot(self._cc.full_ip_range)
+            h.wait_for_masters_boot(self._cc.real_ip_range)
 
         def cb() -> None:
             finished = [p for p in futures if p.done()]
@@ -455,7 +455,7 @@ class ClusterDeployer(BaseDeployer):
 
         # Wait for workers to have booted.
         for h in hosts_with_workers:
-            h.wait_for_workers_boot(self._cc.full_ip_range)
+            h.wait_for_workers_boot(self._cc.real_ip_range)
 
         # Rename workers in AI.
         logger.info("renaming workers")
@@ -495,7 +495,7 @@ class ClusterDeployer(BaseDeployer):
                 hosts.append(rh)
                 workers.append(k8s_node)
 
-        ip_range = self._cc.full_ip_range
+        ip_range = self._cc.real_ip_range
         logger.info(f"Connectivity established to all workers; checking that they have an IP in range: {ip_range}")
 
         def any_address_in_range(h: host.Host, ip_range: tuple[str, str]) -> bool:
@@ -618,7 +618,7 @@ class ClusterDeployer(BaseDeployer):
             self.client().approve_csr()
             if len(connections) != len(bf_workers):
                 for e in filter(lambda x: x.name not in connections, bf_workers):
-                    ai_ip = self._ai.get_ai_ip(e.name, self._cc.full_ip_range)
+                    ai_ip = self._ai.get_ai_ip(e.name, self._cc.real_ip_range)
                     if ai_ip is None:
                         continue
                     h = host.Host(ai_ip)
