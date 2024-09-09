@@ -14,6 +14,7 @@ from clustersConfig import ExtraConfigArgs
 from imageRegistry import ImageRegistry
 from reglocal import git_build_local, GitBuildLocalContainerInfo
 from common import git_repo_setup
+from ktoolbox.common import unwrap
 
 
 def default_images(version: str) -> dict[str, str]:
@@ -126,13 +127,13 @@ def _sno_make_deploy(
 def ExtraConfigSriov(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, Future[Optional[host.Result]]]) -> None:
     [f.result() for (_, f) in futures.items()]
     repo_dir = "/root/sriov-network-operator"
-    git_repo_setup(repo_dir, repo_wipe=not cfg.sriov_network_operator_local, url="https://github.com/openshift/sriov-network-operator.git")
+    git_repo_setup(repo_dir, repo_wipe=not unwrap(cfg.sriov_network_operator_local), url="https://github.com/openshift/sriov-network-operator.git")
     _sno_make_deploy(
         repo_dir,
         kubeconfig=cc.kubeconfig,
         version=cc.version,
         image=cfg.image,
-        build_local=cfg.sriov_network_operator_local,
+        build_local=unwrap(cfg.sriov_network_operator_local),
     )
     time.sleep(60)
 

@@ -1,6 +1,7 @@
 from clustersConfig import ClustersConfig
 from k8sClient import K8sClient
 import host
+import collections.abc
 from common_patches import apply_common_pathches
 from concurrent.futures import Future
 from extraConfigDpuInfra import run_dpu_network_operator_git
@@ -14,6 +15,7 @@ import re
 from logger import logger
 from clustersConfig import ExtraConfigArgs
 import common
+from ktoolbox.common import unwrap
 
 
 def ExtraConfigDpuTenantMC(cc: ClustersConfig, _: ExtraConfigArgs, futures: dict[str, Future[Optional[host.Result]]]) -> None:
@@ -48,8 +50,7 @@ def render_sriov_node_policy(policyname: str, bf_port: str, bf_addr: str, numvfs
         outFile.write(rendered)
 
 
-def render_envoverrides_cm(client: K8sClient, mapping: Optional[list[dict[str, str]]], ns: str) -> str:
-    assert mapping is not None
+def render_envoverrides_cm(client: K8sClient, mapping: tuple[collections.abc.Mapping[str, str], ...], ns: str) -> str:
     contents = open("manifests/tenant/envoverrides.yaml").read()
     contents += f"{ns}\n"
     contents += "data:\n"
@@ -75,11 +76,6 @@ def render_envoverrides_cm(client: K8sClient, mapping: Optional[list[dict[str, s
 def _ExtraConfigDpuTenant_common(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, Future[Optional[host.Result]]], *, new_api: bool = False) -> None:
     [f.result() for (_, f) in futures.items()]
     logger.info("Running post config step")
-
-    if not new_api:
-        if cfg.mapping is None:
-            logger.error("BF to Worker mapping not provided for tenant deployment")
-            sys.exit(1)
 
     tclient = K8sClient("/root/kubeconfig.tenantcluster")
     logger.info("Waiting for mcp dpu-host to become ready")
@@ -175,8 +171,7 @@ def _ExtraConfigDpuTenant_common(cc: ClustersConfig, cfg: ExtraConfigArgs, futur
         logger.info(os.getcwd())
         contents = open("manifests/tenant/setenvovnkube.yaml").read()
 
-        assert cfg.mapping is not None
-        for bfmap in cfg.mapping:
+        for bfmap in unwrap(cfg.mapping):
             a: dict[str, str] = {}
             mp = re.sub(r'np\d$', '', bf_port)
             a["OVNKUBE_NODE_MGMT_PORT_NETDEV"] = f"{mp}v0"
@@ -235,9 +230,9 @@ def _ExtraConfigDpuTenant_common(cc: ClustersConfig, cfg: ExtraConfigArgs, futur
 
         tc_namespace = "two-cluster-design"
         dpu_namespace = "openshift-dpu-network-operator"
-        file = render_envoverrides_cm(iclient, cfg.mapping, tc_namespace)
+        file = render_envoverrides_cm(iclient, unwrap(cfg.mapping), tc_namespace)
         logger.info(iclient.oc(f"create -f {file}"))
-        file = render_envoverrides_cm(iclient, cfg.mapping, dpu_namespace)
+        file = render_envoverrides_cm(iclient, unwrap(cfg.mapping), dpu_namespace)
         logger.info(iclient.oc(f"create -f {file}"))
 
         # Restart DPU network operator to apply env-overrides cm
