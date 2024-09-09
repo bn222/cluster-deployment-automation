@@ -33,7 +33,7 @@ def _test_parse_1(tfile: TFileConfig) -> None:
         basedir=basedir,
         rnd_seed=rnd_seed,
         get_last_ip=lambda: None,
-        test_only=True,
+        with_system_check=False,
     )
     assert isinstance(cc, clustersConfig.ClustersConfig)
 
