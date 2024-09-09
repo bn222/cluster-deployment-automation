@@ -312,7 +312,7 @@ class ExtraConfigArgs(kcommon.StructParseBaseNamed):
             dpu_net_interface=dpu_net_interface,
         )
 
-    def pre_check(self) -> None:
+    def system_check(self) -> None:
         if self.sriov_network_operator_local:
             if not common.podman_pull(
                 "registry.ci.openshift.org/ocp/builder:rhel-9-golang-1.21-openshift-4.16",
@@ -1054,6 +1054,12 @@ class ClusterConfig(kcommon.StructParseBaseNamed):
     def is_sno(self) -> bool:
         return self._is_sno(self.kind, len(self.masters))
 
+    def system_check(self) -> None:
+        for c in self.preconfig:
+            c.system_check()
+        for c in self.postconfig:
+            c.system_check()
+
 
 @kcommon.strict_dataclass
 @dataclass(frozen=True, kw_only=True)
@@ -1200,6 +1206,10 @@ class MainConfig(kcommon.StructParseBase):
 
         return cc
 
+    def system_check(self) -> None:
+        for cluster_config in self.clusters:
+            cluster_config.system_check()
+
 
 class ClustersConfig:
     worker_range: common.RangeList
@@ -1216,7 +1226,7 @@ class ClustersConfig:
         basedir: Optional[str] = None,
         rnd_seed: Optional[str] = None,
         get_last_ip: Optional[typing.Callable[[], Optional[str]]] = None,
-        test_only: bool = False,
+        with_system_check: bool = True,
     ):
         self.secrets_path = secrets_path
         self.worker_range = worker_range
@@ -1233,19 +1243,11 @@ class ClustersConfig:
 
         self.external_port = self.cluster_config.external_port or "auto"
 
-        if test_only:
-            # Skip the remaining steps. They access the system, which makes them
-            # unsuitable for unit tests.
-            #
-            # TODO: this flag will go away, and instead the test can inject the pieces
-            # that are needed.
-            return
-
-        for cluster_config in self.main_config.clusters:
-            for c in cluster_config.preconfig:
-                c.pre_check()
-            for c in cluster_config.postconfig:
-                c.pre_check()
+        if with_system_check:
+            try:
+                self.system_check()
+            except ValueError as e:
+                raise ValueError(f"Failure checking {repr(yaml_path)}: {e}")
 
     @property
     def cluster_config(self) -> ClusterConfig:
@@ -1356,6 +1358,9 @@ class ClustersConfig:
 
     def local_worker_vms(self) -> list[NodeConfig]:
         return [x for x in self.worker_vms() if x.node == "localhost"]
+
+    def system_check(self) -> None:
+        self.main_config.system_check()
 
 
 def main() -> None:
