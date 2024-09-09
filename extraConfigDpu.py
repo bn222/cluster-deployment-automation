@@ -222,7 +222,7 @@ def wait_vsp_ds_running(client: K8sClient) -> None:
             available_pods = int(available_result.out)
             if available_pods == desired_pods:
                 break
-        time.sleep(10)
+        time.sleep(20)
     else:
         logger.error_and_exit("Vsp pods failed to reach ready state")
 
