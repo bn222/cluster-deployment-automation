@@ -114,6 +114,7 @@ def _test_parse_1(tfile: TFileConfig) -> None:
 
 
 def check_test5(tfile: TFileConfig, cc: clustersConfig.ClustersConfig) -> None:
+    assert cc.cluster_config.ocp_version == "4.14"
     assert tuple(cc.hosts.values()) == (
         clustersConfig.HostConfig(
             yamlpath=".clusters[0].hosts[0]",

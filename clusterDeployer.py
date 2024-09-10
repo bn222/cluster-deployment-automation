@@ -29,15 +29,6 @@ from baseDeployer import BaseDeployer
 from ktoolbox.common import unwrap
 
 
-def match_to_proper_version_format(version_cluster_config: str) -> str:
-    regex_pattern = r'^\d+\.\d+'
-    match = re.match(regex_pattern, version_cluster_config)
-    logger.info(f"getting version to match with format XX.X using regex {regex_pattern}")
-    if not match:
-        logger.error_and_exit(f"Invalid match {match}")
-    return match.group(0)
-
-
 _BF_ISO_PATH = "/root/iso"
 
 
@@ -55,14 +46,11 @@ class ClusterDeployer(BaseDeployer):
         self._all_nodes = {k8s_node.config.name: k8s_node for h in self._all_hosts for k8s_node in h._k8s_nodes()}
 
         self.masters_arch = "x86_64"
-        is_bf_map = [x.kind == "bf" for x in self._cc.workers]
-        self.is_bf = any(is_bf_map)
-        if self.is_bf:
-            if not all(is_bf_map):
-                logger.error_and_exit("Not yet supported to have mixed BF and non-bf workers")
+        if self._cc.cluster_config.has_bf_workers:
             self.workers_arch = "arm64"
         else:
             self.workers_arch = "x86_64"
+
         self._validate()
 
     def _all_hosts_with_masters(self) -> set[ClusterHost]:
@@ -209,19 +197,14 @@ class ClusterDeployer(BaseDeployer):
                 else:
                     logger.info("Skipping worker creation.")
         if self._cc.kind == "microshift":
-            version = match_to_proper_version_format(self._cc.version)
-
-            if len(self._cc.masters) == 1:
-                duration[MASTERS_STEP].start()
-                microshift.deploy(
-                    secrets_path=self._secrets_path,
-                    node=self._cc.masters[0],
-                    external_port=self._cc.get_external_port(),
-                    version=version,
-                )
-                duration[MASTERS_STEP].stop()
-            else:
-                logger.error_and_exit("Masters must be of length one for deploying microshift")
+            duration[MASTERS_STEP].start()
+            microshift.deploy(
+                secrets_path=self._secrets_path,
+                node=self._cc.cluster_config.single_master,
+                external_port=self._cc.get_external_port(),
+                version=self._cc.cluster_config.ocp_version,
+            )
+            duration[MASTERS_STEP].stop()
         if POST_STEP in self.steps:
             duration[POST_STEP].start()
             self._postconfig()
@@ -234,8 +217,6 @@ class ClusterDeployer(BaseDeployer):
     def _validate(self) -> None:
         if self._cc.cluster_config.is_sno:
             logger.info("Setting up a Single Node OpenShift (SNO) environment")
-            if self._cc.masters[0].ip is None:
-                logger.error_and_exit("Missing ip on master")
 
         min_cores = 28
         cc = int(self._local_host.hostconn.run("nproc").out)
@@ -435,7 +416,7 @@ class ClusterDeployer(BaseDeployer):
             logger.info(f"Preinstall {h}: {pf.result()}")
 
         # Start all workers on all hosts.
-        if not self.is_bf:
+        if not self._cc.cluster_config.has_bf_workers:
             iso_path = os.getcwd()
         else:
             # BF images are NFS mounted from _BF_ISO_PATH.

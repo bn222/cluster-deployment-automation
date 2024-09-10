@@ -8,6 +8,8 @@ from clustersConfig import ExtraConfigArgs
 import host
 import json
 import sys
+from ktoolbox.common import unwrap
+
 
 ORIGINAL_IMAGE = "ovnk-image:original"
 CUSTOM_IMAGE = "ovnk-custom-image:dev"
@@ -23,11 +25,7 @@ def ExtraConfigCustomOvn(cc: ClustersConfig, _cfg: ExtraConfigArgs, futures: dic
     [f.result() for (_, f) in futures.items()]
     logger.info("Running post config step to build custom OVN from source")
 
-    if not cc.masters:
-        die("There isn't any master node available in the config.")
-
-    assert cc.masters[0].ip is not None
-    node = host.RemoteHost(cc.masters[0].ip)
+    node = host.RemoteHost(unwrap(cc.masters[0].ip))
     node.ssh_connect("core")
 
     tag_ovnk_image(node)

@@ -186,8 +186,7 @@ def ExtraConfigDpu(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, 
 
     repo = unwrap(cfg.dpu_operator_path_abs)
     dpu_node = cc.masters[0]
-    assert dpu_node.ip is not None
-    acc = host.Host(dpu_node.ip)
+    acc = host.Host(unwrap(dpu_node.ip))
     lh = host.LocalHost()
     acc.ssh_connect("root", "redhat")
     client = K8sClient(MICROSHIFT_KUBECONFIG)

@@ -7,6 +7,7 @@ from clustersConfig import ExtraConfigArgs
 import host
 import yaml
 import time
+from ktoolbox.common import unwrap
 
 
 def early_access_microshift() -> str:
@@ -47,7 +48,7 @@ def extract_microshift_kubeconfig(acc: host.Host) -> str:
 
 def masquarade(rsh: host.Host, cc: ClustersConfig) -> None:
     wan_interface = cc.get_external_port()
-    lan_interface = cc.network_api_port
+    lan_interface = unwrap(cc.cluster_config.network_api_port)
     ip_tables = "/sbin/iptables"
     logger.info(f"Setting up ip forwarding on {rsh.hostname()} from {lan_interface} to {wan_interface}")
     rsh.run_or_die("sysctl -w net.ipv4.ip_forward=1")
@@ -68,8 +69,7 @@ def ExtraConfigMicroshift(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dic
     masquarade(lh, cc)
 
     dpu_node = cc.masters[0]
-    assert dpu_node.ip is not None
-    acc = host.Host(dpu_node.ip)
+    acc = host.Host(unwrap(dpu_node.ip))
     acc.ssh_connect("root", "redhat")
 
     # Set up pull secret
