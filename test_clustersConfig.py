@@ -51,6 +51,12 @@ TFILES = (
     TFileConfig("tests/configs/test3.yaml"),
     TFileConfig("tests/configs/test4.yaml"),
     TFileConfig("tests/configs/test5.yaml", check_test5),
+    TFileConfig("tests/configs/test6.yaml"),
+    TFileConfig("tests/configs/test7.yaml"),
+    TFileConfig("tests/configs/test8.yaml"),
+    TFileConfig("tests/configs/test9.yaml"),
+    TFileConfig("tests/configs/test10.yaml"),
+    TFileConfig("tests/configs/test11.yaml"),
 )
 
 
