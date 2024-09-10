@@ -4,10 +4,7 @@ import logging
 import threading
 import re
 import functools
-import ipaddress
-import typing
 from typing import Optional
-import xml.etree.ElementTree as et
 import jinja2
 from yaml import safe_load
 import yaml
@@ -721,7 +718,6 @@ class ClusterConfig(kcommon.StructParseBaseNamed):
         *,
         basedir: Optional[str] = None,
         rnd_seed: Optional[str] = None,
-        get_last_ip: Optional[typing.Callable[[], Optional[str]]] = None,
     ) -> "ClusterConfig":
         if basedir is None:
             basedir = os.getcwd()
@@ -937,7 +933,6 @@ class ClusterConfig(kcommon.StructParseBaseNamed):
             ip_range=ip_range,
             ip_mask=ip_mask,
             all_nodes=list(masters.values()) + list(workers.values()),
-            get_last_ip=get_last_ip,
         )
 
         return ClusterConfig(
@@ -976,7 +971,6 @@ class ClusterConfig(kcommon.StructParseBaseNamed):
         ip_mask: Optional[str],
         ip_range: Optional[tuple[str, str]],
         all_nodes: list[NodeConfig],
-        get_last_ip: Optional[typing.Callable[[], Optional[str]]] = None,
     ) -> tuple[Optional[tuple[str, str]], Optional[BridgeConfig], Optional[BridgeConfig]]:
         if kind != "openshift":
             return None, None, None
@@ -987,21 +981,7 @@ class ClusterConfig(kcommon.StructParseBaseNamed):
 
         n_nodes = len(all_nodes) + 1
 
-        # Get the last IP used in the running cluster.
-        if get_last_ip is not None:
-            last_ip = get_last_ip()
-        else:
-            last_ip = None
-
-        # Update the last IP based on the config.
-        for node in all_nodes:
-            if node.ip and last_ip and ipaddress.IPv4Address(node.ip) > ipaddress.IPv4Address(last_ip):
-                last_ip = node.ip
-
-        if last_ip and ipaddress.IPv4Address(last_ip) > ipaddress.IPv4Address(ip_range[0]) + n_nodes:
-            real_ip_range = ip_range[0], str(ipaddress.ip_address(last_ip) + 1)
-        else:
-            real_ip_range = common.ip_range(ip_range[0], n_nodes)
+        real_ip_range = common.ip_range(ip_range[0], n_nodes)
 
         if common.ip_range_size(ip_range) < common.ip_range_size(real_ip_range):
             raise ValueError(f"\"{yamlpath}.ip_range\": the supplied IP range {ip_range} is too small for the number of nodes")
@@ -1088,7 +1068,6 @@ class MainConfig(kcommon.StructParseBase):
         *,
         basedir: Optional[str] = None,
         rnd_seed: Optional[str] = None,
-        get_last_ip: Optional[typing.Callable[[], Optional[str]]] = None,
     ) -> "MainConfig":
         if basedir is None:
             basedir = os.getcwd()
@@ -1102,7 +1081,6 @@ class MainConfig(kcommon.StructParseBase):
                     arg2,
                     basedir=basedir,
                     rnd_seed=rnd_seed,
-                    get_last_ip=get_last_ip,
                 ),
                 allow_empty=False,
             )
@@ -1159,7 +1137,6 @@ class MainConfig(kcommon.StructParseBase):
         cluster_info_loader: Optional[clusterInfo.ClusterInfoLoader] = None,
         basedir: Optional[str] = None,
         rnd_seed: Optional[str] = None,
-        get_last_ip: Optional[typing.Callable[[], Optional[str]]] = None,
     ) -> 'MainConfig':
         if not os.path.exists(filename):
             raise ValueError(f"Missing YAML configuration at {repr(filename)}")
@@ -1202,7 +1179,6 @@ class MainConfig(kcommon.StructParseBase):
                 yamldata,
                 basedir=basedir,
                 rnd_seed=rnd_seed,
-                get_last_ip=get_last_ip,
             )
         except Exception as e:
             raise ValueError(f"Error loading YAML file {repr(filename)}: {e}")
@@ -1232,21 +1208,16 @@ class ClustersConfig:
         worker_range: common.RangeList = common.RangeList.UNLIMITED,
         basedir: Optional[str] = None,
         rnd_seed: Optional[str] = None,
-        get_last_ip: Optional[typing.Callable[[], Optional[str]]] = None,
         with_system_check: bool = True,
     ):
         self._lock = threading.Lock()
         self.secrets_path = secrets_path
         self.worker_range = worker_range
 
-        if get_last_ip is None:
-            get_last_ip = self.get_last_ip
-
         self.main_config = MainConfig.load(
             yaml_path,
             basedir=basedir,
             rnd_seed=rnd_seed,
-            get_last_ip=get_last_ip,
         )
 
         if cluster_index is None:
@@ -1317,21 +1288,6 @@ class ClustersConfig:
     @property
     def hosts(self) -> collections.abc.Mapping[str, HostConfig]:
         return self.cluster_config.hosts
-
-    @staticmethod
-    def get_last_ip() -> Optional[str]:
-        hostconn = host.LocalHost()
-        last_ip = "0.0.0.0"
-        xml_str = hostconn.run("virsh net-dumpxml default").out
-        if xml_str.strip():
-            tree = et.fromstring(xml_str)
-            ip_tree = next((it for it in tree.iter("ip")), et.Element(''))
-            dhcp = next((it for it in ip_tree.iter("dhcp")), et.Element(''))
-            for e in dhcp:
-                if ipaddress.IPv4Address(e.get('ip', "0.0.0.0")) > ipaddress.IPv4Address(last_ip):
-                    last_ip = e.get('ip', "0.0.0.0")
-            return last_ip
-        return None
 
     def get_external_port(self) -> str:
         with self._lock:
