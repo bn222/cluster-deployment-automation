@@ -145,26 +145,26 @@ class ClustersConfig:
     kubeconfig: str
     api_vip: dict[str, str]
     ingress_vip: dict[str, str]
-    external_port: str = "auto"
-    kind: str = "openshift"
-    version: str = "4.14.0-nightly"
-    network_api_port: str = "auto"
-    masters: list[NodeConfig] = []
-    workers: list[NodeConfig] = []
-    configured_workers: list[NodeConfig] = []
+    external_port: str
+    kind: str
+    version: str
+    network_api_port: str
+    masters: list[NodeConfig]
+    workers: list[NodeConfig]
+    configured_workers: list[NodeConfig]
     local_bridge_config: BridgeConfig
     remote_bridge_config: BridgeConfig
     full_ip_range: tuple[str, str]
     ip_range: tuple[str, str]
-    hosts: list[HostConfig] = []
-    proxy: Optional[str] = None
-    noproxy: Optional[str] = None
-    preconfig: list[ExtraConfigArgs] = []
-    postconfig: list[ExtraConfigArgs] = []
-    ntp_source: str = "clock.redhat.com"
-    base_dns_domain: str = "redhat.com"
-    install_iso: str = ""
-    secrets_path: str = ""
+    hosts: list[HostConfig]
+    proxy: Optional[str]
+    noproxy: Optional[str]
+    preconfig: list[ExtraConfigArgs]
+    postconfig: list[ExtraConfigArgs]
+    ntp_source: str
+    base_dns_domain: str
+    install_iso: str
+    secrets_path: str
 
     # All configurations that used to be supported but are not anymore.
     # Used to warn the user to change their config.
@@ -176,7 +176,24 @@ class ClustersConfig:
         *,
         secrets_path: str = "",
         worker_range: common.RangeList = common.RangeList.UNLIMITED,
+        test_only: bool = False,
     ):
+        self.external_port = "auto"
+        self.kind = "openshift"
+        self.version = "4.14.0-nightly"
+        self.network_api_port = "auto"
+        self.masters: list[NodeConfig] = []
+        self.workers: list[NodeConfig] = []
+        self.configured_workers: list[NodeConfig] = []
+        self.hosts: list[HostConfig] = []
+        self.proxy: Optional[str] = None
+        self.noproxy: Optional[str] = None
+        self.preconfig: list[ExtraConfigArgs] = []
+        self.postconfig: list[ExtraConfigArgs] = []
+        self.ntp_source = "clock.redhat.com"
+        self.base_dns_domain = "redhat.com"
+        self.install_iso = ""
+
         self._cluster_info: Optional[ClusterInfo] = None
         self._load_full_config(yaml_path)
         self._check_deprecated_config()
@@ -214,10 +231,8 @@ class ClustersConfig:
         self.configured_workers = [NodeConfig(self.name, **w) for w in cc["workers"]]
         self.workers = [NodeConfig(self.name, **w) for w in worker_range.filter(cc["workers"])]
 
-        if self.kind == "openshift":
-            self.configure_ip_range()
-
         self.set_cc_hosts_defaults(cc)
+
         if not self.is_sno():
             self.api_vip = {'ip': cc["api_vip"]}
             self.ingress_vip = {'ip': cc["ingress_vip"]}
@@ -229,6 +244,17 @@ class ClustersConfig:
             self.preconfig.append(ExtraConfigArgs(**c))
         for c in cc["postconfig"]:
             self.postconfig.append(ExtraConfigArgs(**c))
+
+        if test_only:
+            # Skip the remaining steps. They access the system, which makes them
+            # unsuitable for unit tests.
+            #
+            # TODO: this flag will go away, and instead the test can inject the pieces
+            # that are needed.
+            return
+
+        if self.kind == "openshift":
+            self.configure_ip_range()
 
         for c in self.preconfig:
             c.pre_check()

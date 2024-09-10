@@ -138,6 +138,8 @@ EOF
 cat > cluster.yaml << EOF
 clusters:
   - name : "vm-sno"
+    api_vip: "192.168.122.99"
+    ingress_vip: "192.168.122.101"
     masters:
     - name: "sno-master"
       kind: "vm"
