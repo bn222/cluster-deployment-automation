@@ -29,6 +29,7 @@ def _test_parse_1(tfile: TFileConfig) -> None:
 
     cc = clustersConfig.ClustersConfig(
         yamlpath,
+        cluster_index=0,
         secrets_path="/secrets/path",
         basedir=basedir,
         rnd_seed=rnd_seed,
@@ -100,6 +101,18 @@ def _test_parse_1(tfile: TFileConfig) -> None:
             rnd_seed=rnd_seed,
         )
         assert node == node2
+
+    for idx, cluster_config in enumerate(cc.main_config.clusters):
+        # Try also to load the other cluster indexes (if any).
+        cc = clustersConfig.ClustersConfig(
+            yamlpath,
+            cluster_index=idx if len(cc.main_config.clusters) > 1 else None,
+            secrets_path="/secrets/path",
+            basedir=basedir,
+            rnd_seed=rnd_seed,
+            get_last_ip=lambda: None,
+            with_system_check=False,
+        )
 
 
 def check_test5(tfile: TFileConfig, cc: clustersConfig.ClustersConfig) -> None:
@@ -221,9 +234,8 @@ def test_parse_2(tmp_path: pathlib.Path) -> None:
     assert main_config
     assert main_config.clusters[0].name == "mycluster1"
 
-    with pytest.raises(ValueError) as ex:
-        _load(
-            """clusters:
+    main_config = _load(
+        """clusters:
     - name: mycluster1
       api_vip: "192.168.122.99"
       ingress_vip: "192.168.122.101"
@@ -231,5 +243,8 @@ def test_parse_2(tmp_path: pathlib.Path) -> None:
       api_vip: "192.168.122.99"
       ingress_vip: "192.168.122.101"
 """
-        )
-    assert "currently only one entry in the clusters list is supported" in str(ex.value)
+    )
+    assert main_config
+    assert len(main_config.clusters) == 2
+    assert main_config.clusters[0].name == "mycluster1"
+    assert main_config.clusters[1].name == "mycluster2"

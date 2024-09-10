@@ -1171,9 +1171,6 @@ class MainConfig(kcommon.StructParseBase):
                 allow_empty=False,
             )
 
-        if len(clusters) > 1:
-            raise ValueError(f"\"{yamlpath}.clusters\": currently only one entry in the clusters list is supported")
-
         return MainConfig(
             yamlidx=yamlidx,
             yamlpath=yamlpath,
@@ -1300,6 +1297,7 @@ class ClustersConfig:
     yaml_path: str
     worker_range: common.RangeList
     main_config: MainConfig
+    cluster_index: int
     external_port: str
     secrets_path: str
 
@@ -1307,6 +1305,7 @@ class ClustersConfig:
         self,
         yaml_path: str,
         *,
+        cluster_index: Optional[int] = None,
         secrets_path: str = "",
         worker_range: common.RangeList = common.RangeList.UNLIMITED,
         basedir: Optional[str] = None,
@@ -1328,6 +1327,16 @@ class ClustersConfig:
 
         self.main_config._owner_reference.init(self)
 
+        if cluster_index is None:
+            cluster_index = 0
+            if len(self.main_config.clusters) != 1:
+                raise ValueError(f"Error loading {repr(yaml_path)}: \"{self.main_config.yamlpath}.clusters\": only one entry in the clusters list is supported but {len(self.main_config.clusters)} given")
+        else:
+            if cluster_index < 0 or cluster_index >= len(self.main_config.clusters):
+                raise ValueError(f"Error loading {repr(yaml_path)}: \"{self.main_config.yamlpath}.clusters\": requested cluster index {cluster_index} but only {len(self.main_config.clusters)} are configured")
+
+        self.cluster_index = cluster_index
+
         self.external_port = self.cluster_config.external_port or "auto"
 
         if with_system_check:
@@ -1338,7 +1347,7 @@ class ClustersConfig:
 
     @property
     def cluster_config(self) -> ClusterConfig:
-        return self.main_config.clusters[0]
+        return self.main_config.clusters[self.cluster_index]
 
     @property
     def name(self) -> str:
@@ -1458,6 +1467,8 @@ class ClustersConfig:
 
     def log_config(self, *, log_level: int = logging.DEBUG, show_secrets: bool = False) -> None:
         logger.log(log_level, f"config: {self.main_config.serialize_json(show_secrets=show_secrets)}")
+        if len(self.main_config.clusters) != 1:
+            logger.log(log_level, f"config: cluster-index {self.cluster_index}")
         if self.cluster_config.real_ip_range is not None:
             logger.log(log_level, f"config: ip-range={self.cluster_config.real_ip_range}, local_bridge_config={self.cluster_config.local_bridge_config}, remote_bridge_config={self.cluster_config.remote_bridge_config}")
 
@@ -1468,6 +1479,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description='Cluster Deployment Automation Config')
     parser.add_argument("-S", '--no-system-check', dest='with_system_check', action='store_false', help="Disable system checks.")
     parser.add_argument('--system-check', dest='with_system_check', action='store_true', help=argparse.SUPPRESS)
+    parser.add_argument('--cluster-index', default=0, type=int, help="A configuration can contain multiple clusters. This is the index which one to load")
     parser.add_argument('-v', "--verbose", action='store_true', help='Enable debug logs')
     parser.add_argument("--show-secrets", action='store_true', help='Show secrets that would be hidden otherwise')
     parser.add_argument('filenames', nargs='+', help="List of filenames")
@@ -1484,6 +1496,7 @@ def main() -> None:
         cc = ClustersConfig(
             f,
             with_system_check=False,
+            cluster_index=args.cluster_index,
         )
         cc.log_config(
             log_level=logging.INFO,
@@ -1494,6 +1507,7 @@ def main() -> None:
             print("---")
         print(f"# file: {f}")
         print(f"# secrets_path: {cc.secrets_path}")
+        print(f"# cluster_index: {cc.cluster_index}")
         print(f"# ip_range: {cc.cluster_config.real_ip_range}")
         print(f"# local_bridge_config: {cc.cluster_config.local_bridge_config}")
         print(f"# remote_bridge_config: {cc.cluster_config.remote_bridge_config}")

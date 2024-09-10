@@ -37,3 +37,11 @@ clusters:
       dpu_net_interface: eth0
       dpu_operator_path: ../
     - name: "dpu_operator_dpu"
+  - name : "vm-sno"
+    api_vip: "192.168.122.99"
+    ingress_vip: "192.168.122.101"
+    masters:
+    - name: "sno-master"
+      kind: "vm"
+      node: "localhost"
+      ip: "192.168.122.41"
