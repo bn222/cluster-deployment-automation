@@ -57,6 +57,7 @@ TFILES = (
     TFileConfig("tests/configs/test9.yaml"),
     TFileConfig("tests/configs/test10.yaml"),
     TFileConfig("tests/configs/test11.yaml"),
+    TFileConfig("microshift.yml"),
 )
 
 
