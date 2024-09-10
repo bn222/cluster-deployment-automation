@@ -1063,6 +1063,10 @@ class ClusterConfig(kcommon.StructParseBaseNamed):
         local_bridge_config = BridgeConfig(ip=real_ip_range[0], mask=ip_mask, dynamic_ip_range=dynamic_ip_range)
         remote_bridge_config = BridgeConfig(ip=ip_range[1], mask=ip_mask)
 
+        for node in all_nodes:
+            if node.ip is not None and not common.ip_range_contains(real_ip_range, node.ip):
+                raise ValueError(f"\"{yamlpath}.ip_range\": the node {repr(node.name)} (\"{node.yamlpath}\") with IP {node.ip} is not in the supplied IP range {real_ip_range}")
+
         return real_ip_range, local_bridge_config, remote_bridge_config
 
     @staticmethod
@@ -1434,18 +1438,6 @@ class ClustersConfig:
             self._external_port_validated = True
 
         return candidate
-
-    def validate_node_ips(self) -> None:
-        ip_range = unwrap(self.cluster_config.real_ip_range)
-
-        def validate_node_ip(n: NodeConfig) -> bool:
-            if n.ip is not None and not common.ip_range_contains(ip_range, n.ip):
-                logger.error(f"Node ({n.name} IP ({n.ip}) not in cluster subnet range: {ip_range[0]} - {ip_range[1]}.")
-                return False
-            return True
-
-        if not all(validate_node_ip(n) for n in self.masters + list(self.cluster_config.workers.values())):
-            logger.error(f"Not all master/worker IPs are in the reserved cluster IP range ({ip_range}).  Other hosts in the network might be offered those IPs via DHCP.")
 
     def all_nodes(self) -> list[NodeConfig]:
         return self.masters + self.workers
