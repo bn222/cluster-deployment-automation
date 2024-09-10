@@ -7,6 +7,7 @@ from clustersConfig import ExtraConfigArgs
 import host
 import yaml
 import time
+from ktoolbox.common import unwrap
 
 
 def early_access_microshift() -> str:
@@ -54,7 +55,7 @@ def ExtraConfigMicroshift(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dic
     # Enable NAT / IP forwarding on host to provide internet connectivity to ACC
     lh = host.LocalHost()
     wan_interface = cc.get_external_port()
-    lan_interface = cc.network_api_port
+    lan_interface = unwrap(cc.cluster_config.network_api_port)
     ip_tables = "/sbin/iptables"
 
     logger.info(f"Setting up ip forwarding on {lh.hostname()} from {lan_interface} to {wan_interface}")
@@ -68,8 +69,7 @@ def ExtraConfigMicroshift(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dic
     lh.run_or_die(f"{ip_tables} -A FORWARD -i {lan_interface} -o {wan_interface} -j ACCEPT")
 
     dpu_node = cc.masters[0]
-    assert dpu_node.ip is not None
-    acc = host.Host(dpu_node.ip)
+    acc = host.Host(unwrap(dpu_node.ip))
     acc.ssh_connect("root", "redhat")
 
     # Set up pull secret

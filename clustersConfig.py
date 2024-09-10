@@ -61,6 +61,13 @@ def _normalize_network_api_port(network_api_port: Optional[str]) -> Optional[str
     return network_api_port
 
 
+def _parse_ocp_version(version: str) -> Optional[str]:
+    match = re.match(r'^\d+\.\d+\b', version)
+    if not match:
+        return None
+    return match.group(0)
+
+
 def is_openshift_like(cluster_kind: str) -> bool:
     return cluster_kind in ("openshift", "microshift")
 
@@ -133,6 +140,14 @@ class ExtraConfigArgs(kcommon.StructParseBaseNamed):
         return extraConfigRunner.EXTRA_CONFIGS
 
     @staticmethod
+    def get_extra_configs_for_pre() -> tuple[str, ...]:
+        return ("bf_bfb_image",)
+
+    @staticmethod
+    def get_extra_configs_for_post() -> tuple[str, ...]:
+        return tuple(sorted(set(ExtraConfigArgs.get_extra_configs()) - set(ExtraConfigArgs.get_extra_configs_for_pre())))
+
+    @staticmethod
     def parse(
         yamlidx: int,
         yamlpath: str,
@@ -151,7 +166,11 @@ class ExtraConfigArgs(kcommon.StructParseBaseNamed):
                 return ValueError(f"\"{yamlpath}.{key}\": parameter is mandatory for {repr(name)}")
 
             if name not in ExtraConfigArgs.get_extra_configs():
-                raise ValueError(f"\"{yamlpath}.name\": must be one of {repr(sorted(ExtraConfigArgs.get_extra_configs()))}")
+                if config_type == "preconfig":
+                    valid = ExtraConfigArgs.get_extra_configs_for_pre()
+                else:
+                    valid = ExtraConfigArgs.get_extra_configs_for_post()
+                raise ValueError(f"\"{yamlpath}.name\": invalid value {repr(name)} must be one of {repr(list(valid))}")
 
             image = kcommon.structparse_pop_str(
                 *varg.for_key("image"),
@@ -535,6 +554,12 @@ class NodeConfig(kcommon.StructParseBaseNamed):
                 check=lambda x: x > 0,
             )
 
+        if ip is None:
+            if kind in ("vm",):
+                raise ValueError(f"\"{yamlpath}.ip\": mandatory for node of kind {repr(kind)}")
+            if kind == "marvell-dpu" and cluster_kind == "iso":
+                raise ValueError(f"\"{yamlpath}.ip\": mandatory for node of kind {repr(kind)} and cluster kind {repr(cluster_kind)}")
+
         if kind != "vm":
             # Those value are normalized away unless for VM.
             os_variant = None
@@ -748,6 +773,8 @@ class ClusterConfig(kcommon.StructParseBaseNamed):
                 *varg.for_key("version"),
                 default="4.14.0-nightly" if is_openshift_like(kind) else None,
             )
+            if version is not None and _parse_ocp_version(version) is None:
+                raise ValueError(f'"{yamlpath}.version: version {repr(version)} does not look like a valid OCP version"')
 
             network_api_port: Optional[str] = kcommon.structparse_pop_str(
                 *varg.for_key("network_api_port"),
@@ -919,13 +946,50 @@ class ClusterConfig(kcommon.StructParseBaseNamed):
                 if not masters:
                     raise ValueError(f"\"{yamlpath}.masters\": requires one master with kind {repr(kind)}")
                 raise ValueError(f"\"{yamlpath}.masters\": only one master allowed with kind {repr(kind)}")
+            if network_api_port is None:
+                raise ValueError(f"\"{yamlpath}.network_api_port\": mandatory parameter missing for kind {kind}")
 
             master = next(iter(masters.values()))
             if master.kind not in ("physical", "marvell-dpu"):
-                raise ValueError(f"\"{yamlpath}.masters[0]\": for a cluster kind {repr(kind)} the master has an unexpected kind {master.kind}")
+                raise ValueError(f"\"{master.yamlpath}.kind\": for a cluster kind {repr(kind)} the master has an unexpected kind {repr(master.kind)}")
+            if master.mac_explicit is None:
+                raise ValueError(f"\"{master.yamlpath}.mac\": for a cluster kind {repr(kind)} the master must have a MAC address configured")
+            if master.ip is None:
+                raise ValueError(f"\"{master.yamlpath}.ip\": for a cluster kind {repr(kind)} the master must have an IP address set")
         else:
             if install_iso is not None:
                 raise ValueError(f"\"{yamlpath}.install_iso\": only valid with kind \"iso\"")
+
+        if kind == "microshift":
+            if len(masters) > 1:
+                raise ValueError(f"\"{yamlpath}.masters\": only one master allowed with kind {repr(kind)}")
+
+        is_allowed_for_preconfig = set(ExtraConfigArgs.get_extra_configs_for_pre())
+        is_allowed_for_postconfig = set(ExtraConfigArgs.get_extra_configs_for_post())
+        pconfigs = preconfig + postconfig
+        for extra_config in pconfigs:
+            if extra_config.name in ("ovn_custom", "microshift", "dpu_operator_dpu"):
+                if len(masters) < 1:
+                    raise ValueError(f"\"{yamlpath}.masters\": {extra_config.config_type} {repr(extra_config.name)} (\"{extra_config.yamlpath}\") requires masters")
+            if extra_config.name in ("ovn_custom", "microshift", "dpu_operator_dpu"):
+                master = next(iter(masters.values()))
+                if master.ip is None:
+                    raise ValueError(f"\"{master.yamlpath}.ip\": {extra_config.config_type} {repr(extra_config.name)} (\"{extra_config.yamlpath}\") requires an IP address")
+            if extra_config.name in ("microshift",):
+                if network_api_port is None:
+                    raise ValueError(f"\"{yamlpath}.network_api_port\": the parameter is mandatory with {extra_config.config_type} {repr(extra_config.name)} (\"{extra_config.yamlpath}\")")
+            if extra_config.name in ("microshift", "rh_subscription", "dpu_operator_dpu"):
+                if kind != "iso":
+                    raise ValueError(f"\"{extra_config.yamlpath}\": the {extra_config.config_type} {repr(extra_config.name)} only works with cluster kind \"iso\" but got {repr(kind)}")
+            if extra_config.config_type == "preconfig":
+                if extra_config.name not in is_allowed_for_preconfig:
+                    raise ValueError(f"\"{extra_config.yamlpath}\": the {extra_config.config_type} {repr(extra_config.name)} only works as \"postconfig\" step")
+            else:
+                if extra_config.name not in is_allowed_for_postconfig:
+                    raise ValueError(f"\"{extra_config.yamlpath}\": the {extra_config.config_type} {repr(extra_config.name)} only works as \"preconfig\" step")
+            extra_config_dup = kcommon.iter_get_first(c for c in pconfigs if c.name == extra_config.name and c.config_type == extra_config.config_type and c is not extra_config)
+            if extra_config_dup is not None:
+                raise ValueError(f"\"{extra_config_dup.yamlpath}\": the {extra_config.config_type} {repr(extra_config_dup.name)} is listed twice (\"{extra_config.yamlpath}\")")
 
         real_ip_range, local_bridge_config, remote_bridge_config = ClusterConfig._parse_ip_range(
             yamlpath=yamlpath,
@@ -934,6 +998,22 @@ class ClusterConfig(kcommon.StructParseBaseNamed):
             ip_mask=ip_mask,
             all_nodes=list(masters.values()) + list(workers.values()),
         )
+
+        if ClusterConfig._is_sno(kind, len(masters)):
+            (master,) = masters.values()
+            if master.ip is None:
+                raise ValueError(f"\"{master.yamlpath}.ip\": missing parameter for SNO cluster of kind {kind}")
+
+        first_worker: Optional[NodeConfig] = None
+        for node in workers.values():
+            if first_worker is None:
+                first_worker = node
+                continue
+            if (first_worker.kind == "bf") == (node.kind == "bf"):
+                continue
+            if first_worker.kind != "bf":
+                first_worker, node = node, first_worker
+            raise ValueError(f"\"{first_worker.yamlpath}.kind\": cannot mix workers of kind \"bf\" with worker \"{node.yamlpath}\" of kind {repr(node.kind)}")
 
         return ClusterConfig(
             yamlidx=yamlidx,
@@ -1032,6 +1112,12 @@ class ClusterConfig(kcommon.StructParseBaseNamed):
                 )
         return hosts
 
+    @property
+    def ocp_version(self) -> str:
+        if self.version is None:
+            raise ValueError(f"\"{self.yamlpath}.version\": no version is set for cluster kind {repr(self.kind)}")
+        return unwrap(_parse_ocp_version(self.version))
+
     @staticmethod
     def _is_sno(kind: str, n_masters: int) -> bool:
         return n_masters == 1 and kind == "openshift"
@@ -1039,6 +1125,24 @@ class ClusterConfig(kcommon.StructParseBaseNamed):
     @property
     def is_sno(self) -> bool:
         return self._is_sno(self.kind, len(self.masters))
+
+    @property
+    def has_bf_workers(self) -> bool:
+        for n in self.workers.values():
+            # In parse(), we validate that there are no mixed BF/non-BF workers.
+            # Hence, we only need to look at the first. All subsequent workers
+            # will also be (not be) "bf" workers.
+            return n.kind == "bf"
+        return False
+
+    @property
+    def single_master(self) -> NodeConfig:
+        # Certain cluster kinds are validated to only have a single master node.
+        # This getter returns that node, but it also checks that there is exactly
+        # one.
+        if len(self.masters) != 1:
+            raise ValueError(f"\"{self.yamlpath}.masters\": exactly one master is expected for cluster kind {repr(self.kind)}")
+        return next(iter(self.masters.values()))
 
     def system_check(self) -> None:
         for c in self.preconfig:
@@ -1266,14 +1370,6 @@ class ClustersConfig:
         if self.cluster_config.version is None:
             raise ValueError(f"\"{self.cluster_config.yamlpath}.version\": parameter missing for cluster kind {repr(self.kind)}")
         return self.cluster_config.version
-
-    @property
-    def network_api_port(self) -> str:
-        if self.cluster_config.network_api_port is None:
-            # TODO: the upper layers should accept "auto" to be represented as
-            # None.
-            return "auto"
-        return self.cluster_config.network_api_port
 
     @property
     def kubeconfig(self) -> str:

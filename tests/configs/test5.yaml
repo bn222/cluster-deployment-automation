@@ -36,7 +36,6 @@ clusters:
         foo: xfoo
     - name: "dpu_operator_host"
       dpu_net_interface: eth0
-    - name: "dpu_operator_dpu"
   - name : "vm-sno"
     api_vip: "192.168.122.99"
     ingress_vip: "192.168.122.101"
