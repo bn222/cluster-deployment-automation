@@ -53,8 +53,7 @@ def ExtraConfigMicroshift(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dic
 
     # Enable NAT / IP forwarding on host to provide internet connectivity to ACC
     lh = host.LocalHost()
-    cc.prepare_external_port()
-    wan_interface = cc.external_port
+    wan_interface = cc.get_external_port()
     lan_interface = cc.network_api_port
     ip_tables = "/sbin/iptables"
 
