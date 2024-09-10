@@ -32,7 +32,6 @@ class ClusterSnapshotter:
         self._name = name
 
     def export_cluster(self) -> None:
-        self._cc.prepare_external_port()
         lh = host.LocalHost()
         lh.run(f"mkdir -p {self._snapshot_dir()}")
         self._ais.export_snapshot(self._snapshot_dir())
@@ -40,7 +39,7 @@ class ClusterSnapshotter:
         def save_phys(node: str) -> None:
             coreosBuilder.ensure_fcos_exists()
             rh = host.RemoteHost(node)
-            nfs = NFS(host.LocalHost(), self._cc.external_port)
+            nfs = NFS(host.LocalHost(), self._cc.get_external_port())
             file = nfs.host_file("/root/iso/fedora-coreos.iso")
             rh.boot_iso_redfish(file)
             logger.info(f"Backing up node {node}")
@@ -70,13 +69,13 @@ class ClusterSnapshotter:
         executor = ThreadPoolExecutor(max_workers=len(not_vms) + 1)
         futures = []
         for e in not_vms:
+            self._cc.get_external_port()
             futures.append(executor.submit(save_phys, e.node))
         futures.append(executor.submit(save_vms))
         for x in futures:
             x.result()
 
     def import_cluster(self) -> None:
-        self._cc.prepare_external_port()
         self._ais.import_snapshot(self._snapshot_dir())
         ai_nodes = [h["requested_hostname"] for h in self._ai.list_hosts()]
         active_vms = [x for x in self._cc.all_vms() if x.name in ai_nodes]
@@ -94,7 +93,7 @@ class ClusterSnapshotter:
         def load_phys(node: str) -> None:
             coreosBuilder.ensure_fcos_exists()
             rh = host.RemoteHost(node)
-            nfs = NFS(host.LocalHost(), self._cc.external_port)
+            nfs = NFS(host.LocalHost(), self._cc.get_external_port())
             file = nfs.host_file("/root/iso/fedora-coreos.iso")
             rh.boot_iso_redfish(file)
             logger.info(f"Restoring node {node}")
@@ -118,6 +117,7 @@ class ClusterSnapshotter:
         executor = ThreadPoolExecutor(max_workers=len(not_vms) + 1)
         futures = []
         for e in not_vms:
+            self._cc.get_external_port()
             futures.append(executor.submit(load_phys, e.node))
         futures.append(executor.submit(load_vms))
         for x in futures:

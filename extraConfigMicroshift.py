@@ -46,7 +46,7 @@ def extract_microshift_kubeconfig(acc: host.Host) -> str:
 
 
 def masquarade(rsh: host.Host, cc: ClustersConfig) -> None:
-    wan_interface = cc.external_port
+    wan_interface = cc.get_external_port()
     lan_interface = cc.network_api_port
     ip_tables = "/sbin/iptables"
     logger.info(f"Setting up ip forwarding on {rsh.hostname()} from {lan_interface} to {wan_interface}")
@@ -62,10 +62,6 @@ def masquarade(rsh: host.Host, cc: ClustersConfig) -> None:
 def ExtraConfigMicroshift(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, Future[Optional[host.Result]]]) -> None:
     [f.result() for (_, f) in futures.items()]
     logger.info("Running post config step to start Microshift on the IPU")
-
-    # Validate args
-
-    cc.prepare_external_port()
 
     # Enable NAT / IP forwarding on host to provide internet connectivity to ACC
     lh = host.LocalHost()

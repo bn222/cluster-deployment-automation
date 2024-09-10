@@ -12,7 +12,6 @@ from ktoolbox.common import unwrap
 def ExtraConfigRhSubscription(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, Future[Optional[host.Result]]]) -> None:
     [f.result() for (_, f) in futures.items()]
 
-    cc.prepare_external_port()
     lh = host.LocalHost()
     masquarade(lh, cc)
 
