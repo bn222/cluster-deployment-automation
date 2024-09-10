@@ -1241,6 +1241,16 @@ class MainConfig(kcommon.StructParseBase):
             except Exception as e:
                 raise ValueError(f"Error reading YAML file {repr(filename)} after Jinja2 templating: {e}")
 
+        if rnd_seed is None:
+            # Generate a stable seed, based on the filename and the file
+            # content. Callers that really want a random value, should pass a
+            # random value in.
+            rnd_seed = _rnd_seed_join(
+                "ClustersConfig",
+                os.path.basename(filename),
+                hashlib.sha256(json.dumps(yamldata).encode()).hexdigest(),
+            )
+
         try:
             cc = MainConfig.parse(
                 0,
