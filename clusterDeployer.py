@@ -77,9 +77,10 @@ class ClusterDeployer(BaseDeployer):
         self._all_nodes = {k8s_node.config.name: k8s_node for h in self._all_hosts for k8s_node in h._k8s_nodes()}
 
         self.masters_arch = "x86_64"
-        self.is_bf = (x.kind == "bf" for x in self._cc.workers)
-        if any(self.is_bf):
-            if not all(self.is_bf):
+        is_bf_map = [x.kind == "bf" for x in self._cc.workers]
+        self.is_bf = any(is_bf_map)
+        if self.is_bf:
+            if not all(is_bf_map):
                 logger.error_and_exit("Not yet supported to have mixed BF and non-bf workers")
             self.workers_arch = "arm64"
         else:
