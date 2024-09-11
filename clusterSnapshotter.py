@@ -138,8 +138,9 @@ class ClusterSnapshotter:
         os.makedirs(os.path.dirname(src), exist_ok=True)
         dst = os.path.join(self._snapshot_dir(), os.path.basename(src))
         logger.info(f"Copying {dst} to {src}")
+        lh.copy_to(dst, src)
         VmClusterNode(lh, config).setup_vm(src)
-        ClusterDeployer(self._cc, self._ai, [], "").update_etc_hosts()
+        ClusterDeployer(self._cc, self._ai, []).update_etc_hosts()
 
     def _snapshot_dir(self) -> str:
         return os.path.join("/root/snapshots", self._name)
