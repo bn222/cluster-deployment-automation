@@ -1179,6 +1179,23 @@ class ClusterConfig(kcommon.StructParseBaseNamed):
     def is_sno(self) -> bool:
         return self._is_sno(self.kind, len(self.masters))
 
+    def get_extra_configs(
+        self,
+        *,
+        with_preconfig: bool = False,
+        with_postconfig: bool = False,
+        with_name: Optional[str] = None,
+    ) -> tuple[ExtraConfigArgs, ...]:
+        if with_preconfig == with_postconfig:
+            lst = self.preconfig + self.postconfig
+        elif with_preconfig:
+            lst = self.preconfig
+        else:
+            lst = self.postconfig
+        if with_name is not None:
+            lst = tuple(c for c in lst if c.name == with_name)
+        return lst
+
     @property
     def has_bf_workers(self) -> bool:
         for n in self.workers.values():
@@ -1402,12 +1419,16 @@ class ClustersConfig:
         yaml_path: str,
         *,
         cluster_index: Optional[int] = None,
-        secrets_path: str = "",
+        secrets_path: Optional[str] = None,
         worker_range: common.RangeList = common.RangeList.UNLIMITED,
         basedir: Optional[str] = None,
         rnd_seed: Optional[str] = None,
         with_system_check: bool = True,
     ):
+        if secrets_path is None:
+            d = basedir if basedir is not None else os.getcwd()
+            secrets_path = os.path.join(d, "pull_secret.json")
+
         self._lock = threading.Lock()
         self.secrets_path = secrets_path
         self.worker_range = worker_range
@@ -1522,8 +1543,17 @@ class ClustersConfig:
     def local_worker_vms(self) -> list[NodeConfig]:
         return [x for x in self.worker_vms() if x.node == "localhost"]
 
+    @property
+    def needs_secrets_path(self) -> bool:
+        return is_openshift_like(self.cluster_config.kind) or bool(self.cluster_config.get_extra_configs(with_name="microshift"))
+
     def system_check(self) -> None:
         self.main_config.system_check()
+
+        if self.needs_secrets_path:
+            if not os.path.isfile(self.secrets_path):
+                url = "https://console.redhat.com/openshift/install/pull-secret"
+                raise ValueError(f"secrets-path: missing file at {self.secrets_path}, get it from {url}")
 
     def make_absolute_path(self, path: str) -> str:
         if not path:
@@ -1538,6 +1568,7 @@ class ClustersConfig:
             logger.log(log_level, f"config: cluster-index {self.cluster_index}")
         if self.cluster_config.real_ip_range is not None:
             logger.log(log_level, f"config: ip-range={self.cluster_config.real_ip_range}, local_bridge_config={self.cluster_config.local_bridge_config}, remote_bridge_config={self.cluster_config.remote_bridge_config}")
+        logger.log(log_level, f"config: secrets-path: {self.secrets_path}")
 
 
 def main() -> None:
@@ -1547,6 +1578,7 @@ def main() -> None:
     parser.add_argument("-S", '--no-system-check', dest='with_system_check', action='store_false', help="Disable system checks.")
     parser.add_argument('--system-check', dest='with_system_check', action='store_true', help=argparse.SUPPRESS)
     parser.add_argument('--cluster-index', default=0, type=int, help="A configuration can contain multiple clusters. This is the index which one to load")
+    parser.add_argument('--secret', dest='secrets_path', default=None, action='store', type=str, help='pull_secret.json path (default is in cwd)')
     parser.add_argument('-v', "--verbose", action='store_true', help='Enable debug logs')
     parser.add_argument("--show-secrets", action='store_true', help='Show secrets that would be hidden otherwise')
     parser.add_argument('filenames', nargs='+', help="List of filenames")
@@ -1564,6 +1596,7 @@ def main() -> None:
             f,
             with_system_check=False,
             cluster_index=args.cluster_index,
+            secrets_path=args.secrets_path,
         )
         cc.log_config(
             log_level=logging.INFO,

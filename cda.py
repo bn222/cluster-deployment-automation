@@ -40,7 +40,7 @@ def main_deploy_openshift(cc: ClustersConfig, args: argparse.Namespace) -> None:
         https://aicli.readthedocs.io/en/latest/
     """
     ai = AssistedClientAutomation(f"{args.url}:8090")
-    cd = ClusterDeployer(cc, ai, args.steps, args.secrets_path)
+    cd = ClusterDeployer(cc, ai, args.steps)
 
     if args.teardown or args.teardown_full:
         cd.teardown_workers()

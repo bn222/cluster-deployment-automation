@@ -33,11 +33,10 @@ _BF_ISO_PATH = "/root/iso"
 
 
 class ClusterDeployer(BaseDeployer):
-    def __init__(self, cc: ClustersConfig, ai: AssistedClientAutomation, steps: list[str], secrets_path: str):
+    def __init__(self, cc: ClustersConfig, ai: AssistedClientAutomation, steps: list[str]):
         super().__init__(cc, steps)
         self._client: Optional[K8sClient] = None
         self._ai = ai
-        self._secrets_path = secrets_path
 
         self._local_host = ClusterHost(host.LocalHost(), self._cc.hosts["localhost"], cc, unwrap(cc.cluster_config.local_bridge_config))
         self._remote_hosts = {bm.name: ClusterHost(host.RemoteHost(bm.name), bm, cc, unwrap(cc.cluster_config.remote_bridge_config)) for bm in self._cc.hosts.values() if bm.name != "localhost"}
@@ -199,7 +198,7 @@ class ClusterDeployer(BaseDeployer):
         if self._cc.kind == "microshift":
             duration[MASTERS_STEP].start()
             microshift.deploy(
-                secrets_path=self._secrets_path,
+                secrets_path=self._cc.secrets_path,
                 node=self._cc.cluster_config.single_master,
                 external_port=self._cc.get_external_port(),
                 version=self._cc.cluster_config.ocp_version,
@@ -262,7 +261,7 @@ class ClusterDeployer(BaseDeployer):
         cfg: dict[str, Union[str, bool, list[str], list[dict[str, str]]]] = {}
         cfg["openshift_version"] = self._cc.version
         cfg["cpu_architecture"] = "multi"
-        cfg["pull_secret"] = self._secrets_path
+        cfg["pull_secret"] = self._cc.secrets_path
         cfg["infraenv"] = "false"
 
         if not self._cc.cluster_config.is_sno:
@@ -297,7 +296,7 @@ class ClusterDeployer(BaseDeployer):
 
         cfg = {}
         cfg["cluster"] = cluster_name
-        cfg["pull_secret"] = self._secrets_path
+        cfg["pull_secret"] = self._cc.secrets_path
         cfg["cpu_architecture"] = self.masters_arch
         cfg["openshift_version"] = self._cc.version
         if self._cc.cluster_config.proxy:
@@ -383,7 +382,7 @@ class ClusterDeployer(BaseDeployer):
 
         cfg = {}
         cfg["cluster"] = cluster_name
-        cfg["pull_secret"] = self._secrets_path
+        cfg["pull_secret"] = self._cc.secrets_path
         cfg["cpu_architecture"] = self.workers_arch
         cfg["openshift_version"] = self._cc.version
         if self._cc.cluster_config.proxy:
