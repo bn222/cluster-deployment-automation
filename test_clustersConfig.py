@@ -1,5 +1,6 @@
 import dataclasses
 import os
+import pytest
 import typing
 
 import clustersConfig
@@ -61,6 +62,6 @@ TFILES = (
 )
 
 
-def test_parse_1() -> None:
-    for tfile in TFILES:
-        _test_parse_1(tfile)
+@pytest.mark.parametrize("tfile", TFILES)
+def test_parse_1(tfile: TFileConfig) -> None:
+    _test_parse_1(tfile)
