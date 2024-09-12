@@ -117,10 +117,6 @@ class VmClusterNode(ClusterNode):
         self.hostconn = h
         self.install_wait = True
 
-    def ip(self) -> str:
-        assert self.config.ip is not None
-        return self.config.ip
-
     def setup_vm(self, iso_or_image_path: str) -> host.Result:
         disk_size_gb = self.config.disk_size
         if iso_or_image_path.endswith(".iso"):
