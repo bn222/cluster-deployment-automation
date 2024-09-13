@@ -215,7 +215,6 @@ class Host:
         key = (hostname, bmc.url if bmc else None)
         if key not in host_instances:
             host_instances[key] = super().__new__(cls)
-            logger.debug(f"new instance for {hostname}")
         return host_instances[key]
 
     def __init__(self, hostname: str, bmc: Optional[BMC] = None):
