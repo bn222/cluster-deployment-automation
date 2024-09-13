@@ -38,6 +38,9 @@ def match_to_proper_version_format(version_cluster_config: str) -> str:
     return match.group(0)
 
 
+_BF_ISO_PATH = "/root/iso"
+
+
 class BaseDeployer(abc.ABC):
     def __init__(self, cc: ClustersConfig, steps: list[str]):
         self._cc = cc
@@ -63,7 +66,6 @@ class ClusterDeployer(BaseDeployer):
         self._client: Optional[K8sClient] = None
         self._ai = ai
         self._secrets_path = secrets_path
-        self._bf_iso_path = "/root/iso"
 
         if self.need_external_network():
             self._cc.prepare_external_port()
@@ -438,14 +440,14 @@ class ClusterDeployer(BaseDeployer):
         if not self.is_bf:
             iso_path = os.getcwd()
         else:
-            # BF images are NFS mounted from self._bf_iso_path.
-            iso_path = self._bf_iso_path
+            # BF images are NFS mounted from _BF_ISO_PATH.
+            iso_path = _BF_ISO_PATH
 
-        os.makedirs(self._bf_iso_path, exist_ok=True)
+        os.makedirs(_BF_ISO_PATH, exist_ok=True)
         self._ai.download_iso_with_retry(infra_env, iso_path)
         iso_file = os.path.join(iso_path, f"{infra_env}.iso")
         ssh_priv_key_path = self._get_discovery_ign_ssh_priv_key(infra_env)
-        shutil.copyfile(ssh_priv_key_path, os.path.join(self._bf_iso_path, "ssh_priv_key"))
+        shutil.copyfile(ssh_priv_key_path, os.path.join(_BF_ISO_PATH, "ssh_priv_key"))
 
         futures = []
         for h in hosts_with_workers:
