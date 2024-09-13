@@ -26,15 +26,27 @@ class ClusterHost:
     bridge: VirBridge
     config: HostConfig
     needs_api_network: bool
-    api_port: Optional[str] = None
+    api_port: Optional[str]
     k8s_master_nodes: list[ClusterNode]
     k8s_worker_nodes: list[ClusterNode]
     hosts_vms: bool
+
+    __slots__ = [
+        "hostconn",
+        "bridge",
+        "config",
+        "needs_api_network",
+        "api_port",
+        "k8s_master_nodes",
+        "k8s_worker_nodes",
+        "hosts_vms",
+    ]
 
     def __init__(self, h: host.Host, c: HostConfig, cc: ClustersConfig, bc: BridgeConfig):
         self.bridge = VirBridge(h, bc)
         self.hostconn = h
         self.config = c
+        self.api_port = None
 
         def _create_k8s_nodes(configs: list[NodeConfig]) -> list[ClusterNode]:
             nodes: list[ClusterNode] = []
