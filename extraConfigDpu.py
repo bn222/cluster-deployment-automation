@@ -111,7 +111,7 @@ def _ensure_local_registry_running(rsh: host.Host, delete_all: bool = False) -> 
 
 
 def go_is_installed(host: host.Host) -> bool:
-    ret = host.run("go version")
+    ret = host.run("sh -c 'go version'")
     if ret.returncode == 0:
         installed_version = ret.out.strip().split(' ')[2]
         if installed_version.startswith("go1.22"):
@@ -174,7 +174,7 @@ def ensure_go_installed(host: host.Host) -> None:
         host.run_or_die("echo 'export PATH=$PATH:/usr/local/go/bin' >> /etc/profile")
         host.run_or_die("echo 'export PATH=$PATH:/usr/local/go/bin' > /etc/profile.d/go.sh")
         host.run_or_die("chmod +x /etc/profile.d/go.sh")
-    ret = host.run("go version")
+    ret = host.run("sh -c 'go version'")
     if not ret.success():
         logger.error_and_exit("Unable to update PATH for a running process, run 'export PATH=$PATH:/usr/local/go/bin' and try again")
 
