@@ -230,7 +230,12 @@ class ClusterDeployer(BaseDeployer):
             version = match_to_proper_version_format(self._cc.version)
 
             if len(self._cc.masters) == 1:
-                microshift.deploy(self._cc.fullConfig["name"], self._cc.masters[0], self._cc.external_port, version)
+                microshift.deploy(
+                    secrets_path=self._secrets_path,
+                    node=self._cc.masters[0],
+                    external_port=self._cc.external_port,
+                    version=version,
+                )
             else:
                 logger.error_and_exit("Masters must be of length one for deploying microshift")
         if POST_STEP in self.steps:

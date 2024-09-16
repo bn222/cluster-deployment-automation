@@ -216,7 +216,13 @@ rhsm = true'''.strip()
     shutil.rmtree("/var/cache/osbuild-worker/osbuild-store/stage/")
 
 
-def deploy(secrets_path: str, node: NodeConfig, external_port: str, version: str) -> None:
+def deploy(
+    *,
+    secrets_path: str,
+    node: NodeConfig,
+    external_port: str,
+    version: str,
+) -> None:
     lh = host.LocalHost()
     bmc = BMC.from_bmc(node.bmc, node.bmc_user, node.bmc_password)
     h = Host(node.node, bmc)
