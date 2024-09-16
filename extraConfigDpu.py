@@ -111,24 +111,12 @@ def _ensure_local_registry_running(rsh: host.Host, delete_all: bool = False) -> 
 
 
 def go_is_installed(host: host.Host) -> bool:
-    ret = host.run("go version")
+    ret = host.run("sh -c 'go version'")
     if ret.returncode == 0:
         installed_version = ret.out.strip().split(' ')[2]
         if installed_version.startswith("go1.22"):
             return True
     return False
-
-
-def download_go(host: host.Host, go_tarball: str, temp_file: str) -> None:
-    url = f"https://go.dev/dl/{go_tarball}"
-
-    response = requests.get(url, stream=True)
-    if response.status_code == 200:
-        with open(temp_file, 'wb') as f:
-            for chunk in response.iter_content(chunk_size=8192):
-                f.write(chunk)
-    else:
-        raise Exception(f"Failed to download {url}")
 
 
 def ensure_go_installed(host: host.Host) -> None:
@@ -144,39 +132,11 @@ def ensure_go_installed(host: host.Host) -> None:
     else:
         logger.error_and_exit(f"Unsupported architecture: {architecture}")
 
-    if host.is_localhost():
-        temp_file = f"/tmp/{go_tarball}"
-        retries = 10
-        while True:
-            try:
-                download_go(host, go_tarball, temp_file)
-                break
-            except Exception as e:
-                logger.info(f"Failed to download {go_tarball}, retrying")
-                retries -= 1
-                if retries <= 0:
-                    raise e
-                time.sleep(1)
-
-        host.run("rm -rf /usr/local/go")
-        host.run("rm -rf /usr/bin/go")
-        host.run_or_die(f"tar -C /usr/local -xzf {temp_file}")
-        current_path = os.environ.get('PATH', '')
-        go_directory = '/usr/local/go/bin'
-        if go_directory not in current_path.split(os.pathsep):
-            new_path = current_path + os.pathsep + go_directory
-            os.environ['PATH'] = new_path
-    else:
-        host.run_or_die(f"wget https://go.dev/dl/{go_tarball}")
-        host.run("rm -rf /usr/local/go")
-        host.run("rm -rf /usr/bin/go")
-        host.run_or_die(f"tar -C /usr/local -xzf {go_tarball}")
-        host.run_or_die("echo 'export PATH=$PATH:/usr/local/go/bin' >> /etc/profile")
-        host.run_or_die("echo 'export PATH=$PATH:/usr/local/go/bin' > /etc/profile.d/go.sh")
-        host.run_or_die("chmod +x /etc/profile.d/go.sh")
-    ret = host.run("go version")
-    if not ret.success():
-        logger.error_and_exit("Unable to update PATH for a running process, run 'export PATH=$PATH:/usr/local/go/bin' and try again")
+    host.run_or_die(f"curl -L https://go.dev/dl/{go_tarball} -o /tmp/{go_tarball}")
+    host.run_or_die(f"tar -C /usr/local -xzf /tmp/{go_tarball}")
+    host.run_or_die("ln -snf /usr/local/go/bin/go /usr/bin/go")
+    host.run_or_die("ln -snf /usr/local/go/bin/gofmt /usr/bin/gofmt")
+    host.run_or_die("sh -c 'go version'")
 
 
 def copy_local_registry_certs(host: host.Host, path: str) -> None:
