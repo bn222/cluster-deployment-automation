@@ -1,0 +1,27 @@
+clusters:
+  - name : "nicmodecluster"
+    api_vip: "192.168.122.99"
+    ingress_vip: "192.168.122.101"
+    kubeconfig: /root/kubeconfig.nicmodecluster
+    version: "4.16.0-nightly"
+    network_api_port: "eno1"
+    masters:
+    - name: "nicmodecluster-master-2"
+      kind: "vm"
+      node: "localhost"
+      ip: "192.168.122.2"
+    - name: "nicmodecluster-master-3"
+      kind: "vm"
+      node: "localhost"
+      ip: "192.168.122.3"
+    - name: "nicmodecluster-master-4"
+      kind: "vm"
+      node: "localhost"
+      ip: "192.168.122.4"
+    workers:
+    - name: "worker-42"
+      kind: "physical"
+      node: "host42.example.com"
+      bmc_user: "root"
+      bmc_password: "12345"
+      bmc: "172.144.16.99"

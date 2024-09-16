@@ -1,0 +1,22 @@
+clusters:
+  - name : "marvel_dpu_cluster"
+    api_vip: "192.168.123.99"
+    ingress_vip: "192.168.123.101"
+    network_api_port: "eno2"
+    kind: "iso"
+    install_iso: "rhel:" # Causes marvell-octeon-10-tools' pxeboot to download latest RHEL9 ISO
+    masters:
+    - name: "marvell-dpu-42"
+      # CDA must be able to ssh as user "core" into the node and run podman
+      # containers as sudo.
+      node: "host42.example.com"
+      kind: "marvell-dpu"
+      ip: "192.168.123.7"
+      mac: "06:32:b1:09:0a:ee" # The MAC address is not stable. CDA configures the MAC address here.
+    postconfig:
+    - name: "rh_subscription"
+      organization_id: "${ORGANIZATION_ID}"
+      activation_key: "${ACTIVATION_KEY}"
+    - name: "microshift"
+    - name: "dpu_operator_dpu"
+      rebuild_dpu_operators_images: false

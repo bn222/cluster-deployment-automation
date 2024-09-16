@@ -1,5 +1,6 @@
 import dataclasses
 import os
+import pytest
 import typing
 
 import clustersConfig
@@ -51,9 +52,16 @@ TFILES = (
     TFileConfig("tests/configs/test3.yaml"),
     TFileConfig("tests/configs/test4.yaml"),
     TFileConfig("tests/configs/test5.yaml", check_test5),
+    TFileConfig("tests/configs/test6.yaml"),
+    TFileConfig("tests/configs/test7.yaml"),
+    TFileConfig("tests/configs/test8.yaml"),
+    TFileConfig("tests/configs/test9.yaml"),
+    TFileConfig("tests/configs/test10.yaml"),
+    TFileConfig("tests/configs/test11.yaml"),
+    TFileConfig("microshift.yml"),
 )
 
 
-def test_parse_1() -> None:
-    for tfile in TFILES:
-        _test_parse_1(tfile)
+@pytest.mark.parametrize("tfile", TFILES)
+def test_parse_1(tfile: TFileConfig) -> None:
+    _test_parse_1(tfile)

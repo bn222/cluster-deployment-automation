@@ -1,0 +1,34 @@
+clusters:
+  - name : "nicmodecluster"
+    api_vip: "192.168.122.99"
+    ingress_vip: "192.168.122.101"
+    kubeconfig: "/root/kubeconfig.nicmodecluster"
+    version: "4.14.0-nightly"
+    network_api_port: "eno12399"
+    preconfig:
+    - name: "bf_bfb_image"
+    postconfig:
+    - name: "sriov_network_operator"
+      sriov_network_operator_local: True
+    - name: "switch_to_nic_mode"
+    - name: "sriov_ovs_hwol"
+    masters:
+    - name: "nicmodecluster-master-1"
+      kind: "vm"
+      node: "localhost"
+      ip: "192.168.122.2"
+    - name: "nicmodecluster-master-2"
+      kind: "vm"
+      node: "localhost"
+      ip: "192.168.122.3"
+    - name: "nicmodecluster-master-3"
+      kind: "vm"
+      node: "localhost"
+      ip: "192.168.122.4"
+    workers:
+    - name: "worker-229"
+      kind: "physical"
+      node: "host229.example.com"
+      bmc_user: "root"
+      bmc_password: "12345"
+      bmc: "172.144.16.67"
