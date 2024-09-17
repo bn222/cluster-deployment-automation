@@ -96,9 +96,9 @@ def _get_ose_image(dockerfile_url: str) -> str:
         logger.error_and_exit(f"Failed to parse base image from {dockerfile_url}")
 
 
-def update_dockerfiles_with_ose_images(repo: str, dockerfile_url: str = OSE_DOCKERFILE) -> None:
+def update_dockerfiles_with_ose_images(*, repo_dir: str, dockerfile_url: str = OSE_DOCKERFILE) -> None:
     image = _get_ose_image(dockerfile_url)
-    for file in [f"{REPO_DIR}/Dockerfile.rhel", f"{REPO_DIR}/Dockerfile.daemon.rhel"]:
+    for file in [f"{repo_dir}/Dockerfile.rhel", f"{repo_dir}/Dockerfile.daemon.rhel"]:
         _update_dockerfile(image, file)
 
 
