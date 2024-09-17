@@ -49,7 +49,7 @@ class IpuPlugin(VendorPlugin):
         lh.run(f"podman push intel-ipuplugin:latest {self.vsp_image_name(img_reg)}")
 
     def vsp_image_name(self, img_reg: ImageRegistry) -> str:
-        return f"{img_reg.url()}/ipu-plugin:dpu-{self.name_suffix}"
+        return f"{img_reg.url()}/intel_vsp:dev"
 
     def build_push_start(self, h: host.Host, client: K8sClient, imgReg: ImageRegistry) -> None:
         return self.start(self.build_push(h, imgReg), client)
