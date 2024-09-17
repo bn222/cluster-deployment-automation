@@ -2,11 +2,9 @@ from clustersConfig import ClustersConfig, NodeConfig
 import host
 from k8sClient import K8sClient
 from concurrent.futures import Future, ThreadPoolExecutor
-import re
 import os
-import requests
 import time
-from typing import Optional, Match
+from typing import Optional
 from logger import logger
 from clustersConfig import ExtraConfigArgs
 import imageRegistry
@@ -63,43 +61,6 @@ def ensure_rhel_9_4_kernel_is_installed(h: host.Host) -> None:
     ret = h.run("uname -r")
     if "el9_4" not in ret.out:
         logger.error_and_exit(f"Failed to install rhel 9.4 kernel on host {h.hostname()}")
-
-
-def _update_dockerfile(image: str, path: str) -> None:
-    with open(path, 'r') as file:
-        dockerfile_contents = file.read()
-
-    # Update only the non-builder image
-    pattern = re.compile(r'^FROM\s+([^\s]+)(?!.*\bAS\b.*$)', re.MULTILINE)
-
-    def replace_image(match: Match[str]) -> str:
-        return f"FROM {image}"
-
-    new_dockerfile_contents = pattern.sub(replace_image, dockerfile_contents)
-
-    with open(path, 'w') as file:
-        file.write(new_dockerfile_contents)
-
-
-def _get_ose_image(dockerfile_url: str) -> str:
-    logger.info("Fetching")
-    request = requests.get(dockerfile_url, verify=False)
-    image = None
-    for line in request.text.split("\n"):
-        if line.startswith("FROM"):
-            image = line.split(" ")[1]
-    if image:
-        src = "openshift/"
-        dst = "registry-proxy.engineering.redhat.com/rh-osbs/openshift-"
-        return image.replace(src, dst)
-    else:
-        logger.error_and_exit(f"Failed to parse base image from {dockerfile_url}")
-
-
-def update_dockerfiles_with_ose_images(repo: str, dockerfile_url: str = OSE_DOCKERFILE) -> None:
-    image = _get_ose_image(dockerfile_url)
-    for file in [f"{REPO_DIR}/Dockerfile.rhel", f"{REPO_DIR}/Dockerfile.daemon.rhel"]:
-        _update_dockerfile(image, file)
 
 
 def _ensure_local_registry_running(rsh: host.Host, delete_all: bool = False) -> ImageRegistry:
