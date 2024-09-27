@@ -20,11 +20,23 @@ class ClusterInfo:
         self.bmcs = []  # type: list[str]
 
 
+def _default_cred_paths() -> list[str]:
+    paths = []
+    cwd = os.getcwd()
+    if cwd:
+        paths.append(os.path.join(cwd, "credentials.json"))
+    homedir = os.environ["HOME"]
+    if homedir:
+        paths.append(os.path.join(os.environ["HOME"], "credentials.json"))
+        paths.append(os.path.join(os.environ["HOME"], ".config/gspread/credentials.json"))
+    return paths
+
+
 @tenacity.retry(wait=tenacity.wait_fixed(10), stop=tenacity.stop_after_attempt(5))
 def read_sheet() -> list[dict[str, str]]:
     logger.info("Downloading sheet from Google")
     scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
-    cred_paths = [os.path.join(os.getcwd(), "credentials.json"), os.path.join(os.environ["HOME"], "credentials.json")]
+    cred_paths = _default_cred_paths()
     cred_path = None
     for e in cred_paths:
         if os.path.exists(e):
