@@ -29,6 +29,7 @@ def read_sheet() -> list[dict[str, str]]:
     for e in cred_paths:
         if os.path.exists(e):
             cred_path = e
+            break
     if cred_path is None:
         logger.info("Missing credentials.json while using templated config file")
         sys.exit(-1)
