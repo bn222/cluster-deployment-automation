@@ -197,21 +197,7 @@ def ExtraConfigDpu(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, 
     logger.info("Waiting for all pods to become ready")
     client.oc_run_or_die("wait --for=condition=Ready pod --all --all-namespaces --timeout=2m")
     client.oc_run_or_die(f"create -f {repo}/examples/dpu.yaml")
-    time.sleep(30)
-
-    # TODO: remove wa once fixed in future versions of MeV
-    # Wait for dpu to restart after vsp triggers reboot
-    # Note, this will fail if the acc comes up with a new MAC address on the physical port.
-    # As a temporary workaround until this issue is resolved, pre-load the rh_mvp.pkg / configure the iscsi attempt
-    # to ensure the MAC remains consistent across reboots
-    acc.ssh_connect("root", "redhat")
-    if isinstance(vendor_plugin, IpuPlugin):
-        uname = acc.run("uname -r").out.strip()
-        cmd = f"podman run --network host -d --privileged --entrypoint='[\"/bin/sh\", \"-c\", \"sleep 5; sh /entrypoint.sh\"]' -v /lib/modules/{uname}:/lib/modules/{uname} -v data1:/opt/p4 {img}"
-        logger.info("Manually restarting P4 container")
-        acc.run_or_die(cmd)
-    acc.run_or_die("systemctl restart microshift")
-    client.oc_run_or_die("wait --for=condition=Ready pod --all --all-namespaces --timeout=2m")
+    client.oc_run_or_die("wait --for=condition=Ready pod --all --all-namespaces --timeout=3m")
     logger.info("Finished setting up dpu operator on dpu")
 
 
