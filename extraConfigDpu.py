@@ -181,9 +181,6 @@ def ExtraConfigDpu(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, 
         # by removing the calls to pip)
         vendor_plugin.build_push(acc, imgReg)
         # vendor_plugin.start(vendor_plugin.vsp_image_name(imgReg), client)
-    else:
-        vendor_plugin.build_push_start(lh, client, imgReg)
-        wait_vsp_ds_running(client)
 
     git_repo_setup(repo, repo_wipe=False, url=DPU_OPERATOR_REPO)
     if cfg.rebuild_dpu_operators_images:
@@ -218,9 +215,6 @@ def ExtraConfigDpuHost(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[s
     vendor_plugin = init_vendor_plugin(h, node.kind or "")
     if isinstance(vendor_plugin, IpuPlugin):
         vendor_plugin.build_push(lh, imgReg)
-    else:
-        vendor_plugin.build_push_start(lh, client, imgReg)
-        wait_vsp_ds_running(client)
 
     git_repo_setup(repo, branch="main", repo_wipe=False, url=DPU_OPERATOR_REPO)
     if cfg.rebuild_dpu_operators_images:
