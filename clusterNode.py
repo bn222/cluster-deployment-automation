@@ -27,11 +27,18 @@ class ClusterNode:
 
     config: NodeConfig
     future: Future[Optional[host.Result]]
-    dynamic_ip: Optional[str] = None
+    dynamic_ip: Optional[str]
+
+    __slots__ = [
+        "config",
+        "future",
+        "dynamic_ip",
+    ]
 
     def __init__(self, config: NodeConfig):
         self.config = config
         self.future = common.empty_future(host.Result)
+        self.dynamic_ip = None
 
     def ip(self) -> str:
         if self.config.ip is not None:
@@ -98,15 +105,17 @@ class ClusterNode:
 
 class VmClusterNode(ClusterNode):
     hostconn: host.Host
-    install_wait: bool = True
+    install_wait: bool
+
+    __slots__ = [
+        "hostconn",
+        "install_wait",
+    ]
 
     def __init__(self, h: host.Host, config: NodeConfig):
         super().__init__(config)
         self.hostconn = h
-
-    def ip(self) -> str:
-        assert self.config.ip is not None
-        return self.config.ip
+        self.install_wait = True
 
     def setup_vm(self, iso_or_image_path: str) -> host.Result:
         disk_size_gb = self.config.disk_size
@@ -192,6 +201,10 @@ class VmClusterNode(ClusterNode):
 class X86ClusterNode(ClusterNode):
     external_port: str
 
+    __slots__ = [
+        "external_port",
+    ]
+
     def __init__(self, config: NodeConfig, external_port: str):
         super().__init__(config)
         self.external_port = external_port
@@ -237,6 +250,10 @@ class X86ClusterNode(ClusterNode):
 
 class BFClusterNode(ClusterNode):
     external_port: str
+
+    __slots__ = [
+        "external_port",
+    ]
 
     def __init__(self, config: NodeConfig, external_port: str):
         super().__init__(config)
