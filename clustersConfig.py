@@ -99,7 +99,7 @@ class NodeConfig:
             raise ValueError("NodeConfig: kind not provided")
 
         # bmc ip is mandatory for physical, not for vm
-        if self.kind == "physical" or self.kind == "bf":
+        if self.kind == "physical" or self.kind == "bf" or self.kind == "ipu":
             if self.bmc == "":
                 raise ValueError("NodeConfig: bmc not provided")
         else:

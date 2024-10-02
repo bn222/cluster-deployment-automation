@@ -53,6 +53,7 @@ class IsoDeployer(BaseDeployer):
             node = isoCluster.IPUClusterNode(self._master, self._cc.external_port, self._cc.network_api_port)
             executor = ThreadPoolExecutor(max_workers=len(self._cc.masters))
             node.start(self._cc.install_iso, executor)
+            node.future.result()
         elif self._master.kind == "marvell-dpu":
             isoCluster.MarvellIsoBoot(self._cc, self._master, self._cc.install_iso)
         else:
