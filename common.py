@@ -588,14 +588,10 @@ def build_sriov_network_operator_check_permissions() -> bool:
     return ret.success()
 
 
-def git_repo_setup(repo_dir: Optional[str] = "/root/dpu-operator", *, repo_wipe: bool = True, url: str, branch: Optional[str] = "master") -> None:
-    if repo_dir is None:
-        raise ValueError("repo_dir cannot be None")
-
+def git_repo_setup(repo_dir: str, *, repo_wipe: bool = True, url: str, branch: Optional[str] = None) -> None:
     exists = os.path.exists(repo_dir)
     if exists and not repo_wipe:
         return
-
     if exists:
         shutil.rmtree(repo_dir)
 
