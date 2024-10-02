@@ -178,11 +178,19 @@ def ExtraConfigDpu(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, 
         # Build on the ACC since an aarch based server is needed for the build
         # (the Dockerfile needs to be fixed to allow layered multi-arch build
         # by removing the calls to pip)
-        vendor_plugin.build_push(acc, imgReg)
-        # vendor_plugin.start(vendor_plugin.vsp_image_name(imgReg), client)
-    else:
-        vendor_plugin.build_push_start(lh, client, imgReg)
-        wait_vsp_ds_running(client)
+        vsp_img = vendor_plugin.build_push(acc, imgReg)
+
+        # As a workaround while waiting for properly multiarch build support, we can create a manifest to ensure both host and dpu can deploy the vsp with the same image.
+        # Note that this makes the assumption that the host deployment has already been run and the latest ipu plugin image is already locally available in the registry.
+        # Without these assumptions, this will not work as expected
+        manifest = f"{vsp_img}-manifest"
+        lh.run(f"buildah manifest rm {manifest}")
+        lh.run_or_die(f"buildah manifest create {manifest}")
+        lh.run_or_die(f"podman pull {vsp_img}-x86_64")
+        lh.run_or_die(f"podman pull {vsp_img}-aarch64")
+        lh.run_or_die(f"buildah manifest add {manifest} {vsp_img}-x86_64")
+        lh.run_or_die(f"buildah manifest add {manifest} {vsp_img}-aarch64")
+        lh.run_or_die(f"buildah manifest push --all {manifest} docker://{vsp_img}")
 
     git_repo_setup(repo, repo_wipe=False, url=DPU_OPERATOR_REPO)
     if cfg.rebuild_dpu_operators_images:
@@ -196,21 +204,7 @@ def ExtraConfigDpu(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, 
     logger.info("Waiting for all pods to become ready")
     client.oc_run_or_die("wait --for=condition=Ready pod --all --all-namespaces --timeout=2m")
     client.oc_run_or_die(f"create -f {repo}/examples/dpu.yaml")
-    time.sleep(30)
-
-    # TODO: remove wa once fixed in future versions of MeV
-    # Wait for dpu to restart after vsp triggers reboot
-    # Note, this will fail if the acc comes up with a new MAC address on the physical port.
-    # As a temporary workaround until this issue is resolved, pre-load the rh_mvp.pkg / configure the iscsi attempt
-    # to ensure the MAC remains consistent across reboots
-    acc.ssh_connect("root", "redhat")
-    if isinstance(vendor_plugin, IpuPlugin):
-        uname = acc.run("uname -r").out.strip()
-        cmd = f"podman run --network host -d --privileged --entrypoint='[\"/bin/sh\", \"-c\", \"sleep 5; sh /entrypoint.sh\"]' -v /lib/modules/{uname}:/lib/modules/{uname} -v data1:/opt/p4 {img}"
-        logger.info("Manually restarting P4 container")
-        acc.run_or_die(cmd)
-    acc.run_or_die("systemctl restart microshift")
-    client.oc_run_or_die("wait --for=condition=Ready pod --all --all-namespaces --timeout=2m")
+    client.oc_run_or_die("wait --for=condition=Ready pod --all --all-namespaces --timeout=3m")
     logger.info("Finished setting up dpu operator on dpu")
 
 
@@ -231,9 +225,6 @@ def ExtraConfigDpuHost(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[s
     vendor_plugin = init_vendor_plugin(h, node.kind or "")
     if isinstance(vendor_plugin, IpuPlugin):
         vendor_plugin.build_push(lh, imgReg)
-    else:
-        vendor_plugin.build_push_start(lh, client, imgReg)
-        wait_vsp_ds_running(client)
 
     git_repo_setup(repo, branch="main", repo_wipe=False, url=DPU_OPERATOR_REPO)
     if cfg.rebuild_dpu_operators_images:

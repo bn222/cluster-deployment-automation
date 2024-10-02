@@ -72,6 +72,11 @@ class IpuPlugin(VendorPlugin):
         vsp_image = self.vsp_image_name(imgReg)
         h.run_or_die(f"podman tag intel-ipuplugin:latest {vsp_image}")
         h.run_or_die(f"podman push {vsp_image}")
+        # WA to ensure multiarch vsp image manifest is available
+        # push images with both the name expected by the dpu operator (so we can proceed with deploying host side)
+        # and the name expected by the manifest that we will build during the IPU deployment step
+        h.run_or_die(f"podman tag {vsp_image} {vsp_image}-{self.name_suffix}")
+        h.run_or_die(f"podman push {vsp_image}-{self.name_suffix}")
         return vsp_image
 
     def start(self, vsp_image: str, client: K8sClient) -> None:
