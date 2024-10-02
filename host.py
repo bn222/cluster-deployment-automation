@@ -48,8 +48,6 @@ class Login(ABC):
     def __init__(self, hostname: str, username: str) -> None:
         self._username = username
         self._hostname = hostname
-        self.host = paramiko.SSHClient()
-        self.host.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
     def debug_details(self) -> str:
         return str({k: v for k, v in vars(self).items() if k not in ['_key', '_password']})
@@ -57,6 +55,11 @@ class Login(ABC):
     @abstractmethod
     def login(self) -> paramiko.SSHClient:
         pass
+
+    def _host(self) -> paramiko.SSHClient:
+        host = paramiko.SSHClient()
+        host.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        return host
 
 
 class KeyLogin(Login):
@@ -83,8 +86,9 @@ class KeyLogin(Login):
 
     def login(self) -> paramiko.SSHClient:
         logger.info(f"Logging in into {self._hostname} with {self._key_path}")
-        self.host.connect(self._hostname, username=self._username, pkey=self._pkey, look_for_keys=False, allow_agent=False)
-        return self.host
+        host = self._host()
+        host.connect(self._hostname, username=self._username, pkey=self._pkey, look_for_keys=False, allow_agent=False)
+        return host
 
 
 class PasswordLogin(Login):
@@ -94,8 +98,9 @@ class PasswordLogin(Login):
 
     def login(self) -> paramiko.SSHClient:
         logger.info(f"Logging into {self._hostname} with password")
-        self.host.connect(self._hostname, username=self._username, password=self._password, look_for_keys=False, allow_agent=False)
-        return self.host
+        host = self._host()
+        host.connect(self._hostname, username=self._username, password=self._password, look_for_keys=False, allow_agent=False)
+        return host
 
 
 class AutoLogin(Login):
@@ -104,8 +109,9 @@ class AutoLogin(Login):
 
     def login(self) -> paramiko.SSHClient:
         logger.info(f"Logging into {self._hostname} with Paramiko 'Auto key discovery' & 'Ssh-Agent'")
-        self.host.connect(self._hostname, username=self._username, look_for_keys=True, allow_agent=True)
-        return self.host
+        host = self._host()
+        host.connect(self._hostname, username=self._username, look_for_keys=True, allow_agent=True)
+        return host
 
 
 class Host:
@@ -143,7 +149,6 @@ class Host:
                 self._logins.append(id_rsa)
             except Exception:
                 pass
-
         if os.path.exists(ed25519_path):
             try:
                 id_ed25519 = KeyLogin(self._hostname, username, ed25519_path)
