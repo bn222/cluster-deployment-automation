@@ -72,74 +72,6 @@ def configure_iso_network_port(api_port: str, node_ip: str) -> None:
     lh.run(f"ip link set {api_port} up")
 
 
-def enable_acc_connectivity(node: NodeConfig) -> None:
-    logger.info(f"Establishing connectivity to {node.name}")
-    if node.kind == "marvell-dpu":
-        pass
-    else:
-        ipu_imc = host.RemoteHost(node.bmc)
-        ipu_imc.ssh_connect(node.bmc_user, node.bmc_password)
-
-        # """
-        # We need to ensure the ACC physical port connectivity is enabled during reboot to ensure dhcp gets an ip.
-        # Trigger an acc reboot and try to run python /usr/bin/scripts/cfg_acc_apf_x2.py. This will fail until the
-        # ACC_LAN_APF_VPORTs are ready. Once this succeeds, we can try to connect to the ACC
-        # """
-        logger.info("Rebooting IMC to trigger ACC reboot")
-        ipu_imc.run("systemctl reboot")
-        time.sleep(30)
-        ipu_imc.ssh_connect(node.bmc_user, node.bmc_password)
-        logger.info(f"Attempting to enable ACC connectivity from IMC {node.bmc} on reboot")
-        retries = 30
-        for _ in range(retries):
-            ret = ipu_imc.run("/usr/bin/scripts/cfg_acc_apf_x2.py")
-            if ret.returncode == 0:
-                logger.info("Enabled ACC physical port connectivity")
-                break
-            logger.debug(f"ACC SPF script failed with returncode {ret.returncode}")
-            logger.debug(f"out: {ret.out}\n err: {ret.err}")
-            time.sleep(15)
-        else:
-            logger.error_and_exit("Failed to enable ACC connectivity")
-
-    ipu_acc = host.RemoteHost(str(node.ip))
-    ipu_acc.ping()
-    ipu_acc.ssh_connect("root", "redhat")
-    ipu_acc.run("nmcli con mod enp0s1f0 ipv4.route-metric 0")
-    ipu_acc.run("ip route delete default via 192.168.0.1")  # remove imc default route to avoid conflict
-    logger.info(f"{node.name} connectivity established")
-    ensure_ipu_netdevs_available(node)
-
-
-# TODO: Remove this workaround once rebooting the IMC no longer causes the netdevs on the IPU host to be removed
-def host_from_imc(imc: str) -> str:
-    ipu_host = imc.split('-intel-ipu-imc')[0]
-    return ipu_host
-
-
-# TODO: Remove this workaround once rebooting the IMC no longer causes the netdevs on the IPU host to be removed
-def ensure_ipu_netdevs_available(node: NodeConfig) -> None:
-    # This is a hack, iso_cluster deployments in general should not need to know about the x86 host they are connected to.
-    # However, since we need to cold boot the corresponding host, for the time being, infer this from the IMC address
-    # rather than requiring the user to provide this information.
-    ipu_host_name = host_from_imc(node.bmc)
-    ipu_host_bmc = BMC.from_bmc(ipu_host_name + "-drac.anl.eng.bos2.dc.redhat.com", "root", "calvin")
-    ipu_host = host.Host(host_from_imc(node.bmc), ipu_host_bmc)
-    ipu_host.ssh_connect("core")
-    ret = ipu_host.run("test -d /sys/class/net/ens2f0")
-    retries = 3
-    while ret.returncode != 0:
-        logger.error(f"{ipu_host.hostname()} does not have a network device ens2f0 cold booting node to try to recover")
-        ipu_host.cold_boot()
-        logger.info("Cold boot triggered, waiting for host to reboot")
-        time.sleep(60)
-        ipu_host.ssh_connect("core")
-        retries = retries - 1
-        if retries == 0:
-            logger.error_and_exit(f"Failed to bring up IPU net device on {ipu_host.hostname()}")
-        ret = ipu_host.run("test -d /sys/class/net/ens2f0")
-
-
 def is_http_url(url: str) -> bool:
     try:
         result = urllib.parse.urlparse(url)
@@ -200,7 +132,6 @@ def MarvellIsoBoot(cc: ClustersConfig, node: NodeConfig, iso: str) -> None:
     _pxeboot_marvell_dpu(node.name, node.node, node.mac, node.ip, iso)
     configure_iso_network_port(cc.network_api_port, node.ip)
     configure_dhcpd(node)
-    enable_acc_connectivity(node)
 
 
 class IPUClusterNode(ClusterNode):
@@ -217,7 +148,7 @@ class IPUClusterNode(ClusterNode):
         assert self.config.ip
         configure_iso_network_port(self.network_api_port, self.config.ip)
         configure_dhcpd(self.config)
-        enable_acc_connectivity(self.config)
+        self._enable_acc_connectivity()
 
     def start(self, iso_or_image_path: str, executor: ThreadPoolExecutor) -> None:
         self.future = executor.submit(self._boot_iso, iso_or_image_path)
@@ -243,15 +174,11 @@ class IPUClusterNode(ClusterNode):
         lh = host.LocalHost()
         lh.run("systemctl stop dhcpd")
 
-        # If an http address is provided, we will boot from here.
-        # Otherwise we will assume a local file has been provided and host it.
         if is_http_url(iso):
-            logger.debug(f"Booting IPU from iso served at {iso}")
             iso_address = iso
-
             logger.info(helper(node))
         else:
-            logger.debug(f"Booting IPU from local iso {iso}")
+            logger.debug(f"Hosting local file {iso}")
             if not os.path.exists(iso):
                 logger.error(f"ISO file {iso} does not exist, exiting")
                 sys.exit(-1)
@@ -264,8 +191,71 @@ class IPUClusterNode(ClusterNode):
                 iso_address = f"http://{lh_ip}:{str(http_server.port)}/{iso_name}"
                 logger.info(helper(node))
 
+    def _enable_acc_connectivity(self) -> None:
+        node = self.config
+        logger.info(f"Establishing connectivity to {node.name}")
+        ipu_imc = host.RemoteHost(node.bmc)
+        ipu_imc.ssh_connect(node.bmc_user, node.bmc_password)
+
+        # """
+        # We need to ensure the ACC physical port connectivity is enabled during reboot to ensure dhcp gets an ip.
+        # Trigger an acc reboot and try to run python /usr/bin/scripts/cfg_acc_apf_x2.py. This will fail until the
+        # ACC_LAN_APF_VPORTs are ready. Once this succeeds, we can try to connect to the ACC
+        # """
+        logger.info("Rebooting IMC to trigger ACC reboot")
+        ipu_imc.run("systemctl reboot")
+        time.sleep(30)
+        ipu_imc.ssh_connect(node.bmc_user, node.bmc_password)
+        logger.info(f"Attempting to enable ACC connectivity from IMC {node.bmc} on reboot")
+        retries = 30
+        for _ in range(retries):
+            ret = ipu_imc.run("/usr/bin/scripts/cfg_acc_apf_x2.py")
+            if ret.returncode == 0:
+                logger.info("Enabled ACC physical port connectivity")
+                break
+            logger.debug(f"ACC SPF script failed with returncode {ret.returncode}")
+            logger.debug(f"out: {ret.out}\n err: {ret.err}")
+            time.sleep(15)
+        else:
+            logger.error_and_exit("Failed to enable ACC connectivity")
+
+        ipu_acc = host.RemoteHost(str(node.ip))
+        ipu_acc.ping()
+        ipu_acc.ssh_connect("root", "redhat")
+        ipu_acc.run("nmcli con mod enp0s1f0 ipv4.route-metric 0")
+        ipu_acc.run("ip route delete default via 192.168.0.1")  # remove imc default route to avoid conflict
+        logger.info(f"{node.name} connectivity established")
+        self.ensure_ipu_netdevs_available()
+
     def post_boot(self, desired_ip_range: tuple[str, str]) -> bool:
         return True
+
+    # TODO: Remove this workaround once rebooting the IMC no longer causes the netdevs on the IPU host to be removed
+    def ensure_ipu_netdevs_available(self) -> None:
+        def host_from_imc(imc: str) -> str:
+            ipu_host = imc.split('-intel-ipu-imc')[0]
+            return ipu_host
+
+        node = self.config
+        # This is a hack, iso_cluster deployments in general should not need to know about the x86 host they are connected to.
+        # However, since we need to cold boot the corresponding host, for the time being, infer this from the IMC address
+        # rather than requiring the user to provide this information.
+        ipu_host_name = host_from_imc(node.bmc)
+        ipu_host_bmc = BMC.from_bmc(ipu_host_name + "-drac.anl.eng.bos2.dc.redhat.com", "root", "calvin")
+        ipu_host = host.Host(ipu_host_name, ipu_host_bmc)
+        ipu_host.ssh_connect("core")
+        ret = ipu_host.run("test -d /sys/class/net/ens2f0")
+        retries = 3
+        while ret.returncode != 0:
+            logger.error(f"{ipu_host.hostname()} does not have a network device ens2f0 cold booting node to try to recover")
+            ipu_host.cold_boot()
+            logger.info("Cold boot triggered, waiting for host to reboot")
+            time.sleep(60)
+            ipu_host.ssh_connect("core")
+            retries = retries - 1
+            if retries == 0:
+                logger.error_and_exit(f"Failed to bring up IPU net device on {ipu_host.hostname()}")
+            ret = ipu_host.run("test -d /sys/class/net/ens2f0")
 
 
 def main() -> None:
