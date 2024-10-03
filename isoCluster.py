@@ -13,7 +13,6 @@ from dhcpConfig import dhcp_config_from_file, DHCPD_CONFIG_PATH, DHCPD_CONFIG_BA
 import host
 from bmc import BMC
 import common
-import abc
 from concurrent.futures import ThreadPoolExecutor
 
 """

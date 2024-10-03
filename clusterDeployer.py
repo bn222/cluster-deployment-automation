@@ -1,11 +1,10 @@
-import abc
 import itertools
 import os
 import sys
 import time
 import json
 import shutil
-from concurrent.futures import Future, ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 from typing import Generator
 from typing import Union
@@ -14,18 +13,16 @@ import re
 import logging
 from assistedInstaller import AssistedClientAutomation
 import host
-from clustersConfig import ClustersConfig, ExtraConfigArgs
+from clustersConfig import ClustersConfig
 from k8sClient import K8sClient
 import common
 from python_hosts import Hosts, HostsEntry
 from logger import logger
 import microshift
-from extraConfigRunner import ExtraConfigRunner
 from clusterHost import ClusterHost
 import dnsutil
 from virshPool import VirshPool
 from arguments import PRE_STEP, WORKERS_STEP, MASTERS_STEP, POST_STEP
-import isoCluster
 from libvirt import Libvirt
 from baseDeployer import BaseDeployer
 
