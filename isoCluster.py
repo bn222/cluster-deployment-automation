@@ -8,11 +8,13 @@ import urllib.parse
 from logger import logger
 from clustersConfig import ClustersConfig
 from clustersConfig import NodeConfig
+from clusterNode import ClusterNode
 from dhcpConfig import dhcp_config_from_file, DHCPD_CONFIG_PATH, DHCPD_CONFIG_BACKUP_PATH, CDA_TAG, get_subnet_range
 import host
 from bmc import BMC
 import common
-
+import abc
+from concurrent.futures import ThreadPoolExecutor
 
 """
 ExtraConfigIPU is used to provision and IPUs specified via Redfish through the IMC.
@@ -146,47 +148,6 @@ def is_http_url(url: str) -> bool:
         return False
 
 
-def _redfish_boot_ipu(cc: ClustersConfig, node: NodeConfig, iso: str) -> None:
-    def helper(node: NodeConfig) -> str:
-        logger.info(f"Booting {node.bmc} with {iso_address}")
-        bmc = BMC.from_bmc(node.bmc)
-        bmc.boot_iso_redfish(iso_path=iso_address, retries=5, retry_delay=15)
-
-        imc = host.Host(node.bmc)
-        imc.ssh_connect(node.bmc_user, node.bmc_password)
-        # TODO: Remove once https://issues.redhat.com/browse/RHEL-32696 is solved
-        logger.info("Waiting for 25m (workaround)")
-        time.sleep(25 * 60)
-        return f"Finished booting imc {node.bmc}"
-
-    # Ensure dhcpd is stopped before booting the IMC to avoid unintentionally setting the ACC hostname during the installation
-    # https://issues.redhat.com/browse/RHEL-32696
-    lh = host.LocalHost()
-    lh.run("systemctl stop dhcpd")
-
-    # If an http address is provided, we will boot from here.
-    # Otherwise we will assume a local file has been provided and host it.
-    if is_http_url(iso):
-        logger.debug(f"Booting IPU from iso served at {iso}")
-        iso_address = iso
-
-        logger.info(helper(node))
-    else:
-        logger.debug(f"Booting IPU from local iso {iso}")
-        if not os.path.exists(iso):
-            logger.error(f"ISO file {iso} does not exist, exiting")
-            sys.exit(-1)
-        serve_path = os.path.dirname(iso)
-        iso_name = os.path.basename(iso)
-        lh = host.LocalHost()
-        cc.prepare_external_port()
-        lh_ip = common.port_to_ip(lh, cc.external_port)
-
-        with common.HttpServerManager(serve_path, 8000) as http_server:
-            iso_address = f"http://{lh_ip}:{str(http_server.port)}/{iso_name}"
-            logger.info(helper(node))
-
-
 def _pxeboot_marvell_dpu(name: str, node: str, mac: str, ip: str, iso: str) -> None:
     rsh = host.RemoteHost(node)
     rsh.ssh_connect("core")
@@ -234,16 +195,77 @@ def _pxeboot_marvell_dpu(name: str, node: str, mac: str, ip: str, iso: str) -> N
         raise RuntimeError(f"Failure to to pxeboot: {r}")
 
 
-def IPUIsoBoot(cc: ClustersConfig, node: NodeConfig, iso: str) -> None:
-    if node.kind == "marvell-dpu":
-        assert node.ip
-        _pxeboot_marvell_dpu(node.name, node.node, node.mac, node.ip, iso)
-    else:
-        _redfish_boot_ipu(cc, node, iso)
+def MarvellIsoBoot(cc: ClustersConfig, node: NodeConfig, iso: str) -> None:
     assert node.ip is not None
+    _pxeboot_marvell_dpu(node.name, node.node, node.mac, node.ip, iso)
     configure_iso_network_port(cc.network_api_port, node.ip)
     configure_dhcpd(node)
     enable_acc_connectivity(node)
+
+
+class IPUClusterNode(ClusterNode):
+    external_port: str
+    network_api_port: str
+
+    def __init__(self, config: NodeConfig, external_port: str, network_api_port: str):
+        super().__init__(config)
+        self.external_port = external_port
+        self.network_api_port = network_api_port
+
+    def _boot_iso(self, iso: str) -> None:
+        self._redfish_boot_ipu(self.external_port, self.config, iso)
+        assert self.config.ip
+        configure_iso_network_port(self.network_api_port, self.config.ip)
+        configure_dhcpd(self.config)
+        enable_acc_connectivity(self.config)
+
+    def start(self, iso_or_image_path: str, executor: ThreadPoolExecutor) -> None:
+        self.future = executor.submit(self._boot_iso, iso_or_image_path)
+
+    def has_booted(self) -> bool:
+        return self.get_future_done()
+
+    def _redfish_boot_ipu(self, external_port: str, node: NodeConfig, iso: str) -> None:
+        def helper(node: NodeConfig) -> str:
+            logger.info(f"Booting {node.bmc} with {iso_address}")
+            bmc = BMC.from_bmc(node.bmc)
+            bmc.boot_iso_redfish(iso_path=iso_address, retries=5, retry_delay=15)
+
+            imc = host.Host(node.bmc)
+            imc.ssh_connect(node.bmc_user, node.bmc_password)
+            # TODO: Remove once https://issues.redhat.com/browse/RHEL-32696 is solved
+            logger.info("Waiting for 25m (workaround)")
+            time.sleep(25 * 60)
+            return f"Finished booting imc {node.bmc}"
+
+        # Ensure dhcpd is stopped before booting the IMC to avoid unintentionally setting the ACC hostname during the installation
+        # https://issues.redhat.com/browse/RHEL-32696
+        lh = host.LocalHost()
+        lh.run("systemctl stop dhcpd")
+
+        # If an http address is provided, we will boot from here.
+        # Otherwise we will assume a local file has been provided and host it.
+        if is_http_url(iso):
+            logger.debug(f"Booting IPU from iso served at {iso}")
+            iso_address = iso
+
+            logger.info(helper(node))
+        else:
+            logger.debug(f"Booting IPU from local iso {iso}")
+            if not os.path.exists(iso):
+                logger.error(f"ISO file {iso} does not exist, exiting")
+                sys.exit(-1)
+            serve_path = os.path.dirname(iso)
+            iso_name = os.path.basename(iso)
+            lh = host.LocalHost()
+            lh_ip = common.port_to_ip(lh, external_port)
+
+            with common.HttpServerManager(serve_path, 8000) as http_server:
+                iso_address = f"http://{lh_ip}:{str(http_server.port)}/{iso_name}"
+                logger.info(helper(node))
+
+    def post_boot(self, desired_ip_range: tuple[str, str]) -> bool:
+        return True
 
 
 def main() -> None:

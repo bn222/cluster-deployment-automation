@@ -5,6 +5,7 @@ from arguments import PRE_STEP, MASTERS_STEP, POST_STEP
 import isoCluster
 from baseDeployer import BaseDeployer
 from clustersConfig import ClustersConfig
+from concurrent.futures import ThreadPoolExecutor
 import sys
 
 
@@ -37,8 +38,7 @@ class IsoDeployer(BaseDeployer):
                 logger.info("Skipping pre configuration.")
 
             if MASTERS_STEP in self.steps:
-                # TODO: We need to either auto-detect the hardware (IPU versus some other vendor) or take this as an additional config param.
-                isoCluster.IPUIsoBoot(self._cc, self._master, self._cc.install_iso)
+                self._deploy_master()
             else:
                 logger.info("Skipping master creation.")
 
@@ -46,3 +46,15 @@ class IsoDeployer(BaseDeployer):
             self._postconfig()
         else:
             logger.info("Skipping post configuration.")
+
+    def _deploy_master(self) -> None:
+        if self._master.kind == "ipu":
+            self._cc.prepare_external_port()
+            node = isoCluster.IPUClusterNode(self._master, self._cc.external_port, self._cc.network_api_port)
+            executor = ThreadPoolExecutor(max_workers=len(self._cc.masters))
+            node.start(self._cc.install_iso, executor)
+        elif self._master.kind == "marvell-dpu":
+            isoCluster.MarvellIsoBoot(self._cc, self._master, self._cc.install_iso)
+        else:
+            logger.error("Not tested")
+            sys.exit(-1)
