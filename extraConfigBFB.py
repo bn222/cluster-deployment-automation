@@ -9,7 +9,7 @@ from typing import Optional
 import sys
 from logger import logger
 from clustersConfig import ExtraConfigArgs
-from host import BMC
+from bmc import BMC
 
 """
 The "ExtraConfigBFB" is used to put the BF2 in a known good state. This is achieved by

@@ -10,7 +10,7 @@ from typing import Optional
 import common
 import host
 from clustersConfig import NodeConfig
-from host import BMC
+from bmc import BMC
 from nfs import NFS
 
 

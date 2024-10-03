@@ -10,6 +10,7 @@ from clustersConfig import ClustersConfig
 from clustersConfig import NodeConfig
 from dhcpConfig import dhcp_config_from_file, DHCPD_CONFIG_PATH, DHCPD_CONFIG_BACKUP_PATH, CDA_TAG, get_subnet_range
 import host
+from bmc import BMC
 import common
 
 
@@ -120,7 +121,7 @@ def ensure_ipu_netdevs_available(node: NodeConfig) -> None:
     # However, since we need to cold boot the corresponding host, for the time being, infer this from the IMC address
     # rather than requiring the user to provide this information.
     ipu_host_name = host_from_imc(node.bmc)
-    ipu_host_bmc = host.BMC.from_bmc(ipu_host_name + "-drac.anl.eng.bos2.dc.redhat.com", "root", "calvin")
+    ipu_host_bmc = BMC.from_bmc(ipu_host_name + "-drac.anl.eng.bos2.dc.redhat.com", "root", "calvin")
     ipu_host = host.Host(host_from_imc(node.bmc), ipu_host_bmc)
     ipu_host.ssh_connect("core")
     ret = ipu_host.run("test -d /sys/class/net/ens2f0")
@@ -148,7 +149,7 @@ def is_http_url(url: str) -> bool:
 def _redfish_boot_ipu(cc: ClustersConfig, node: NodeConfig, iso: str) -> None:
     def helper(node: NodeConfig) -> str:
         logger.info(f"Booting {node.bmc} with {iso_address}")
-        bmc = host.BMC.from_bmc(node.bmc)
+        bmc = BMC.from_bmc(node.bmc)
         bmc.boot_iso_redfish(iso_path=iso_address, retries=5, retry_delay=15)
 
         imc = host.Host(node.bmc)

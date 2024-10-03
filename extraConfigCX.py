@@ -8,7 +8,7 @@ from typing import Optional
 import sys
 from logger import logger
 from clustersConfig import ExtraConfigArgs
-from host import BMC
+from bmc import BMC
 
 """
 The "ExtraConfigCX" is used to put the CX in a known good state. This is achieved by
