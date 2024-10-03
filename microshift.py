@@ -10,7 +10,7 @@ from typing import Optional
 from jinja2 import Template
 from clustersConfig import NodeConfig
 import common
-from host import BMC
+from bmc import BMC
 
 
 # cleans microshift artifacts from previous installation
