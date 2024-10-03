@@ -27,6 +27,7 @@ from virshPool import VirshPool
 from arguments import PRE_STEP, WORKERS_STEP, MASTERS_STEP, POST_STEP
 import isoCluster
 from libvirt import Libvirt
+from baseDeployer import BaseDeployer
 
 
 def match_to_proper_version_format(version_cluster_config: str) -> str:
@@ -39,25 +40,6 @@ def match_to_proper_version_format(version_cluster_config: str) -> str:
 
 
 _BF_ISO_PATH = "/root/iso"
-
-
-class BaseDeployer(abc.ABC):
-    def __init__(self, cc: ClustersConfig, steps: list[str]):
-        self._cc = cc
-        self._extra_config = ExtraConfigRunner(cc)
-        self._futures: dict[str, Future[Optional[host.Result]]] = {}
-        self.steps = tuple(steps)
-
-    def _prepost_config(self, to_run: ExtraConfigArgs) -> None:
-        self._extra_config.run(to_run, self._futures)
-
-    def _preconfig(self) -> None:
-        for e in self._cc.preconfig:
-            self._prepost_config(e)
-
-    def _postconfig(self) -> None:
-        for e in self._cc.postconfig:
-            self._prepost_config(e)
 
 
 class ClusterDeployer(BaseDeployer):
@@ -642,43 +624,3 @@ class ClusterDeployer(BaseDeployer):
                     logger.info(e)
 
             time.sleep(30)
-
-
-class IsoDeployer(BaseDeployer):
-    def __init__(self, cc: ClustersConfig, steps: list[str]):
-        super().__init__(cc, steps)
-
-        if len(self._cc.masters) != 1:
-            logger.error("Masters must be of length one for deploying from iso")
-            sys.exit(-1)
-        self._master = self._cc.masters[0]
-        self._futures[self._master.name] = common.empty_future(host.Result)
-        self._validate()
-
-    def _validate(self) -> None:
-        if self._master.mac is None:
-            logger.error_and_exit(f"No MAC address provided for cluster {self._cc.name}, exiting")
-        if self._master.ip is None:
-            logger.error_and_exit(f"No IP address provided for cluster {self._cc.name}, exiting")
-        if self._master.name is None:
-            logger.error_and_exit(f"No name provided for cluster {self._cc.name}, exiting")
-        if not self._cc.network_api_port or self._cc.network_api_port == "auto":
-            logger.error_and_exit(f"Network API port with connection to {self._cc.name} must be specified, exiting")
-
-    def deploy(self) -> None:
-        if self._cc.masters:
-            if PRE_STEP in self.steps:
-                self._preconfig()
-            else:
-                logger.info("Skipping pre configuration.")
-
-            if MASTERS_STEP in self.steps:
-                # TODO: We need to either auto-detect the hardware (IPU versus some other vendor) or take this as an additional config param.
-                isoCluster.IPUIsoBoot(self._cc, self._master, self._cc.install_iso)
-            else:
-                logger.info("Skipping master creation.")
-
-        if POST_STEP in self.steps:
-            self._postconfig()
-        else:
-            logger.info("Skipping post configuration.")

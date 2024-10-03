@@ -4,7 +4,8 @@
 from assistedInstaller import AssistedClientAutomation
 from assistedInstallerService import AssistedInstallerService
 from clustersConfig import ClustersConfig
-from clusterDeployer import ClusterDeployer, IsoDeployer
+from clusterDeployer import ClusterDeployer
+from isoDeployer import IsoDeployer
 from arguments import parse_args
 import argparse
 import host
