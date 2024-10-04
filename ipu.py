@@ -54,6 +54,9 @@ class IPUClusterNodeVersion(ClusterNode):
     def has_booted(self) -> bool:
         return self.cluster_node.has_booted()
 
+    def post_boot(self, desired_ip_range: tuple[str, str]) -> bool:
+        return self.cluster_node.post_boot(desired_ip_range)
+
 
 class IPUClusterNode(ClusterNode):
     external_port: str
