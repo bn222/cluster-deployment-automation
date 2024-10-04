@@ -98,8 +98,8 @@ class DhcpConfig:
         config_str = ""
         for subnet in self._subnet_configs:
             config_str += subnet.to_string()
-        for host in self._host_configs:
-            config_str += host.to_string()
+        for h in self._host_configs:
+            config_str += h.to_string()
         return config_str
 
     def write_to_file(self, file_path: str = DHCPD_CONFIG_PATH) -> None:
