@@ -295,7 +295,7 @@ systemctl restart redfish
         match = re.search(r"Version: (\S+)", contents)
         if match is None:
             sys.exit(-1)
-        return match.group(1)
+        return match.group(1).strip()
 
 
 def main() -> None:
