@@ -3,6 +3,7 @@ import common
 from logger import logger
 from arguments import PRE_STEP, MASTERS_STEP, POST_STEP
 import isoCluster
+import ipu
 from baseDeployer import BaseDeployer
 from clustersConfig import ClustersConfig
 from concurrent.futures import ThreadPoolExecutor
@@ -50,7 +51,7 @@ class IsoDeployer(BaseDeployer):
     def _deploy_master(self) -> None:
         if self._master.kind == "ipu":
             self._cc.prepare_external_port()
-            node = isoCluster.IPUClusterNode(self._master, self._cc.external_port, self._cc.network_api_port)
+            node = ipu.IPUClusterNode(self._master, self._cc.external_port, self._cc.network_api_port)
             executor = ThreadPoolExecutor(max_workers=len(self._cc.masters))
             node.start(self._cc.install_iso, executor)
             node.future.result()
