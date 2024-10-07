@@ -576,15 +576,19 @@ class ClusterDeployer(BaseDeployer):
         lh = host.LocalHost()
         bf_workers = [x for x in self._cc.workers if x.kind == "bf"]
         connections: dict[str, host.Host] = {}
+        prev_ready = 0
         for try_count in itertools.count(0):
             workers = [w.name for w in self._cc.workers]
-            n_not_ready_workers = sum(1 for w in workers if not self.client().is_ready(w))
-            if n_not_ready_workers == 0:
+            ready_count = sum(self.client().is_ready(w) for w in workers)
+
+            if prev_ready != ready_count:
+                logger.info(f"{ready_count}/{len(workers)} is ready (try #{try_count})")
+                prev_ready = ready_count
+
+            if ready_count == len(workers):
                 break
 
-            logger.info(f"Not all workers ready (try #{try_count}). {n_not_ready_workers} are not ready yet.")
             self.client().approve_csr()
-
             if len(connections) != len(bf_workers):
                 for e in filter(lambda x: x.name not in connections, bf_workers):
                     ai_ip = self._ai.get_ai_ip(e.name, self._cc.full_ip_range)
