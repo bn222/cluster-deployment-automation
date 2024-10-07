@@ -9,7 +9,7 @@ import shutil
 import sys
 import logging
 import tempfile
-from bmc import BMC
+import typing
 from typing import Optional
 from typing import Union
 from functools import lru_cache
@@ -115,13 +115,13 @@ class AutoLogin(Login):
 
 
 class Host:
-    def __new__(cls, hostname: str, bmc: Optional[BMC] = None) -> 'Host':
+    def __new__(cls, hostname: str, bmc: Optional["BMC"] = None) -> 'Host':
         key = (hostname, bmc.url if bmc else None)
         if key not in host_instances:
             host_instances[key] = super().__new__(cls)
         return host_instances[key]
 
-    def __init__(self, hostname: str, bmc: Optional[BMC] = None):
+    def __init__(self, hostname: str, bmc: Optional["BMC"] = None):
         self._hostname = hostname
         self._bmc = bmc
         self._logins: list[Login] = []
@@ -519,3 +519,7 @@ def LocalHost() -> Host:
 
 def RemoteHost(ip: str) -> Host:
     return Host(ip)
+
+
+if typing.TYPE_CHECKING:
+    from bmc import BMC
