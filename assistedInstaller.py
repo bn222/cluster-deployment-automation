@@ -19,6 +19,7 @@ class AssistedClientClusterInfo:
 
 @dataclass
 class AssistedClientHostInfo:
+    id: str
     status: str
     inventory: str
 
@@ -98,7 +99,7 @@ class AssistedClientAutomation(AssistedClient):  # type: ignore
             except Exception:
                 time.sleep(timeout)
         else:
-            logger.error(f"Failed to download the ISO after {retries} attempts")
+            logger.error_and_exit(f"Failed to download the ISO after {retries} attempts")
 
     def wait_cluster_ready(self, cluster_name: str) -> None:
         logger.info("Waiting for cluster state to be ready")
@@ -153,7 +154,18 @@ class AssistedClientAutomation(AssistedClient):  # type: ignore
         for h in filter(lambda x: "inventory" in x, self.list_hosts()):
             rhn = h["requested_hostname"]
             if rhn == name:
-                return AssistedClientHostInfo(h["status"], h["inventory"])
+                return AssistedClientHostInfo(h["id"], h["status"], h["inventory"])
+        return None
+
+    def get_ai_host_id_by_ip(self, infra_env: str, ip: str) -> Optional[AssistedClientHostInfo]:
+        id = self.get_infra_env_id(infra_env)
+        for h in filter(lambda x: "inventory" in x and x["infra_env_id"] == id, self.list_hosts()):
+            nics = json.loads(h["inventory"]).get("interfaces")
+            addresses: list[str] = sum((nic["ipv4_addresses"] for nic in nics), [])
+            stripped_addresses = [a.split("/")[0] for a in addresses]
+            if ip in stripped_addresses:
+                return AssistedClientHostInfo(h["id"], h["status"], h["inventory"])
+
         return None
 
     def get_ai_ip(self, name: str, ip_range: tuple[str, str]) -> Optional[str]:
@@ -188,3 +200,10 @@ class AssistedClientAutomation(AssistedClient):  # type: ignore
             sys.exit(-1)
 
         return AssistedClientClusterInfo(cluster_info.id, cluster_info.api_vips[0].ip)
+
+    def install_ai_host(self, infra_env: str, name: str) -> None:
+        infra_env_id = self.get_infra_env_id(infra_env)
+        host_info = self.get_ai_host(name)
+        if host_info is not None and host_info.status not in ["installed", "added-to-existing-cluster"]:
+            logger.info(f"Installing host {name}")
+            self.client.v2_install_host(infra_env_id=infra_env_id, host_id=host_info.id)
