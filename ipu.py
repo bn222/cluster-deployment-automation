@@ -55,6 +55,7 @@ class IPUClusterNodeVersion(ClusterNode):
 
     def start(self, iso_or_image_path: str, executor: ThreadPoolExecutor) -> None:
         self.cluster_node.start(iso_or_image_path, executor)
+        self.future = self.cluster_node.future
 
     def has_booted(self) -> bool:
         return self.cluster_node.has_booted()
