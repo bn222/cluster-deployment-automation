@@ -173,11 +173,11 @@ def ExtraConfigDpu(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, 
         # We need to manually start the p4 sdk container currently for the IPU plugin
         p4_img = "wsfd-advnetlab239.anl.eng.bos2.dc.redhat.com:5000/intel-ipu-p4-sdk:10-9-2024"
         lh.run_or_die(f"podman pull --tls-verify=false {p4_img}")
-        lh.run_or_die(f"podman tag {p4_img} {imgReg.url}/intel-ipu-p4-sdk:10-9-2024")
-        lh.run_or_die(f"podman push {imgReg.url}/intel-ipu-p4-sdk:10-9-2024")
+        lh.run_or_die(f"podman tag {p4_img} {imgReg.url()}/intel-ipu-p4-sdk:10-9-2024")
+        lh.run_or_die(f"podman push {imgReg.url()}/intel-ipu-p4-sdk:10-9-2024")
         uname = acc.run("uname -r").out.strip()
         logger.info("Manually starting P4 container")
-        cmd = f"podman run --network host -d --privileged --entrypoint='[\"/bin/sh\", \"-c\", \"sleep 5; sh /entrypoint.sh\"]' -v /lib/modules/{uname}:/lib/modules/{uname} -v data1:/opt/p4 {imgReg.url}/intel-ipu-p4-sdk:10-9-2024"
+        cmd = f"podman run --network host -d --privileged --entrypoint='[\"/bin/sh\", \"-c\", \"sleep 5; sh /entrypoint.sh\"]' -v /lib/modules/{uname}:/lib/modules/{uname} -v data1:/opt/p4 {imgReg.url()}/intel-ipu-p4-sdk:10-9-2024"
         acc.run_or_die(cmd)
         # Build on the ACC since an aarch based server is needed for the build
         # (the Dockerfile needs to be fixed to allow layered multi-arch build
