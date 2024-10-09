@@ -195,7 +195,7 @@ class IPUClusterNodeOld(ClusterNode):
         else:
             logger.debug(f"Hosting local file {iso}")
             if not os.path.exists(iso):
-                raise ValueError("fISO file {iso} does not exist, exiting")
+                raise ValueError(f"ISO file {iso} does not exist, exiting")
             serve_path = os.path.dirname(iso)
             iso_name = os.path.basename(iso)
             lh = host.LocalHost()
