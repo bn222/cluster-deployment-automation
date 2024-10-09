@@ -79,6 +79,9 @@ def ExtraConfigSwitchNicMode(cc: ClustersConfig, _: ExtraConfigArgs, futures: di
 
     client.oc("delete -f manifests/nicmode/switch.yaml")
     client.oc("create -f manifests/nicmode/switch.yaml")
+
+    logger.info("Waiting for mcp to update")
+    client.wait_for_mcp("sriov", "switch.yaml")
     # Workaround for https://issues.redhat.com/browse/OCPBUGS-29882 caused by the BF-2 firmware failing to update without cold boot
 
     logger.info("Cold booting.....")
@@ -89,5 +92,5 @@ def ExtraConfigSwitchNicMode(cc: ClustersConfig, _: ExtraConfigArgs, futures: di
         f = executor.submit(helper, h)
         futures[e.name] = f
 
-    logger.info("Waiting for mcp to update")
+    logger.info("Waiting for nodes to recover from cold boot")
     client.wait_for_mcp("sriov", "switch.yaml")
