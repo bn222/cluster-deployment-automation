@@ -347,6 +347,22 @@ systemctl restart redfish
 
     def boot_iso_with_redfish(self, iso_path: str) -> None:
         self._prepare_imc(extract_server(iso_path))
+        self._redfish_boot_retry(iso_path)
+
+    def _redfish_boot_retry(self, iso_path: str, max_retries: int = 10) -> None:
+        retries = 1
+        while True:
+            try:
+                self._redfish_boot(iso_path)
+                break
+            except Exception as e:
+                logger.info(f"Encountered exception {e} when booting, retrying... (attempt={retries})")
+                retries += 1
+                if retries >= max_retries:
+                    logger.error_and_exit("Redfish boot failed")
+                time.sleep(5)
+
+    def _redfish_boot(self, iso_path: str) -> None:
         logger.info("restarting Redfish")
         self._restart_redfish()
         # W/A delete iso before downloading it if partially downladed
@@ -376,6 +392,8 @@ systemctl restart redfish
         rh.ssh_connect("root", password="", discover_auth=False)
         loop_count = 0
         while True:
+            if not rh.is_connected():
+                raise RuntimeError(f"Connection to {rh.hostname} has been dropped, download failed")
             result = rh.run("du -b /mnt/imc/acc-os.iso").out.split()
             if len(result) == 0:
                 continue

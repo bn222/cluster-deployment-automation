@@ -190,6 +190,29 @@ class Host:
 
         raise ConnectionError(f"Failed to establish an SSH connection to {self._hostname}")
 
+    def is_connected(self) -> bool:
+        if self.is_localhost():
+            return True
+        try:
+            assert self._host is not None
+            _, stdout, stderr = self._host.exec_command("echo 'connection check'")
+
+            out = []
+            for line in iter(stdout.readline, ""):
+                logger.log(logging.DEBUG, f"{self._hostname}: {line.rstrip()}")
+                out.append(line)
+
+            err = []
+            for line in iter(stderr.readline, ""):
+                err.append(line)
+
+            exit_code = stdout.channel.recv_exit_status()
+
+            return exit_code == 0
+        except Exception as e:
+            logger.log(logging.DEBUG, e)
+            return False
+
     def _rsa_login(self) -> Optional[KeyLogin]:
         for x in self._logins:
             if isinstance(x, KeyLogin) and x._is_rsa():
