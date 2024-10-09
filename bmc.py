@@ -1,5 +1,4 @@
 from logger import logger
-import sys
 import time
 from ailib import Redfish
 
