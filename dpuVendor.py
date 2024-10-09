@@ -58,6 +58,10 @@ class IpuPlugin(VendorPlugin):
         logger.info("Building ipu-opi-plugin")
         h.run("rm -rf /root/ipu-opi-plugins")
         h.run_or_die(f"git clone {self.repo} /root/ipu-opi-plugins")
+
+        # WA until 1.8 VSP has been merged / validated into main branch
+        h.run_or_die("git -C /root/ipu-opi-plugins checkout 1.6.2_MEV_REL_new_artifacts")
+
         fn = "/root/ipu-opi-plugins/ipu-plugin/images/Dockerfile"
         golang_img = extractContainerImage(h.read_file(fn))
         h.run_or_die(f"podman pull docker.io/library/{golang_img}")
