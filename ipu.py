@@ -314,6 +314,18 @@ rm -rf /home/root/MtRemoteRunner # workaround to free up some space: https://iss
 update-ca-trust
 sleep 10 # wait for ip address so that redfish starts with that in place
 systemctl restart redfish
+#  workaround to ensure acc has connectivity https://issues.redhat.com/browse/IIC-266
+nohup sh -c '
+    while true; do
+        sleep 30
+        python /usr/bin/scripts/cfg_acc_apf_x2.py
+        ping -c 1 192.168.0.2
+        if [ $? -eq 0 ]; then
+            break
+        fi
+    done
+' &
+
         """
         server = host.RemoteHost(server_with_key)
         server.ssh_connect("root", "redhat")
