@@ -4,7 +4,6 @@ import time
 from concurrent.futures import Future, ThreadPoolExecutor
 from logger import logger
 from typing import Optional, Dict, Callable
-
 import common
 import coreosBuilder
 import host
@@ -12,6 +11,7 @@ from clustersConfig import BridgeConfig, ClustersConfig, HostConfig, NodeConfig
 from clusterNode import ClusterNode, X86ClusterNode, VmClusterNode, BFClusterNode
 from virtualBridge import VirBridge
 from virshPool import VirshPool
+from ktoolbox.common import unwrap
 
 
 class ClusterHost:
@@ -56,9 +56,9 @@ class ClusterHost:
                 if node_config.kind == "vm":
                     nodes.append(VmClusterNode(self.hostconn, node_config))
                 elif node_config.kind == "physical":
-                    nodes.append(X86ClusterNode(node_config, cc.external_port))
+                    nodes.append(X86ClusterNode(node_config, cc.get_external_port()))
                 elif node_config.kind == "bf":
-                    nodes.append(BFClusterNode(node_config, cc.external_port))
+                    nodes.append(BFClusterNode(node_config, cc.get_external_port()))
                 else:
                     raise ValueError()
             return nodes
@@ -78,12 +78,12 @@ class ClusterHost:
         # than one physical host in the deployment.
         self.needs_api_network = self.hosts_vms and any(node_config.node != c.name for node_config in cc.all_nodes())
         if self.needs_api_network:
-            if self.config.network_api_port == "auto":
+            if self.config.network_api_port is None:
                 self.api_port = common.get_auto_port(self.hostconn)
+                if self.api_port is None:
+                    logger.error_and_exit("Can't find a valid network API port")
             else:
                 self.api_port = self.config.network_api_port
-            if self.api_port is None:
-                logger.error_and_exit(f"Can't find a valid network API port, config is {self.config.network_api_port}")
             logger.info(f"Using {self.api_port} as network API port")
 
     def _k8s_nodes(self) -> list[ClusterNode]:
@@ -93,7 +93,7 @@ class ClusterHost:
         if not self.hosts_vms:
             return
 
-        image_paths = {os.path.dirname(node.config.image_path) for node in nodes}
+        image_paths = {os.path.dirname(unwrap(node.config.image_path)) for node in nodes}
         for image_path in image_paths:
             self.hostconn.run(f"mkdir -p {image_path}")
             self.hostconn.run(f"chmod a+rw {image_path}")
@@ -184,7 +184,7 @@ class ClusterHost:
 
     def preinstall(self, external_port: str, executor: ThreadPoolExecutor) -> Future[host.Result]:
         def _preinstall() -> host.Result:
-            if self.config.is_preinstalled():
+            if self.config.pre_installed:
                 return host.Result.result_success()
 
             iso = "fedora-coreos.iso"
@@ -202,7 +202,7 @@ class ClusterHost:
         self._ensure_images(iso_path, infra_env, nodes)
         futures = []
         for node in nodes:
-            remote_iso_path = os.path.join(os.path.dirname(node.config.image_path), f"{infra_env}.iso")
+            remote_iso_path = os.path.join(os.path.dirname(unwrap(node.config.image_path)), f"{infra_env}.iso")
             node.start(remote_iso_path, executor)
             futures.append(node.future)
         return futures

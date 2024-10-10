@@ -5,6 +5,7 @@ from clustersConfig import NodeConfig
 import dhcpConfig
 import common
 import host
+from ktoolbox.common import unwrap
 
 
 def _pxeboot_marvell_dpu(name: str, node: str, mac: str, ip: str, iso: str) -> None:
@@ -57,7 +58,7 @@ def _pxeboot_marvell_dpu(name: str, node: str, mac: str, ip: str, iso: str) -> N
 def MarvellIsoBoot(cc: ClustersConfig, node: NodeConfig, iso: str) -> None:
     assert node.ip is not None
     _pxeboot_marvell_dpu(node.name, node.node, node.mac, node.ip, iso)
-    dhcpConfig.configure_iso_network_port(cc.network_api_port, node.ip)
+    dhcpConfig.configure_iso_network_port(unwrap(cc.cluster_config.network_api_port), node.ip)
     dhcpConfig.configure_dhcpd(node)
 
 

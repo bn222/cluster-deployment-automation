@@ -1,4 +1,8 @@
 [tool.black]
 line-length = 250
 skip-string-normalization = 1
-
+extend-exclude = '''
+/(
+  ktoolbox/
+)
+'''
