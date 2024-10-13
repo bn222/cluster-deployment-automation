@@ -75,6 +75,7 @@ class IPUClusterNode(ClusterNode):
 
     def _boot_iso(self, iso: str) -> None:
         assert self.config.ip
+        dhcpConfig.configure_iso_network_port(self.network_api_port, self.config.ip)
         dhcpConfig.configure_dhcpd(self.config)
         self._redfish_boot_ipu(self.external_port, self.config, iso)
         # wait on install + reboot to complete
