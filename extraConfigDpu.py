@@ -16,6 +16,7 @@ from imageRegistry import ImageRegistry
 DPU_OPERATOR_REPO = "https://github.com/openshift/dpu-operator.git"
 MICROSHIFT_KUBECONFIG = "/root/kubeconfig.microshift"
 OSE_DOCKERFILE = "https://pkgs.devel.redhat.com/cgit/containers/dpu-operator/tree/Dockerfile?h=rhaos-4.17-rhel-9"
+P4_IMG = "wsfd-advnetlab239.anl.eng.bos2.dc.redhat.com:5000/intel-ipu-p4-sdk:10-9-2024"
 
 KERNEL_RPMS = [
     "https://download-01.beak-001.prod.iad2.dc.redhat.com/brewroot/vol/rhel-9/packages/kernel/5.14.0/427.2.1.el9_4/x86_64/kernel-5.14.0-427.2.1.el9_4.x86_64.rpm",
@@ -130,6 +131,7 @@ def dpu_operator_start(client: K8sClient, repo: Optional[str]) -> None:
     logger.info("Waiting for all dpu operator pods to become ready")
     time.sleep(30)
     client.oc_run_or_die("wait --for=condition=Ready pod --all -n openshift-dpu-operator --timeout=5m")
+    wait_vsp_ds_running(client)
 
 
 def wait_vsp_ds_running(client: K8sClient) -> None:
@@ -146,6 +148,23 @@ def wait_vsp_ds_running(client: K8sClient) -> None:
         time.sleep(20)
     else:
         logger.error_and_exit("Vsp pods failed to reach ready state")
+
+
+def ensure_p4_pod_running(lh: host.Host, acc: host.Host, imgReg: ImageRegistry) -> None:
+    lh.run_or_die(f"podman pull --tls-verify=false {P4_IMG}")
+    lh.run_or_die(f"podman tag {P4_IMG} {imgReg.url()}/intel-ipu-p4-sdk:10-9-2024")
+    lh.run_or_die(f"podman push {imgReg.url()}/intel-ipu-p4-sdk:10-9-2024")
+    uname = acc.run("uname -r").out.strip()
+    logger.info("Manually starting P4 container")
+    cmd = f"podman run --network host -d --privileged --entrypoint='[\"/bin/sh\", \"-c\", \"sleep 5; sh /entrypoint.sh\"]' -v /lib/modules/{uname}:/lib/modules/{uname} -v data1:/opt/p4 {imgReg.url()}/intel-ipu-p4-sdk:10-9-2024"
+    acc.run_or_die(cmd)
+    # Occasionally the P4 pod fails to start
+    while True:
+        time.sleep(10)
+        if "intel-ipu-p4-sdk:10-9-2024" in acc.run("podman ps").out:
+            break
+        logger.info("Failed to start p4 container, retrying")
+        acc.run_or_die(cmd)
 
 
 def ExtraConfigDpu(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, Future[Optional[host.Result]]]) -> None:
@@ -171,14 +190,8 @@ def ExtraConfigDpu(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, 
     if isinstance(vendor_plugin, IpuPlugin):
         # TODO: Remove when this container is properly started by the vsp
         # We need to manually start the p4 sdk container currently for the IPU plugin
-        p4_img = "wsfd-advnetlab239.anl.eng.bos2.dc.redhat.com:5000/intel-ipu-p4-sdk:10-9-2024"
-        lh.run_or_die(f"podman pull --tls-verify=false {p4_img}")
-        lh.run_or_die(f"podman tag {p4_img} {imgReg.url()}/intel-ipu-p4-sdk:10-9-2024")
-        lh.run_or_die(f"podman push {imgReg.url()}/intel-ipu-p4-sdk:10-9-2024")
-        uname = acc.run("uname -r").out.strip()
-        logger.info("Manually starting P4 container")
-        cmd = f"podman run --network host -d --privileged --entrypoint='[\"/bin/sh\", \"-c\", \"sleep 5; sh /entrypoint.sh\"]' -v /lib/modules/{uname}:/lib/modules/{uname} -v data1:/opt/p4 {imgReg.url()}/intel-ipu-p4-sdk:10-9-2024"
-        acc.run_or_die(cmd)
+        ensure_p4_pod_running(lh, acc, imgReg)
+
         # Build on the ACC since an aarch based server is needed for the build
         # (the Dockerfile needs to be fixed to allow layered multi-arch build
         # by removing the calls to pip)

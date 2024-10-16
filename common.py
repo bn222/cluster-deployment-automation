@@ -72,7 +72,7 @@ def strict_dataclass(cls: TCallable) -> TCallable:
             name = field.name
             value = getattr(self, name)
             type_hint = field.type
-            if not check_type(value, type_hint):
+            if not check_type(value, type_hint):  # type: ignore
                 raise TypeError(f"Expected type '{type_hint}' for attribute '{name}' but received type '{type(value)}')")
 
         # Normally, data classes support __post_init__(), which is called by __init__()
