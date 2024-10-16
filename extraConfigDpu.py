@@ -131,7 +131,6 @@ def dpu_operator_start(client: K8sClient, repo: Optional[str]) -> None:
     logger.info("Waiting for all dpu operator pods to become ready")
     time.sleep(30)
     client.oc_run_or_die("wait --for=condition=Ready pod --all -n openshift-dpu-operator --timeout=5m")
-    wait_vsp_ds_running(client)
 
 
 def wait_vsp_ds_running(client: K8sClient) -> None:
@@ -221,6 +220,7 @@ def ExtraConfigDpu(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, 
     logger.info("Waiting for all pods to become ready")
     client.oc_run_or_die("wait --for=condition=Ready pod --all --all-namespaces --timeout=2m")
     client.oc_run_or_die(f"create -f {repo}/examples/dpu.yaml")
+    wait_vsp_ds_running(client)
     client.oc_run_or_die("wait --for=condition=Ready pod --all --all-namespaces --timeout=3m")
     logger.info("Finished setting up dpu operator on dpu")
 
@@ -299,6 +299,7 @@ def ExtraConfigDpuHost(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[s
     logger.info("Creating dpu operator config")
     client.oc_run_or_die(f"create -f {repo}/examples/host.yaml")
     time.sleep(30)
+    wait_vsp_ds_running(client)
     client.oc_run_or_die("wait --for=condition=Ready pod --all -n openshift-dpu-operator --timeout=5m")
     logger.info("Finished setting up dpu operator on host")
 
