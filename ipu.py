@@ -426,23 +426,37 @@ nohup sh -c '
     def cold_boot(self) -> None:
         pass
 
-    def version(self) -> str:
+    def _version_via_redfish(self) -> Optional[str]:
         url = f"https://{self.url}:8443/redfish/v1/Managers/1"
         res = self._run_curl(f"-k '{url}'")
         if res.returncode != 0:
-            raise RuntimeError(f"Cannot detect Redfish version: failure to fetch URL {repr(url)}")
+            return None
         try:
             data = json.loads(res.out)
         except Exception:
-            raise RuntimeError(f"Cannot detect Redfish version: not valid JSON received but {repr(res.out)}")
+            return None
         fwversion = data.get("FirmwareVersion")
         if not isinstance(fwversion, str):
-            raise RuntimeError(f"Cannot detect Redfish version: FirmwareVersion field not present in {repr(res.out)}")
-        fwversion = fwversion.strip()
-        match = re.search(r"^MEV-.*\.([0-9]+\.[0-9]+\.[0-9]+)\.[0-9]+$", fwversion)
+            return None
+        match = re.search(r"^MEV-.*\.([0-9]+\.[0-9]+\.[0-9]+)\.[0-9]+$", fwversion.strip())
         if not match:
-            raise RuntimeError(f"Cannot detect Redfish version: FirmwareVersion is unexpected {repr(fwversion)}")
+            return None
         return match.group(1)
+
+    def _version_via_ssh(self) -> Optional[str]:
+        rh = host.RemoteHost(self.url)
+        rh.ssh_connect("root", password="", discover_auth=False)
+        contents = rh.read_file("/etc/issue")
+        match = re.search(r"Version: (\S+)", contents)
+        if not match:
+            return None
+        return match.group(1).strip()
+
+    def version(self) -> str:
+        fwversion = self._version_via_redfish() or self._version_via_ssh()
+        if not fwversion:
+            raise RuntimeError(f"Failed to detect Redfish version on {self.url}")
+        return fwversion
 
 
 def extract_server(url: str) -> str:
