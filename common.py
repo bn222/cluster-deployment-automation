@@ -25,7 +25,7 @@ from typing import Union
 T = TypeVar("T")
 
 
-def check_type(value: typing.Any, type_hint: type[typing.Any]) -> bool:
+def check_type(value: typing.Any, type_hint: typing.Any) -> bool:
 
     # Some naive type checking. This is used for ensuring that data classes
     # contain the expected types (via @strict_dataclass.
@@ -72,7 +72,7 @@ def strict_dataclass(cls: TCallable) -> TCallable:
             name = field.name
             value = getattr(self, name)
             type_hint = field.type
-            if not check_type(value, type_hint):  # type: ignore
+            if not check_type(value, type_hint):
                 raise TypeError(f"Expected type '{type_hint}' for attribute '{name}' but received type '{type(value)}')")
 
         # Normally, data classes support __post_init__(), which is called by __init__()
