@@ -1,4 +1,3 @@
-import sys
 import os
 import time
 from logger import logger
@@ -279,11 +278,12 @@ class IPUBMC(BMC):
             password = "calvincalvincalvin"
         super().__init__(full_url, user, password)
 
-    def _run_curl(self, command: str) -> None:
+    def _run_curl(self, command: str) -> host.Result:
         lh = host.LocalHost()
         logger.info(command)
         result = lh.run(f"curl -v -u {self.user}:{self.password} {command}")
         logger.info(result)
+        return result
 
     def _restart_redfish(self) -> None:
         rh = host.RemoteHost(self.url)
@@ -443,13 +443,22 @@ nohup sh -c '
         pass
 
     def version(self) -> str:
-        rh = host.RemoteHost(self.url)
-        rh.ssh_connect("root", password="", discover_auth=False)
-        contents = rh.read_file("/etc/issue")
-        match = re.search(r"Version: (\S+)", contents)
-        if match is None:
-            sys.exit(-1)
-        return match.group(1).strip()
+        url = f"https://{self.url}:8443/redfish/v1/Managers/1"
+        res = self._run_curl(f"-k '{url}'")
+        if res.returncode != 0:
+            raise RuntimeError(f"Cannot detect Redfish version: failure to fetch URL {repr(url)}")
+        try:
+            data = json.loads(res.out)
+        except Exception:
+            raise RuntimeError(f"Cannot detect Redfish version: not valid JSON received but {repr(res.out)}")
+        fwversion = data.get("FirmwareVersion")
+        if not isinstance(fwversion, str):
+            raise RuntimeError(f"Cannot detect Redfish version: FirmwareVersion field not present in {repr(res.out)}")
+        fwversion = fwversion.strip()
+        match = re.search(r"^MEV-.*\.([0-9]+\.[0-9]+\.[0-9]+)\.[0-9]+$", fwversion)
+        if not match:
+            raise RuntimeError(f"Cannot detect Redfish version: FirmwareVersion is unexpected {repr(fwversion)}")
+        return match.group(1)
 
 
 def extract_server(url: str) -> str:
