@@ -1,4 +1,3 @@
-import sys
 import os
 import time
 from logger import logger
@@ -279,11 +278,12 @@ class IPUBMC(BMC):
             password = "calvincalvincalvin"
         super().__init__(full_url, user, password)
 
-    def _run_curl(self, command: str) -> None:
+    def _run_curl(self, command: str) -> host.Result:
         lh = host.LocalHost()
         logger.info(command)
         result = lh.run(f"curl -v -u {self.user}:{self.password} {command}")
         logger.info(result)
+        return result
 
     def _restart_redfish(self) -> None:
         rh = host.RemoteHost(self.url)
@@ -442,14 +442,36 @@ nohup sh -c '
     def cold_boot(self) -> None:
         pass
 
-    def version(self) -> str:
+    def _version_via_redfish(self) -> Optional[str]:
+        url = f"https://{self.url}:8443/redfish/v1/Managers/1"
+        res = self._run_curl(f"-k '{url}'")
+        if res.returncode != 0:
+            return None
+        try:
+            fwversion = (json.loads(res.out))["FirmwareVersion"]
+        except Exception:
+            return None
+        if not isinstance(fwversion, str):
+            return None
+        match = re.search(r"^MEV-.*\.([0-9]+\.[0-9]+\.[0-9]+)\.[0-9]+$", fwversion.strip())
+        if not match:
+            return None
+        return match.group(1)
+
+    def _version_via_ssh(self) -> Optional[str]:
         rh = host.RemoteHost(self.url)
         rh.ssh_connect("root", password="", discover_auth=False)
         contents = rh.read_file("/etc/issue")
         match = re.search(r"Version: (\S+)", contents)
-        if match is None:
-            sys.exit(-1)
+        if not match:
+            return None
         return match.group(1).strip()
+
+    def version(self) -> str:
+        fwversion = self._version_via_redfish() or self._version_via_ssh()
+        if not fwversion:
+            raise RuntimeError(f"Failed to detect Redfish version on {self.url}")
+        return fwversion
 
 
 def extract_server(url: str) -> str:
