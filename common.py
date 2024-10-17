@@ -8,6 +8,7 @@ from types import TracebackType
 import http.server
 from multiprocessing import Process
 from git.repo import Repo
+import shlex
 import shutil
 import host
 from logger import logger
@@ -25,7 +26,7 @@ from typing import Union
 T = TypeVar("T")
 
 
-def check_type(value: typing.Any, type_hint: type[typing.Any]) -> bool:
+def check_type(value: typing.Any, type_hint: typing.Any) -> bool:
 
     # Some naive type checking. This is used for ensuring that data classes
     # contain the expected types (via @strict_dataclass.
@@ -72,7 +73,7 @@ def strict_dataclass(cls: TCallable) -> TCallable:
             name = field.name
             value = getattr(self, name)
             type_hint = field.type
-            if not check_type(value, type_hint):  # type: ignore
+            if not check_type(value, type_hint):
                 raise TypeError(f"Expected type '{type_hint}' for attribute '{name}' but received type '{type(value)}')")
 
         # Normally, data classes support __post_init__(), which is called by __init__()
@@ -571,7 +572,7 @@ def atomic_write(
                 pass
 
 
-def build_sriov_network_operator_check_permissions() -> bool:
+def podman_pull(image: str, *, authfile: Optional[str] = None) -> bool:
     # To build sriov_network_operator, we must be able to pull build images
     # from registry.ci.ipenshift.org. See [1].
     #
@@ -583,8 +584,11 @@ def build_sriov_network_operator_check_permissions() -> bool:
     #
     # [1] https://github.com/openshift/sriov-network-operator/blob/34f3e5f934ca72eae57667d7a9185f5af47aea3a/Dockerfile.rhel7#L1
     # [2] https://oauth-openshift.apps.ci.l2s4.p1.openshiftapps.com/oauth/token/request
+    s_authfile = ""
+    if authfile is not None:
+        s_authfile = f" --authfile={shlex.quote(authfile)}"
     rsh = host.LocalHost()
-    ret = rsh.run("podman pull registry.ci.openshift.org/ocp/builder:rhel-9-golang-1.21-openshift-4.16")
+    ret = rsh.run(f"podman pull{s_authfile} {shlex.quote(image)}")
     return ret.success()
 
 

@@ -1,7 +1,5 @@
 clusters:
   - name : "marvel_dpu_cluster"
-    api_vip: "192.168.123.99"
-    ingress_vip: "192.168.123.101"
     network_api_port: "eno2"
     kind: "iso"
     install_iso: "rhel:" # Causes marvell-octeon-10-tools' pxeboot to download latest RHEL9 ISO

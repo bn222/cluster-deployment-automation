@@ -5,11 +5,12 @@ from typing import Optional
 from logger import logger
 from clustersConfig import ExtraConfigArgs
 import host
+from ktoolbox.common import unwrap
 
 
 def ExtraConfigMastersSchedulable(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, Future[Optional[host.Result]]]) -> None:
     [f.result() for (_, f) in futures.items()]
-    schedulable = "true" if cfg.schedulable else "false"
+    schedulable = "true" if unwrap(cfg.schedulable) else "false"
     logger.info(f"Running post config step to set \"mastersSchedulable\" to \"{schedulable}\".")
     iclient = K8sClient(cc.kubeconfig)
 

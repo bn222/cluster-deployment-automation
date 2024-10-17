@@ -25,47 +25,30 @@ from virshPool import VirshPool
 from arguments import PRE_STEP, WORKERS_STEP, MASTERS_STEP, POST_STEP
 from libvirt import Libvirt
 from baseDeployer import BaseDeployer
-
-
-def match_to_proper_version_format(version_cluster_config: str) -> str:
-    regex_pattern = r'^\d+\.\d+'
-    match = re.match(regex_pattern, version_cluster_config)
-    logger.info(f"getting version to match with format XX.X using regex {regex_pattern}")
-    if not match:
-        logger.error_and_exit(f"Invalid match {match}")
-    return match.group(0)
+from ktoolbox.common import unwrap
 
 
 _BF_ISO_PATH = "/root/iso"
 
 
 class ClusterDeployer(BaseDeployer):
-    def __init__(self, cc: ClustersConfig, ai: AssistedClientAutomation, steps: list[str], secrets_path: str):
+    def __init__(self, cc: ClustersConfig, ai: AssistedClientAutomation, steps: list[str]):
         super().__init__(cc, steps)
         self._client: Optional[K8sClient] = None
         self._ai = ai
-        self._secrets_path = secrets_path
 
-        if self.need_external_network():
-            self._cc.prepare_external_port()
-
-        lh = host.LocalHost()
-        lh_config = list(filter(lambda hc: hc.name == lh.hostname(), self._cc.hosts))[0]
-        self._local_host = ClusterHost(lh, lh_config, cc, cc.local_bridge_config)
-        self._remote_hosts = {bm.name: ClusterHost(host.RemoteHost(bm.name), bm, cc, cc.remote_bridge_config) for bm in self._cc.hosts if bm.name != lh.hostname()}
+        self._local_host = ClusterHost(host.LocalHost(), self._cc.hosts["localhost"], cc, unwrap(cc.cluster_config.local_bridge_config))
+        self._remote_hosts = {bm.name: ClusterHost(host.RemoteHost(bm.name), bm, cc, unwrap(cc.cluster_config.remote_bridge_config)) for bm in self._cc.hosts.values() if bm.name != "localhost"}
         self._all_hosts = [self._local_host] + list(self._remote_hosts.values())
         self._futures.update((k8s_node.config.name, k8s_node.future) for h in self._all_hosts for k8s_node in h._k8s_nodes())
         self._all_nodes = {k8s_node.config.name: k8s_node for h in self._all_hosts for k8s_node in h._k8s_nodes()}
 
         self.masters_arch = "x86_64"
-        is_bf_map = [x.kind == "bf" for x in self._cc.workers]
-        self.is_bf = any(is_bf_map)
-        if self.is_bf:
-            if not all(is_bf_map):
-                logger.error_and_exit("Not yet supported to have mixed BF and non-bf workers")
+        if self._cc.cluster_config.has_bf_workers:
             self.workers_arch = "arm64"
         else:
             self.workers_arch = "x86_64"
+
         self._validate()
 
     def _all_hosts_with_masters(self) -> set[ClusterHost]:
@@ -125,7 +108,7 @@ class ClusterDeployer(BaseDeployer):
 
         self._local_host.bridge.remove_dhcp_entries(self._cc.master_vms())
 
-        image_paths = {os.path.dirname(n.image_path) for n in self._cc.local_vms()}
+        image_paths = {os.path.dirname(unwrap(n.image_path)) for n in self._cc.local_vms()}
         for image_path in image_paths:
             vp = VirshPool(
                 name=os.path.basename(image_path),
@@ -208,38 +191,32 @@ class ClusterDeployer(BaseDeployer):
                 else:
                     logger.info("Skipping worker creation.")
         if self._cc.kind == "microshift":
-            version = match_to_proper_version_format(self._cc.version)
-
-            if len(self._cc.masters) == 1:
-                microshift.deploy(
-                    secrets_path=self._secrets_path,
-                    node=self._cc.masters[0],
-                    external_port=self._cc.external_port,
-                    version=version,
-                )
-            else:
-                logger.error_and_exit("Masters must be of length one for deploying microshift")
+            microshift.deploy(
+                secrets_path=self._cc.secrets_path,
+                node=self._cc.cluster_config.single_master,
+                external_port=self._cc.get_external_port(),
+                version=self._cc.cluster_config.ocp_version,
+            )
         if POST_STEP in self.steps:
             self._postconfig()
         else:
             logger.info("Skipping post configuration.")
 
     def _validate(self) -> None:
-        if self._cc.is_sno():
+        if self._cc.cluster_config.is_sno:
             logger.info("Setting up a Single Node OpenShift (SNO) environment")
-            if self._cc.masters[0].ip is None:
-                logger.error_and_exit("Missing ip on master")
 
         min_cores = 28
         cc = int(self._local_host.hostconn.run("nproc").out)
         if cc < min_cores:
             logger.error_and_exit(f"Detected {cc} cores on localhost, but need at least {min_cores} cores")
         if self.need_external_network():
-            if not self._cc.validate_external_port():
-                logger.error_and_exit(f"Invalid external port, config is {self._cc.external_port}")
+            try:
+                self._cc.get_external_port()
+            except Exception as e:
+                logger.error_and_exit(f"Invalid external port: {e}")
         else:
             logger.info("Don't need external network so will not set it up")
-        self._cc.validate_node_ips()
 
     def _get_status(self, name: str) -> Optional[str]:
         h = self._ai.get_ai_host(name)
@@ -273,21 +250,29 @@ class ClusterDeployer(BaseDeployer):
         cfg: dict[str, Union[str, bool, list[str], list[dict[str, str]]]] = {}
         cfg["openshift_version"] = self._cc.version
         cfg["cpu_architecture"] = "multi"
-        cfg["pull_secret"] = self._secrets_path
+        cfg["pull_secret"] = self._cc.secrets_path
         cfg["infraenv"] = "false"
 
-        if not self._cc.is_sno():
-            cfg["api_vips"] = [self._cc.api_vip]
-            cfg["ingress_vips"] = [self._cc.ingress_vip]
+        if not self._cc.cluster_config.is_sno:
+            cfg["api_vips"] = [
+                {
+                    "ip": unwrap(self._cc.cluster_config.api_vip),
+                }
+            ]
+            cfg["ingress_vips"] = [
+                {
+                    "ip": unwrap(self._cc.cluster_config.ingress_vip),
+                }
+            ]
 
         cfg["vip_dhcp_allocation"] = False
-        cfg["additional_ntp_source"] = self._cc.ntp_source
-        cfg["base_dns_domain"] = self._cc.base_dns_domain
-        cfg["sno"] = self._cc.is_sno()
-        if self._cc.proxy:
-            cfg["proxy"] = self._cc.proxy
-        if self._cc.noproxy:
-            cfg["noproxy"] = self._cc.noproxy
+        cfg["additional_ntp_source"] = unwrap(self._cc.cluster_config.ntp_source)
+        cfg["base_dns_domain"] = unwrap(self._cc.cluster_config.base_dns_domain)
+        cfg["sno"] = self._cc.cluster_config.is_sno
+        if self._cc.cluster_config.proxy:
+            cfg["proxy"] = self._cc.cluster_config.proxy
+        if self._cc.cluster_config.noproxy:
+            cfg["noproxy"] = self._cc.cluster_config.noproxy
 
         logger.info("Creating cluster")
         logger.info(cfg)
@@ -300,13 +285,13 @@ class ClusterDeployer(BaseDeployer):
 
         cfg = {}
         cfg["cluster"] = cluster_name
-        cfg["pull_secret"] = self._secrets_path
+        cfg["pull_secret"] = self._cc.secrets_path
         cfg["cpu_architecture"] = self.masters_arch
         cfg["openshift_version"] = self._cc.version
-        if self._cc.proxy:
-            cfg["proxy"] = self._cc.proxy
-        if self._cc.noproxy:
-            cfg["noproxy"] = self._cc.noproxy
+        if self._cc.cluster_config.proxy:
+            cfg["proxy"] = self._cc.cluster_config.proxy
+        if self._cc.cluster_config.noproxy:
+            cfg["noproxy"] = self._cc.cluster_config.noproxy
         self._ai.ensure_infraenv_created(infra_env, cfg)
 
         hosts_with_masters = self._all_hosts_with_masters()
@@ -337,7 +322,7 @@ class ClusterDeployer(BaseDeployer):
 
         # Wait for masters to have booted.
         for h in hosts_with_masters:
-            h.wait_for_masters_boot(self._cc.full_ip_range)
+            h.wait_for_masters_boot(self._cc.real_ip_range)
 
         def cb() -> None:
             finished = [p for p in futures if p.done()]
@@ -383,13 +368,13 @@ class ClusterDeployer(BaseDeployer):
 
         cfg = {}
         cfg["cluster"] = cluster_name
-        cfg["pull_secret"] = self._secrets_path
+        cfg["pull_secret"] = self._cc.secrets_path
         cfg["cpu_architecture"] = self.workers_arch
         cfg["openshift_version"] = self._cc.version
-        if self._cc.proxy:
-            cfg["proxy"] = self._cc.proxy
-        if self._cc.noproxy:
-            cfg["noproxy"] = self._cc.noproxy
+        if self._cc.cluster_config.proxy:
+            cfg["proxy"] = self._cc.cluster_config.proxy
+        if self._cc.cluster_config.noproxy:
+            cfg["noproxy"] = self._cc.cluster_config.noproxy
 
         self._ai.ensure_infraenv_created(infra_env, cfg)
         hosts_with_workers = self._all_hosts_with_workers()
@@ -411,12 +396,12 @@ class ClusterDeployer(BaseDeployer):
         executor = ThreadPoolExecutor(max_workers=len(self._cc.workers))
 
         # Install all hosts that need to run (or be) workers.
-        preinstall_futures = {h: h.preinstall(self._cc.external_port, executor) for h in hosts_with_workers}
+        preinstall_futures = {h: h.preinstall(self._cc.get_external_port(), executor) for h in hosts_with_workers}
         for h, pf in preinstall_futures.items():
             logger.info(f"Preinstall {h}: {pf.result()}")
 
         # Start all workers on all hosts.
-        if not self.is_bf:
+        if not self._cc.cluster_config.has_bf_workers:
             iso_path = os.getcwd()
         else:
             # BF images are NFS mounted from _BF_ISO_PATH.
@@ -434,7 +419,7 @@ class ClusterDeployer(BaseDeployer):
 
         # Wait for workers to have booted.
         for h in hosts_with_workers:
-            h.wait_for_workers_boot(self._cc.full_ip_range)
+            h.wait_for_workers_boot(self._cc.real_ip_range)
 
         # Rename workers in AI.
         logger.info("renaming workers")
@@ -474,7 +459,7 @@ class ClusterDeployer(BaseDeployer):
                 hosts.append(rh)
                 workers.append(k8s_node)
 
-        ip_range = self._cc.full_ip_range
+        ip_range = self._cc.real_ip_range
         logger.info(f"Connectivity established to all workers; checking that they have an IP in range: {ip_range}")
 
         def any_address_in_range(h: host.Host, ip_range: tuple[str, str]) -> bool:
@@ -591,7 +576,7 @@ class ClusterDeployer(BaseDeployer):
             self.client().approve_csr()
             if len(connections) != len(bf_workers):
                 for e in filter(lambda x: x.name not in connections, bf_workers):
-                    ai_ip = self._ai.get_ai_ip(e.name, self._cc.full_ip_range)
+                    ai_ip = self._ai.get_ai_ip(e.name, self._cc.real_ip_range)
                     if ai_ip is None:
                         continue
                     h = host.Host(ai_ip)
