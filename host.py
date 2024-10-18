@@ -242,14 +242,15 @@ class Host:
         if self.sudo_needed:
             cmd = "sudo " + cmd
 
-        if not quiet:
+        if not quiet and log_level >= 0:
             logger.log(log_level, f"running command {cmd} on {self._hostname}")
         if self.is_localhost():
             ret_val = self._run_local(cmd, env)
         else:
             ret_val = self._run_remote(cmd, log_level)
 
-        logger.log(log_level, ret_val)
+        if log_level >= 0:
+            logger.log(log_level, ret_val)
         return ret_val
 
     def _run_local(self, cmd: str, env: dict[str, str]) -> Result:
@@ -273,7 +274,8 @@ class Host:
 
             out = []
             for line in iter(stdout.readline, ""):
-                logger.log(log_level, f"{self._hostname}: {line.rstrip()}")
+                if log_level >= 0:
+                    logger.log(log_level, f"{self._hostname}: {line.rstrip()}")
                 out.append(line)
 
             err = []
@@ -290,8 +292,9 @@ class Host:
             try:
                 return read_output(cmd, log_level)
             except Exception as e:
-                logger.log(log_level, e)
-                logger.log(log_level, "Connection lost while running command, reconnecting...")
+                if log_level >= 0:
+                    logger.log(log_level, e)
+                    logger.log(log_level, "Connection lost while running command, reconnecting...")
                 self.ssh_connect_looped(self._logins)
 
     def run_or_die(self, cmd: str) -> Result:
