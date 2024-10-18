@@ -81,7 +81,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description='Cluster deployment automation')
     parser.add_argument('config', metavar='config', type=str, help='Yaml file with config').completer = yaml_completer  # type: ignore
     parser.add_argument('-v', '--verbosity', choices=['debug', 'info', 'warning', 'error', 'critical'], default='info', help='Set the logging level (default: info)')
-    parser.add_argument('--secret', dest='secrets_path', default='', action='store', type=str, help='pull_secret.json path (default is in cwd)')
+    parser.add_argument('--secret', dest='secrets_path', default=None, action='store', type=str, help='pull_secret.json path (default is in cwd)')
     parser.add_argument('--assisted-installer-url', dest='url', default='192.168.122.1', action='store', type=str, help='If set to 0.0.0.0 (the default), Assisted Installer will be started locally')
 
     subparsers = parser.add_subparsers(title='subcommands', dest='subcommand')
@@ -121,11 +121,4 @@ def parse_args() -> argparse.Namespace:
         args.worker_range = range_list or common.RangeList.UNLIMITED
 
     configure_logger(getattr(logging, args.verbosity.upper()))
-
-    if not args.secrets_path:
-        args.secrets_path = os.path.join(os.getcwd(), "pull_secret.json")
-    if not os.path.exists(args.secrets_path):
-        url = "https://console.redhat.com/openshift/install/pull-secret"
-        logger.info(f"Missing secrets file at {args.secrets_path}, get it from {url}")
-        sys.exit(-1)
     return args
