@@ -291,7 +291,7 @@ class Host:
                 return read_output(cmd, log_level)
             except Exception as e:
                 logger.log(log_level, e)
-                logger.log(log_level, f"Connection lost while running command, reconnecting...")
+                logger.log(log_level, "Connection lost while running command, reconnecting...")
                 self.ssh_connect_looped(self._logins)
 
     def run_or_die(self, cmd: str) -> Result:
