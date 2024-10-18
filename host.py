@@ -245,14 +245,14 @@ class Host:
         if not quiet:
             logger.log(log_level, f"running command {cmd} on {self._hostname}")
         if self.is_localhost():
-            ret_val = self._run_local(cmd, env, quiet)
+            ret_val = self._run_local(cmd, env)
         else:
-            ret_val = self._run_remote(cmd, log_level, quiet)
+            ret_val = self._run_remote(cmd, log_level)
 
         logger.log(log_level, ret_val)
         return ret_val
 
-    def _run_local(self, cmd: str, env: dict[str, str], quiet: bool = False) -> Result:
+    def _run_local(self, cmd: str, env: dict[str, str]) -> Result:
         args = shlex.split(cmd)
         pipe = subprocess.PIPE
         with subprocess.Popen(args, stdout=pipe, stderr=pipe, env=env) as proc:
@@ -262,13 +262,11 @@ class Host:
             if proc.stderr is None:
                 logger.info("Can't find stderr")
                 sys.exit(-1)
-            out = proc.stdout.read().decode("utf-8")
-            err = proc.stderr.read().decode("utf-8")
-            proc.communicate()
+            out, err = proc.communicate()
             ret = proc.returncode
-        return Result(out, err, ret)
+        return Result(out.decode("utf-8"), err.decode("utf-8"), ret)
 
-    def _run_remote(self, cmd: str, log_level: int, quiet: bool = False) -> Result:
+    def _run_remote(self, cmd: str, log_level: int) -> Result:
         def read_output(cmd: str, log_level: int) -> Result:
             assert self._host is not None
             _, stdout, stderr = self._host.exec_command(cmd)
