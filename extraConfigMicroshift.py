@@ -39,7 +39,7 @@ def extract_microshift_kubeconfig(acc: host.Host) -> str:
     kubeconfig: Dict[str, Any] = yaml.safe_load(acc.read_file(kubeconfig_path))
     kubeconfig["clusters"][0]["cluster"]["insecure-skip-tls-verify"] = True
     kubeconfig["clusters"][0]["cluster"]["server"] = f"https://{acc.hostname()}:6443"
-    to_write = yaml.dump(kubeconfig)
+    to_write: str = yaml.dump(kubeconfig)
     key = "certificate-authority-data"
     to_write = to_write.replace(f"{key}:", f"# {key}:")
     return to_write
