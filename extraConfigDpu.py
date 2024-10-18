@@ -194,7 +194,7 @@ def ExtraConfigDpu(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, 
         # Build on the ACC since an aarch based server is needed for the build
         # (the Dockerfile needs to be fixed to allow layered multi-arch build
         # by removing the calls to pip)
-        vsp_img = vendor_plugin.build_push(acc, imgReg)
+        vsp_img = vendor_plugin.build_push(acc, imgReg, cfg.ipu_plugin_sha)
 
         # As a workaround while waiting for properly multiarch build support, we can create a manifest to ensure both host and dpu can deploy the vsp with the same image.
         # Note that this makes the assumption that the host deployment has already been run and the latest ipu plugin image is already locally available in the registry.
@@ -241,7 +241,7 @@ def ExtraConfigDpuHost(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[s
     h.ssh_connect("core")
     vendor_plugin = init_vendor_plugin(h, node.kind or "")
     if isinstance(vendor_plugin, IpuPlugin):
-        vendor_plugin.build_push(lh, imgReg)
+        vendor_plugin.build_push(lh, imgReg, cfg.ipu_plugin_sha)
 
     git_repo_setup(repo, branch="main", repo_wipe=False, url=DPU_OPERATOR_REPO)
     if cfg.rebuild_dpu_operators_images:
