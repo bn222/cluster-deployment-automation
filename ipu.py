@@ -82,7 +82,6 @@ class IPUClusterNode(ClusterNode):
         acc.ssh_connect("root", "redhat")
         logger.info(acc.run("uname -a"))
         # configure_iso_network_port(self.network_api_port, self.config.ip)
-        self._ensure_ipu_netdevs_available()
 
     def start(self, iso_or_image_path: str, executor: ThreadPoolExecutor) -> None:
         self.future = executor.submit(self._boot_iso, iso_or_image_path)
@@ -115,27 +114,6 @@ class IPUClusterNode(ClusterNode):
 
     def post_boot(self, desired_ip_range: tuple[str, str]) -> bool:
         return True
-
-    # TODO: Remove this workaround once rebooting the IMC no longer
-    # causes the netdevs on the IPU host to be removed
-    def _ensure_ipu_netdevs_available(self) -> None:
-        # This is a hack, iso_cluster deployments in general should not need to know about the x86 host they are connected to.
-        # However, since we need to cold boot the corresponding host, for the time being, infer this from the IMC address
-        # rather than requiring the user to provide this information.
-        ipu_host = self._ipu_host()
-        ipu_host.ssh_connect("core")
-        ret = ipu_host.run("test -d /sys/class/net/ens2f0")
-        retries = 3
-        while ret.returncode != 0:
-            logger.error(f"{ipu_host.hostname()} does not have a network device ens2f0 cold booting node to try to recover")
-            ipu_host.cold_boot()
-            logger.info("Cold boot triggered, waiting for host to reboot")
-            time.sleep(60)
-            ipu_host.ssh_connect("core")
-            retries = retries - 1
-            if retries == 0:
-                logger.error_and_exit(f"Failed to bring up IPU net device on {ipu_host.hostname()}")
-            ret = ipu_host.run("test -d /sys/class/net/ens2f0")
 
     def _ipu_host(self) -> host.Host:
         def host_from_imc(imc: str) -> str:
@@ -239,37 +217,9 @@ class IPUClusterNodeOld(ClusterNode):
         ipu_acc.run("nmcli con mod enp0s1f0 ipv4.route-metric 0")
         ipu_acc.run("ip route delete default via 192.168.0.1")  # remove imc default route to avoid conflict
         logger.info(f"{node.name} connectivity established")
-        self.ensure_ipu_netdevs_available()
 
     def post_boot(self, desired_ip_range: tuple[str, str]) -> bool:
         return True
-
-    # TODO: Remove this workaround once rebooting the IMC no longer causes the netdevs on the IPU host to be removed
-    def ensure_ipu_netdevs_available(self) -> None:
-        def host_from_imc(imc: str) -> str:
-            ipu_host = imc.split('-intel-ipu-imc')[0]
-            return ipu_host
-
-        node = self.config
-        # This is a hack, iso_cluster deployments in general should not need to know about the x86 host they are connected to.
-        # However, since we need to cold boot the corresponding host, for the time being, infer this from the IMC address
-        # rather than requiring the user to provide this information.
-        ipu_host_name = host_from_imc(node.bmc)
-        ipu_host_bmc = BMC.from_bmc(ipu_host_name + "-drac.anl.eng.bos2.dc.redhat.com", "root", "calvin")
-        ipu_host = host.Host(ipu_host_name, ipu_host_bmc)
-        ipu_host.ssh_connect("core")
-        ret = ipu_host.run("test -d /sys/class/net/ens2f0")
-        retries = 3
-        while ret.returncode != 0:
-            logger.error(f"{ipu_host.hostname()} does not have a network device ens2f0 cold booting node to try to recover")
-            ipu_host.cold_boot()
-            logger.info("Cold boot triggered, waiting for host to reboot")
-            time.sleep(60)
-            ipu_host.ssh_connect("core")
-            retries = retries - 1
-            if retries == 0:
-                logger.error_and_exit(f"Failed to bring up IPU net device on {ipu_host.hostname()}")
-            ret = ipu_host.run("test -d /sys/class/net/ens2f0")
 
 
 class IPUBMC(BMC):
