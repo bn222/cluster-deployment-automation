@@ -52,15 +52,15 @@ class IpuPlugin(VendorPlugin):
         return f"{img_reg.url()}/intel_vsp:dev"
 
     def build_push_start(self, h: host.Host, client: K8sClient, imgReg: ImageRegistry) -> None:
-        return self.start(self.build_push(h, imgReg), client)
+        return self.start(self.build_push(h, imgReg, "main"), client)
 
-    def build_push(self, h: host.Host, imgReg: ImageRegistry) -> str:
+    def build_push(self, h: host.Host, imgReg: ImageRegistry, sha: str) -> str:
         logger.info("Building ipu-opi-plugin")
         h.run("rm -rf /root/ipu-opi-plugins")
         h.run_or_die(f"git clone {self.repo} /root/ipu-opi-plugins")
 
-        # WA until 1.8 VSP has been merged / validated into main branch
-        # h.run_or_die("git -C /root/ipu-opi-plugins checkout 1.6.2_MEV_REL_new_artifacts")
+        logger.info(f"Will build ipu-opi-plugin from commit f{sha}")
+        h.run_or_die(f"git checkout {sha}")
 
         fn = "/root/ipu-opi-plugins/ipu-plugin/images/Dockerfile"
         golang_img = extractContainerImage(h.read_file(fn))

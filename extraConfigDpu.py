@@ -194,7 +194,7 @@ def ExtraConfigDpu(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, 
         # Build on the ACC since an aarch based server is needed for the build
         # (the Dockerfile needs to be fixed to allow layered multi-arch build
         # by removing the calls to pip)
-        vsp_img = vendor_plugin.build_push(acc, imgReg)
+        vsp_img = vendor_plugin.build_push(acc, imgReg, cfg.ipu_plugin_sha)
 
         # As a workaround while waiting for properly multiarch build support, we can create a manifest to ensure both host and dpu can deploy the vsp with the same image.
         # Note that this makes the assumption that the host deployment has already been run and the latest ipu plugin image is already locally available in the registry.
@@ -241,7 +241,7 @@ def ExtraConfigDpuHost(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[s
     h.ssh_connect("core")
     vendor_plugin = init_vendor_plugin(h, node.kind or "")
     if isinstance(vendor_plugin, IpuPlugin):
-        vendor_plugin.build_push(lh, imgReg)
+        vendor_plugin.build_push(lh, imgReg, cfg.ipu_plugin_sha)
 
     git_repo_setup(repo, branch="main", repo_wipe=False, url=DPU_OPERATOR_REPO)
     if cfg.rebuild_dpu_operators_images:
@@ -251,26 +251,6 @@ def ExtraConfigDpuHost(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[s
     dpu_operator_start(client, repo)
 
     def helper(h: host.Host, node: NodeConfig) -> Optional[host.Result]:
-        # Temporary workaround, remove once 4.16 installations are working
-        logger.info("Ensuring Rhel 9.4 kernel is installed")
-        ensure_rhel_9_4_kernel_is_installed(h)
-        # There is a bug with the idpf driver that causes the IPU to fail to be enumerated over PCIe on boot
-        # As a result, we will need to trigger cold boots of the node until the device is available
-        # TODO: Remove when no longer needed
-        retries = 3
-        h.ssh_connect("core")
-        ret = h.run(f"test -d /sys/class/net/{cfg.dpu_net_interface}")
-        while ret.returncode != 0:
-            logger.error(f"{h.hostname()} does not have a network device {cfg.dpu_net_interface} cold booting node to try to recover")
-            h.cold_boot()
-            logger.info("Cold boot triggered, waiting for host to reboot")
-            time.sleep(60)
-            h.ssh_connect("core")
-            retries = retries - 1
-            if retries == 0:
-                logger.error_and_exit(f"Failed to bring up IPU net device on {h.hostname()}")
-            ret = h.run(f"test -d /sys/class/net/{cfg.dpu_net_interface}")
-
         # Label the node
         logger.info(f"labeling node {h.hostname()} dpu=true")
         client.oc_run_or_die(f"label no {e.name} dpu=true")

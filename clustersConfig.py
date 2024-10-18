@@ -56,6 +56,9 @@ class ExtraConfigArgs:
 
     dpu_operator_path: str = "/root/dpu-operator"
 
+    # Specify the commit to checkout when building https://github.com/intel/ipu-opi-plugins
+    ipu_plugin_sha: str = "main"
+
     rebuild_dpu_operators_images: bool = True
 
     dpu_net_interface: Optional[str] = "ens2f0"
