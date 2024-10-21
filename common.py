@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 import dataclasses
 import ipaddress
-from typing import Optional, TypeVar, Iterator, Type
+from typing import Any, Callable, Optional, TypeVar, Iterator, Type
 from concurrent.futures import Future
 import contextlib
 from types import TracebackType
@@ -20,6 +20,8 @@ import tempfile
 import typing
 from collections.abc import Iterable
 from typing import Union
+import time
+import itertools
 
 
 T = TypeVar("T")
@@ -615,3 +617,23 @@ def empty_future(result_type: type[T]) -> Future[Optional[T]]:
     f: Future[Optional[T]] = Future()
     f.set_result(None)
     return f
+
+
+def any_address_in_range(h: host.Host, ip_range: tuple[str, str]) -> bool:
+    for ipaddr in ip_addrs(h):
+        for ainfo in ipaddr.addr_info:
+            if ainfo.family != "inet":
+                continue
+            if not ip_range_contains(ip_range, ainfo.local):
+                continue
+            return True
+    return False
+
+
+def wait_true(name: str, func: Callable[..., bool], **func_kwargs: Any) -> None:
+    logger.info(f"Waiting for {name}")
+    for try_count in itertools.count(0):
+        if func(**func_kwargs):
+            logger.info(f"Took {try_count} tries for {name}")
+            break
+        time.sleep(30)

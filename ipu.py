@@ -7,7 +7,6 @@ from clusterNode import ClusterNode
 import host
 from bmc import BMC
 import common
-from concurrent.futures import ThreadPoolExecutor
 import urllib.parse
 from urllib.parse import urlparse
 from typing import Optional
@@ -52,9 +51,8 @@ class IPUClusterNodeVersion(ClusterNode):
         else:
             self.cluster_node = IPUClusterNodeOld(config, external_port, network_api_port)
 
-    def start(self, iso_or_image_path: str, executor: ThreadPoolExecutor) -> None:
-        self.cluster_node.start(iso_or_image_path, executor)
-        self.future = self.cluster_node.future
+    def start(self, iso_or_image_path: str) -> None:
+        self.cluster_node.start(iso_or_image_path)
 
     def has_booted(self) -> bool:
         return self.cluster_node.has_booted()
@@ -83,11 +81,11 @@ class IPUClusterNode(ClusterNode):
         logger.info(acc.run("uname -a"))
         # configure_iso_network_port(self.network_api_port, self.config.ip)
 
-    def start(self, iso_or_image_path: str, executor: ThreadPoolExecutor) -> None:
-        self.future = executor.submit(self._boot_iso, iso_or_image_path)
+    def start(self, iso_or_image_path: str) -> None:
+        self._boot_iso(iso_or_image_path)
 
     def has_booted(self) -> bool:
-        return self.get_future_done()
+        return True
 
     def _redfish_boot_ipu(self, external_port: str, node: NodeConfig, iso: str) -> None:
         def helper(node: NodeConfig, iso_address: str) -> str:
@@ -143,11 +141,11 @@ class IPUClusterNodeOld(ClusterNode):
         dhcpConfig.configure_dhcpd(self.config)
         self._enable_acc_connectivity()
 
-    def start(self, iso_or_image_path: str, executor: ThreadPoolExecutor) -> None:
-        self.future = executor.submit(self._boot_iso, iso_or_image_path)
+    def start(self, iso_or_image_path: str) -> None:
+        self._boot_iso(iso_or_image_path)
 
     def has_booted(self) -> bool:
-        return self.get_future_done()
+        return True
 
     def _redfish_boot_ipu(self, external_port: str, node: NodeConfig, iso: str) -> None:
         def helper(node: NodeConfig) -> str:
