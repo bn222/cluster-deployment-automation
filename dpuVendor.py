@@ -59,8 +59,8 @@ class IpuPlugin(VendorPlugin):
         h.run("rm -rf /root/ipu-opi-plugins")
         h.run_or_die(f"git clone {self.repo} /root/ipu-opi-plugins")
 
-        logger.info(f"Will build ipu-opi-plugin from commit f{sha}")
-        h.run_or_die(f"git checkout {sha}")
+        logger.info(f"Will build ipu-opi-plugin from commit {sha}")
+        h.run_or_die(f"git -C /root/ipu-opi-plugins checkout {sha}")
 
         fn = "/root/ipu-opi-plugins/ipu-plugin/images/Dockerfile"
         golang_img = extractContainerImage(h.read_file(fn))
