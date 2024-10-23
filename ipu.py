@@ -1,5 +1,8 @@
+import logging
+import shlex
 import os
 import time
+import typing
 from logger import logger
 import dhcpConfig
 from clustersConfig import NodeConfig
@@ -228,11 +231,16 @@ class IPUBMC(BMC):
             password = "calvincalvincalvin"
         super().__init__(full_url, user, password)
 
-    def _run_curl(self, command: str) -> host.Result:
+    def _run_curl(self, command: str, *, quiet: bool = False) -> host.Result:
         lh = host.LocalHost()
-        logger.info(command)
-        result = lh.run(f"curl -v -u {self.user}:{self.password} {command}")
-        logger.info(result)
+        if not quiet:
+            logger.info(command)
+        result = lh.run(
+            f"curl -v -u {self.user}:{self.password} {command}",
+            log_level=-1 if quiet else logging.DEBUG,
+        )
+        if not quiet:
+            logger.info(result)
         return result
 
     def _restart_redfish(self) -> None:
@@ -280,8 +288,7 @@ nohup sh -c '
         """
         server = host.RemoteHost(server_with_key)
         server.ssh_connect("root", "redhat")
-        imc = host.RemoteHost(self.url)
-        imc.ssh_connect("root", password="", discover_auth=False)
+        imc = self._create_imc_rsh()
         imc.run("mkdir -pm 0700 /work/redfish/certs")
         imc.run("chmod 0700 /work/redfish")
         imc.run("chmod 0700 /work/redfish/certs")
@@ -299,25 +306,41 @@ nohup sh -c '
         time.sleep(10)
         imc.wait_ping()
 
-    def cleanup_iso_if_needed(self, iso_path: str) -> None:
-        imc = host.RemoteHost(self.url)
-        imc.ssh_connect("root", password="", discover_auth=False)
-        expected_size = get_size(iso_path)
-        result = imc.run("du -b /mnt/imc/acc-os.iso").out.split()
-        logger.info(result)
-        if len(result) != 0 and result[0] != expected_size:
-            imc.run("rm /mnt/imc/acc-os.iso")
+    def _create_imc_rsh(self) -> host.Host:
+        rsh = host.RemoteHost(self.url)
+        rsh.ssh_connect("root", password="", discover_auth=False)
+        return rsh
+
+    @staticmethod
+    def _get_file_size(rsh: host.Host, filename: str) -> Optional[int]:
+        try:
+            res = rsh.run(f"du -b {shlex.quote(filename)}", log_level=-1)
+            if res.returncode != 0:
+                return None
+            val = int(res.out.split()[0])
+        except Exception:
+            return None
+        if val < 0:
+            return None
+        return val
+
+    def _cleanup_iso(self, iso_path: str) -> None:
+        imc = self._create_imc_rsh()
+        imc.run("rm -f /mnt/imc/acc-os.iso")
 
     def boot_iso_with_redfish(self, iso_path: str) -> None:
+        expected_size = url_get_size(iso_path)
+        if expected_size is None:
+            raise RuntimeError(f"failed to determine file size of URL {repr(iso_path)}")
         self._prepare_imc(extract_server(iso_path))
         logger.info("restarting Redfish")
         self._restart_redfish()
         # W/A delete iso before downloading it if partially downladed
         # https://issues.redhat.com/browse/IIC-382
-        logger.info("Checking if iso needs to be cleaned up")
-        self.cleanup_iso_if_needed(iso_path)
+        logger.info("Cleaning up iso")
+        self._cleanup_iso(iso_path)
         logger.info("inserting iso")
-        self._insert_media(iso_path)
+        self._insert_media(iso_path, expected_size=expected_size)
         logger.info("setting boot source override")
         self._bootsource_override_cd()
         logger.info("triggering reboot")
@@ -329,41 +352,56 @@ nohup sh -c '
         logger.info("unsetting boot source override")
         self._unset_bootsource_override()
 
-    def _wait_iso_downloaded(self, iso_path: str) -> None:
-        size = get_size(iso_path)
-        if size is None:
-            logger.error_and_exit(f"Couldn't get size of iso {iso_path}")
-        logger.info(f"Size of {iso_path} is {size}")
+    def _virtual_media_is_inserted(self, filename: str) -> bool:
+        result = self._run_curl(
+            f"-k 'https://{self.url}:8443/redfish/v1/Systems/1/VirtualMedia/1'",
+            quiet=True,
+        )
+        if result.returncode != 0:
+            return False
+        try:
+            data = json.loads(result.out)
+        except Exception:
+            return False
+        v_inserted = data.get("Inserted")
+        if not isinstance(v_inserted, bool) or not v_inserted:
+            return False
+        v_imageName = data.get("ImageName")
+        if not isinstance(v_imageName, str) or v_imageName != filename:
+            return False
 
-        rh = host.RemoteHost(self.url)
-        rh.ssh_connect("root", password="", discover_auth=False)
-        loop_count = 0
+        return True
+
+    def _wait_iso_downloaded(self, iso_path: str, *, expected_size: int) -> None:
+        logger.info(f"Waiting for iso_path {repr(iso_path)} ({expected_size} bytes) to be inserted as VirtualMedia")
+        wait_until = time.monotonic() + 3600
+        filename = url_extract_filename(iso_path)
+
+        imc = self._create_imc_rsh()
+
+        sleep_time = 60.0
         while True:
-            result = rh.run("du -b /mnt/imc/acc-os.iso").out.split()
-            if len(result) == 0:
-                continue
-            downloaded_size = rh.run("du -b /mnt/imc/acc-os.iso").out.split()[0]
-            percentage = (int(downloaded_size) / int(size)) * 100
-            if loop_count % 6 == 0:
-                logger.info(f"Downloaded {downloaded_size} of {size} ({percentage:.2f}%)")
-            loop_count += 1
-            if downloaded_size == size:
-                break
-            time.sleep(10)
-        logger.info(f"Downloaded {downloaded_size} of {size} ({percentage:.2f}%)")
+            time.sleep(sleep_time)
+            sleep_time = max(5.0, sleep_time / 1.1)
+            if self._virtual_media_is_inserted(filename):
+                logger.info(f"Done iso_path {repr(iso_path)} is inserted as VirtualMedia")
+                return
+            if time.monotonic() >= wait_until:
+                raise RuntimeError("Timeout waiting for iso_path {repr(iso_path)} to be inserted as VirtualMedia")
 
-    def _insert_media(self, iso_path: str) -> None:
+            downloaded_size = self._get_file_size(imc, "/mnt/imc/acc-os.iso")
+            if downloaded_size is not None and downloaded_size < expected_size:
+                percentage = float(downloaded_size) / float(expected_size) * 100.0
+            else:
+                percentage = 100.0
+            logger.info(f"BMC downloaded {downloaded_size} of {expected_size} bytes ({percentage:.2f}%) of {repr(iso_path)}...")
+
+    def _insert_media(self, iso_path: str, *, expected_size: int) -> None:
         url = f"https://{self.url}:8443/redfish/v1/Systems/1/VirtualMedia/1/Actions/VirtualMedia.InsertMedia"
         data = {"Image": iso_path, "TransferMethod": "Upload"}
         json_data = json.dumps(data)
         self._run_curl(f"-k -X POST {url} -d '{json_data}'")
-
-        # Since there is no API to check when iso has been completely
-        # insertered (downloaded), check for this manually
-        # https://issues.redhat.com/browse/IIC-379
-        # TODO: Turns out there is an API, Kamil will provide it
-        logger.info("Waiting for the size of iso_path to be the same the IMC")
-        self._wait_iso_downloaded(iso_path)
+        self._wait_iso_downloaded(iso_path, expected_size=expected_size)
 
     def _bootsource_override_cd(self) -> None:
         url = f"https://{self.url}:8443/redfish/v1/Systems/1"
@@ -425,6 +463,21 @@ def extract_server(url: str) -> str:
     return parsed_url.netloc.split(':')[0]
 
 
-def get_size(iso_path: str) -> Optional[str]:
-    response = requests.head(iso_path, verify=False, allow_redirects=True)
-    return response.headers.get('Content-Length')
+def url_extract_filename(url: str) -> str:
+    parsed_url = urlparse(url)
+    if not parsed_url.path:
+        raise ValueError(f"URL {repr(url)} has not path name")
+    return os.path.basename(parsed_url.path)
+
+
+def url_get_size(iso_path: str) -> Optional[int]:
+    header_value: typing.Any
+    try:
+        response = requests.head(iso_path, verify=False, allow_redirects=True, timeout=3600.0)
+        header_value = response.headers.get('Content-Length')
+        val = int(header_value.strip())
+    except Exception:
+        return None
+    if val < 0:
+        return None
+    return val
