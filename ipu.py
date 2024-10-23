@@ -235,10 +235,8 @@ class IPUBMC(BMC):
         lh = host.LocalHost()
         if not quiet:
             logger.info(command)
-        result = lh.run(
-            f"curl -v -u {self.user}:{self.password} {command}",
-            log_level=-1 if quiet else logging.DEBUG,
-        )
+        lvl = -1 if quiet else logging.DEBUG
+        result = lh.run(f"curl -v -u {self.user}:{self.password} {command}", log_level=lvl)
         if not quiet:
             logger.info(result)
         return result
@@ -353,10 +351,8 @@ nohup sh -c '
         self._unset_bootsource_override()
 
     def _virtual_media_is_inserted(self, filename: str) -> bool:
-        result = self._run_curl(
-            f"-k 'https://{self.url}:8443/redfish/v1/Systems/1/VirtualMedia/1'",
-            quiet=True,
-        )
+        cmd = f"-k 'https://{self.url}:8443/redfish/v1/Systems/1/VirtualMedia/1'"
+        result = self._run_curl(cmd, quiet=True)
         if result.returncode != 0:
             return False
         try:
