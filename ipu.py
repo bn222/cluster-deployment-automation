@@ -17,6 +17,7 @@ from typing import Optional
 import json
 import requests
 import re
+from ktoolbox.common import unwrap
 
 
 def is_http_url(url: str) -> bool:
@@ -49,7 +50,7 @@ class IPUClusterNodeVersion(ClusterNode):
         super().__init__(config)
         self.external_port = external_port
         self.network_api_port = network_api_port
-        ipu_bmc = IPUBMC(config.bmc)
+        ipu_bmc = IPUBMC(unwrap(config.bmc))
         if ipu_bmc.version() == "1.8.0":
             self.cluster_node = IPUClusterNode(config, external_port, network_api_port)
         else:
@@ -95,7 +96,7 @@ class IPUClusterNode(ClusterNode):
     def _redfish_boot_ipu(self, external_port: str, node: NodeConfig, iso: str) -> None:
         def helper(node: NodeConfig, iso_address: str) -> str:
             logger.info(f"Booting {node.bmc} with {iso_address}")
-            bmc = IPUBMC(node.bmc)
+            bmc = IPUBMC(unwrap(node.bmc))
             bmc.boot_iso_with_redfish(iso_path=iso_address)
             return "Boot command sent"
 
@@ -124,7 +125,7 @@ class IPUClusterNode(ClusterNode):
             return ipu_host
 
         node = self.config
-        ipu_host_name = host_from_imc(node.bmc)
+        ipu_host_name = host_from_imc(unwrap(node.bmc))
         ipu_host_url = f"{ipu_host_name}-drac.anl.eng.bos2.dc.redhat.com"
         ipu_host_bmc = BMC.from_bmc(ipu_host_url, "root", "calvin")
         return host.Host(ipu_host_name, ipu_host_bmc)
@@ -155,11 +156,11 @@ class IPUClusterNodeOld(ClusterNode):
     def _redfish_boot_ipu(self, external_port: str, node: NodeConfig, iso: str) -> None:
         def helper(node: NodeConfig) -> str:
             logger.info(f"Booting {node.bmc} with {iso_address}")
-            bmc = BMC.from_bmc(node.bmc)
+            bmc = BMC.from_bmc(unwrap(node.bmc))
             bmc.boot_iso_redfish(iso_path=iso_address, retries=5, retry_delay=15)
 
-            imc = host.Host(node.bmc)
-            imc.ssh_connect(node.bmc_user, node.bmc_password)
+            imc = host.Host(unwrap(node.bmc))
+            imc.ssh_connect(unwrap(node.bmc_user), unwrap(node.bmc_password))
             # TODO: Remove once https://issues.redhat.com/browse/RHEL-32696 is solved
             logger.info("Waiting for 25m (workaround)")
             time.sleep(25 * 60)
@@ -189,8 +190,8 @@ class IPUClusterNodeOld(ClusterNode):
     def _enable_acc_connectivity(self) -> None:
         node = self.config
         logger.info(f"Establishing connectivity to {node.name}")
-        ipu_imc = host.RemoteHost(node.bmc)
-        ipu_imc.ssh_connect(node.bmc_user, node.bmc_password)
+        ipu_imc = host.RemoteHost(unwrap(node.bmc))
+        ipu_imc.ssh_connect(unwrap(node.bmc_user), unwrap(node.bmc_password))
 
         # """
         # We need to ensure the ACC physical port connectivity is enabled during reboot to ensure dhcp gets an ip.
@@ -200,7 +201,7 @@ class IPUClusterNodeOld(ClusterNode):
         logger.info("Rebooting IMC to trigger ACC reboot")
         ipu_imc.run("systemctl reboot")
         time.sleep(30)
-        ipu_imc.ssh_connect(node.bmc_user, node.bmc_password)
+        ipu_imc.ssh_connect(unwrap(node.bmc_user), unwrap(node.bmc_password))
         logger.info(f"Attempting to enable ACC connectivity from IMC {node.bmc} on reboot")
         retries = 30
         for _ in range(retries):

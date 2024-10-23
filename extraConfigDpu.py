@@ -1,6 +1,5 @@
 from clustersConfig import ClustersConfig, NodeConfig
 import host
-from bmc import BMC
 from k8sClient import K8sClient
 from concurrent.futures import Future, ThreadPoolExecutor
 import os
@@ -12,6 +11,8 @@ import imageRegistry
 from common import git_repo_setup
 from dpuVendor import init_vendor_plugin, IpuPlugin
 from imageRegistry import ImageRegistry
+from ktoolbox.common import unwrap
+
 
 DPU_OPERATOR_REPO = "https://github.com/openshift/dpu-operator.git"
 MICROSHIFT_KUBECONFIG = "/root/kubeconfig.microshift"
@@ -170,10 +171,9 @@ def ExtraConfigDpu(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, 
     [f.result() for (_, f) in futures.items()]
     logger.info("Running post config step to start DPU operator on IPU")
 
-    repo = cfg.dpu_operator_path
+    repo = unwrap(cfg.dpu_operator_path)
     dpu_node = cc.masters[0]
-    assert dpu_node.ip is not None
-    acc = host.Host(dpu_node.ip)
+    acc = host.Host(unwrap(dpu_node.ip))
     lh = host.LocalHost()
     acc.ssh_connect("root", "redhat")
     client = K8sClient(MICROSHIFT_KUBECONFIG)
@@ -185,7 +185,7 @@ def ExtraConfigDpu(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, 
     acc.run("systemctl disable firewalld")
 
     # Build and start vsp on DPU
-    vendor_plugin = init_vendor_plugin(acc, dpu_node.kind or "")
+    vendor_plugin = init_vendor_plugin(acc, dpu_node.kind)
     if isinstance(vendor_plugin, IpuPlugin):
         # TODO: Remove when this container is properly started by the vsp
         # We need to manually start the p4 sdk container currently for the IPU plugin
@@ -194,7 +194,7 @@ def ExtraConfigDpu(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, 
         # Build on the ACC since an aarch based server is needed for the build
         # (the Dockerfile needs to be fixed to allow layered multi-arch build
         # by removing the calls to pip)
-        vsp_img = vendor_plugin.build_push(acc, imgReg, cfg.ipu_plugin_sha)
+        vsp_img = vendor_plugin.build_push(acc, imgReg, unwrap(cfg.ipu_plugin_sha))
 
         # As a workaround while waiting for properly multiarch build support, we can create a manifest to ensure both host and dpu can deploy the vsp with the same image.
         # Note that this makes the assumption that the host deployment has already been run and the latest ipu plugin image is already locally available in the registry.
@@ -209,7 +209,7 @@ def ExtraConfigDpu(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, 
         lh.run_or_die(f"buildah manifest push --all {manifest} docker://{vsp_img}")
 
     git_repo_setup(repo, repo_wipe=False, url=DPU_OPERATOR_REPO)
-    if cfg.rebuild_dpu_operators_images:
+    if unwrap(cfg.rebuild_dpu_operators_images):
         dpu_operator_build_push(repo)
     else:
         logger.info("Will not rebuild dpu-operator images")
@@ -229,7 +229,7 @@ def ExtraConfigDpuHost(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[s
     logger.info("Running post config step to start DPU operator on Host")
     lh = host.LocalHost()
     client = K8sClient(cc.kubeconfig)
-    repo = cfg.dpu_operator_path
+    repo = unwrap(cfg.dpu_operator_path)
 
     imgReg = _ensure_local_registry_running(lh, delete_all=False)
     imgReg.ocp_trust(client)
@@ -239,12 +239,12 @@ def ExtraConfigDpuHost(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[s
     node = cc.workers[0]
     h = host.Host(node.node)
     h.ssh_connect("core")
-    vendor_plugin = init_vendor_plugin(h, node.kind or "")
+    vendor_plugin = init_vendor_plugin(h, node.kind)
     if isinstance(vendor_plugin, IpuPlugin):
-        vendor_plugin.build_push(lh, imgReg, cfg.ipu_plugin_sha)
+        vendor_plugin.build_push(lh, imgReg, unwrap(cfg.ipu_plugin_sha))
 
     git_repo_setup(repo, branch="main", repo_wipe=False, url=DPU_OPERATOR_REPO)
-    if cfg.rebuild_dpu_operators_images:
+    if unwrap(cfg.rebuild_dpu_operators_images):
         dpu_operator_build_push(repo)
     else:
         logger.info("Will not rebuild dpu-operator images")
@@ -261,7 +261,7 @@ def ExtraConfigDpuHost(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[s
     # Assuming that all workers have a DPU
     for e in cc.workers:
         logger.info(f"Calling helper function for node {e.node}")
-        bmc = BMC.from_bmc(e.bmc, e.bmc_user, e.bmc_password)
+        bmc = e.create_bmc()
         h = host.Host(e.node, bmc)
         f.append(executor.submit(helper, h, e))
 

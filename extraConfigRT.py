@@ -10,16 +10,14 @@ import host
 def ExtraConfigRT(cc: ClustersConfig, _: ExtraConfigArgs, futures: dict[str, Future[Optional[host.Result]]]) -> None:
     [f.result() for (_, f) in futures.items()]
 
-    is_sno = cc.is_sno()
-
     logger.info("Running post config command to install rt kernel on worker nodes")
     client = K8sClient(cc.kubeconfig)
 
-    resource = "sno-realtime.yaml" if is_sno else "worker-realtime.yaml"
+    resource = "sno-realtime.yaml" if cc.cluster_config.is_sno else "worker-realtime.yaml"
     client.oc(f"create -f manifests/rt/{resource}")
 
     logger.info("Waiting for mcp to update")
-    name = "master" if is_sno else "worker"
+    name = "master" if cc.cluster_config.is_sno else "worker"
     client.wait_for_mcp(name, resource)
 
 
