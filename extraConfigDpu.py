@@ -270,11 +270,6 @@ def ExtraConfigDpuHost(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[s
 
     logger.info("Verified idpf is providing net-devs on DPU worker nodes")
 
-    # Create host nad
-    # TODO: Remove when this is automatically created by the dpu operator
-    logger.info("Creating dpu NAD")
-    client.oc("delete -f manifests/dpu/dpu_nad.yaml")
-    client.oc_run_or_die("create -f manifests/dpu/dpu_nad.yaml")
     # Deploy dpu daemon and wait for dpu pods to come up
     logger.info("Creating dpu operator config")
     client.oc_run_or_die(f"create -f {repo}/examples/host.yaml")
