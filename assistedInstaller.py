@@ -140,10 +140,7 @@ class AssistedClientAutomation(AssistedClient):  # type: ignore
             except Exception:
                 pass
 
-            cluster = list(filter(lambda e: e["name"] == cluster_name, self.list_clusters()))
-            status = cluster[0]["status"]
-
-            if status == "installing":
+            if self.cluster_state(cluster_name) == "installing":
                 logger.info(f"Cluster {cluster_name} is in state installing")
                 break
             time.sleep(10)
