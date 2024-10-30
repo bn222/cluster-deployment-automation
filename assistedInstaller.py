@@ -121,7 +121,7 @@ class AssistedClientAutomation(AssistedClient):  # type: ignore
 
     @tenacity.retry(wait=tenacity.wait_fixed(2), stop=tenacity.stop_after_attempt(5))
     def list_clusters(self) -> list[ClusterInfo]:
-        all_clusters = self.list_clusters()
+        all_clusters = super().list_clusters()
         if not isinstance(all_clusters, list):
             raise Exception(f"Unexpected type for list_clusters: {type(all_clusters)}")
 
@@ -133,7 +133,7 @@ class AssistedClientAutomation(AssistedClient):  # type: ignore
                 raise Exception("Invalid cluster info, no name")
             if "status" not in ci or not isinstance(ci["status"], str):
                 raise Exception("Invalid cluster info, no status")
-            ret.append(ci)
+            ret.append(ClusterInfo(name=ci["name"], status=ci["status"]))
         return ret
 
     def cluster_state(self, cluster_name: str) -> str:
