@@ -9,6 +9,7 @@ from ailib import AssistedClient
 import common
 from logger import logger
 import sys
+import tenacity
 
 
 @dataclass
@@ -23,12 +24,18 @@ class AssistedClientHostInfo:
     inventory: str
 
 
+@dataclass
+class ClusterInfo:
+    name: str
+    status: str
+
+
 class AssistedClientAutomation(AssistedClient):  # type: ignore
     def __init__(self, url: str):
         super().__init__(url, quiet=True, debug=False)
 
     def cluster_exists(self, name: str) -> bool:
-        return any(name == x["name"] for x in self.list_clusters())
+        return any(name == x.name for x in self.list_clusters())
 
     def ensure_cluster_deleted(self, name: str) -> None:
         logger.info(f"Ensuring that cluster {name} is not present")
@@ -112,24 +119,33 @@ class AssistedClientAutomation(AssistedClient):  # type: ignore
                 break
             time.sleep(10)
 
+    @tenacity.retry(wait=tenacity.wait_fixed(2), stop=tenacity.stop_after_attempt(5))
+    def list_clusters(self) -> list[ClusterInfo]:
+        all_clusters = self.list_clusters()
+        if not isinstance(all_clusters, list):
+            raise Exception(f"Unexpected type for list_clusters: {type(all_clusters)}")
+
+        ret: list[ClusterInfo] = []
+        for ci in all_clusters:
+            if not isinstance(ci, dict):
+                raise Exception(f"Unexpected type for list_clusters: {type(ci)}")
+            if "name" not in ci or not isinstance(ci["name"], str):
+                raise Exception("Invalid cluster info, no name")
+            if "status" not in ci or not isinstance(ci["status"], str):
+                raise Exception("Invalid cluster info, no status")
+            ret.append(ci)
+        return ret
+
     def cluster_state(self, cluster_name: str) -> str:
-        matching_clusters = [x for x in self.list_clusters() if x["name"] == cluster_name]
+        matching_clusters = [x for x in self.list_clusters() if x.name == cluster_name]
         if len(matching_clusters) == 0:
             logger.error(f"Requested status of cluster '{cluster_name}' but couldn't find it")
             sys.exit(-1)
         elif len(matching_clusters) > 1:
             logger.error(f"Unexpected number of matching clusters: {matching_clusters}")
             sys.exit(-1)
-        elif "status" not in matching_clusters[0]:
-            logger.error(f"Status is missing for cluster {cluster_name}")
-            sys.exit(-1)
         else:
-            s = matching_clusters[0]["status"]
-            if isinstance(s, str):
-                return s
-            else:
-                logger.error(f"Unexpected status: {s}")
-                sys.exit(-1)
+            return matching_clusters[0].status
 
     def start_until_success(self, cluster_name: str) -> None:
         self.wait_cluster_ready(cluster_name)
