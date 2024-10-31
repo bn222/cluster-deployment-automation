@@ -35,7 +35,7 @@ class AssistedClientAutomation(AssistedClient):  # type: ignore
         super().__init__(url, quiet=True, debug=False)
 
     def cluster_exists(self, name: str) -> bool:
-        return any(name == x.name for x in self.list_clusters())
+        return any(name == x.name for x in self.get_cluster_info_all())
 
     def ensure_cluster_deleted(self, name: str) -> None:
         logger.info(f"Ensuring that cluster {name} is not present")
@@ -120,8 +120,8 @@ class AssistedClientAutomation(AssistedClient):  # type: ignore
             time.sleep(10)
 
     @tenacity.retry(wait=tenacity.wait_fixed(2), stop=tenacity.stop_after_attempt(5))
-    def list_clusters(self) -> list[ClusterInfo]:
-        all_clusters = super().list_clusters()
+    def get_cluster_info_all(self) -> list[ClusterInfo]:
+        all_clusters = self.list_clusters()
         if not isinstance(all_clusters, list):
             raise Exception(f"Unexpected type for list_clusters: {type(all_clusters)}")
 
@@ -137,7 +137,7 @@ class AssistedClientAutomation(AssistedClient):  # type: ignore
         return ret
 
     def cluster_state(self, cluster_name: str) -> str:
-        matching_clusters = [x for x in self.list_clusters() if x.name == cluster_name]
+        matching_clusters = [x for x in self.get_cluster_info_all() if x.name == cluster_name]
         if len(matching_clusters) == 0:
             logger.error(f"Requested status of cluster '{cluster_name}' but couldn't find it")
             sys.exit(-1)
