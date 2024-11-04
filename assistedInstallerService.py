@@ -87,6 +87,18 @@ class AssistedInstallerService:
     def _last_run_pod(self) -> str:
         return f'{self.workdir}/pod-persistent-last.yml'
 
+    def _strip_unused_versions(self, versions: str) -> str:
+        def major_minor(v: str) -> str:
+            x = re.match(r"(\d+\.\d+)", v)
+            if x is None:
+                logger.error(f"Can't extract version {x}")
+                sys.exit(-1)
+            return x.group(1)
+
+        j = json.loads(versions)
+        keep = [e for e in j if major_minor(self._version) == e['openshift_version']]
+        return json.dumps(keep)
+
     def _customized_configmap(self) -> dict[str, str]:
         y = yaml.safe_load(self.podConfig)
         if not isinstance(y, dict):
@@ -97,6 +109,7 @@ class AssistedInstallerService:
         y["data"]["INSTALLER_IMAGE"] = AssistedInstallerService.INSTALLER_IMAGE
         y["data"]["CONTROLLER_IMAGE"] = AssistedInstallerService.CONTROLLER_IMAGE
         y["data"]["AGENT_DOCKER_IMAGE"] = AssistedInstallerService.AGENT_DOCKER_IMAGE
+        y["data"]["OS_IMAGES"] = self._strip_unused_versions(y["data"]["OS_IMAGES"])
 
         j = json.loads(y["data"]["HW_VALIDATOR_REQUIREMENTS"])
         j[0]["master"]["disk_size_gb"] = 8
