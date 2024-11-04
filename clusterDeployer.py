@@ -348,7 +348,7 @@ class ClusterDeployer(BaseDeployer):
 
         names = (e.name for e in self._cc.masters)
         self._wait_known_state(names, cb)
-        self._ai.start_until_success(cluster_name)
+        self._ai.ensure_cluster_installing(cluster_name)
 
         self._ai.download_kubeconfig_and_secrets(self._cc.name, self._cc.kubeconfig)
 

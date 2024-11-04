@@ -147,17 +147,26 @@ class AssistedClientAutomation(AssistedClient):  # type: ignore
         else:
             return matching_clusters[0].status
 
-    def start_until_success(self, cluster_name: str) -> None:
+    def ensure_cluster_installing(self, cluster_name: str) -> None:
         self.wait_cluster_ready(cluster_name)
-        logger.info(f"Starting cluster {cluster_name} (will retry until success)")
-        for tries in itertools.count(0):
-            try:
-                self.start_cluster(cluster_name)
-            except Exception:
-                pass
+        self._start_until_success(cluster_name)
 
-            if self.cluster_state(cluster_name) == "installing":
-                logger.info(f"Cluster {cluster_name} is in state installing")
+    def _start_until_success(self, cluster_name: str) -> None:
+        logger.info(f"Starting cluster {cluster_name} (will retry until success)")
+        # https://github.com/openshift/assisted-service/blob/master/swagger.yaml#L5224
+        prev_cs = ""
+
+        for tries in itertools.count(0):
+            cs = self.cluster_state(cluster_name)
+            if cs != prev_cs:
+                logger.info(f"Cluster state is '{cs}'")
+                prev_cs = cs
+            if cs == "ready":
+                try:
+                    self.start_cluster(cluster_name)
+                except Exception:
+                    pass
+            elif cs == "installing":
                 break
             time.sleep(10)
         logger.info(f"Took {tries} tries to start cluster {cluster_name}")
