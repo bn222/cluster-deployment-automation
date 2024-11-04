@@ -161,7 +161,7 @@ class AssistedClientAutomation(AssistedClient):  # type: ignore
             if cs != prev_cs:
                 logger.info(f"Cluster state is '{cs}'")
                 prev_cs = cs
-            if cs == "ready":
+            if cs == "ready" or cs == "error":
                 try:
                     self.start_cluster(cluster_name)
                 except Exception:
