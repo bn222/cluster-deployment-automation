@@ -2,6 +2,7 @@ import itertools
 import os
 import sys
 import time
+import timer
 import json
 import shutil
 from concurrent.futures import ThreadPoolExecutor
@@ -184,9 +185,12 @@ class ClusterDeployer(BaseDeployer):
         return remote_masters != 0 or remote_workers != 0 or len(vm_bm) != 0
 
     def deploy(self) -> None:
+        duration = {k: timer.Timer() for k in self.steps}
         if self._cc.masters:
             if PRE_STEP in self.steps:
+                duration[PRE_STEP].start()
                 self._preconfig()
+                duration[PRE_STEP].stop()
             else:
                 logger.info("Skipping pre configuration.")
 
@@ -194,35 +198,42 @@ class ClusterDeployer(BaseDeployer):
                 if WORKERS_STEP in self.steps or MASTERS_STEP in self.steps:
                     self.teardown_workers()
                 if MASTERS_STEP in self.steps:
+                    duration[MASTERS_STEP].start()
                     self.teardown_masters()
                     self.create_cluster()
                     self.create_masters()
+                    duration[MASTERS_STEP].stop()
                 else:
                     logger.info("Skipping master creation.")
 
                 if WORKERS_STEP in self.steps:
-                    if len(self._cc.workers) != 0:
-                        self.create_workers()
-                    else:
-                        logger.info("No worker to setup. Skip")
+                    duration[WORKERS_STEP].start()
+                    self.create_workers()
+                    duration[WORKERS_STEP].stop()
                 else:
                     logger.info("Skipping worker creation.")
         if self._cc.kind == "microshift":
             version = match_to_proper_version_format(self._cc.version)
 
             if len(self._cc.masters) == 1:
+                duration[MASTERS_STEP].start()
                 microshift.deploy(
                     secrets_path=self._secrets_path,
                     node=self._cc.masters[0],
                     external_port=self._cc.external_port,
                     version=version,
                 )
+                duration[MASTERS_STEP].stop()
             else:
                 logger.error_and_exit("Masters must be of length one for deploying microshift")
         if POST_STEP in self.steps:
+            duration[POST_STEP].start()
             self._postconfig()
+            duration[POST_STEP].stop()
         else:
             logger.info("Skipping post configuration.")
+        for k, v in duration.items():
+            logger.info(f"{k}: {v.duration()}")
 
     def _validate(self) -> None:
         if self._cc.is_sno():
@@ -375,6 +386,9 @@ class ClusterDeployer(BaseDeployer):
         self.update_dnsmasq()
 
     def create_workers(self) -> None:
+        if len(self._cc.workers) == 0:
+            logger.info("No workers to setup")
+            return
         logger.info("Setting up workers")
         cluster_name = self._cc.name
         infra_env = f"{cluster_name}-{self.workers_arch}"
