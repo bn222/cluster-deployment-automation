@@ -107,7 +107,7 @@ class VirBridge:
                 f.write(json.dumps(filtered, indent=4))
             result = self.hostconn.run("virsh net-start default")
             logger.info(f"Start \"default\" Libvirt network: {result}")
-            self._restart()
+            self.libvirt.restart("qemu")
 
     def _ensure_started(self, bridge_xml: str, api_port: Optional[str]) -> None:
         cmd = "virsh net-destroy default"
@@ -154,15 +154,12 @@ class VirBridge:
                 </ip>
                 </network>"""
 
-    def _restart(self) -> None:
-        self.libvirt.restart()
-
     def _ensure_run_as_root(self) -> None:
         qemu_conf = self.hostconn.read_file("/etc/libvirt/qemu.conf")
         if re.search('\nuser = "root"', qemu_conf) and re.search('\nuser = "root"', qemu_conf):
             return
         self.hostconn.run("sed -e 's/#\\(user\\|group\\) = \".*\"$/\\1 = \"root\"/' -i /etc/libvirt/qemu.conf")
-        self._restart()
+        self.libvirt.restart("qemu")
 
     def configure(self, api_port: Optional[str]) -> None:
         hostname = self.hostconn.hostname()
@@ -207,7 +204,7 @@ class VirBridge:
             time.sleep(5)
             self._ensure_started(bridge_xml, api_port)
 
-            self._restart()
+            self.libvirt.restart()
 
             # Not sure why/whether this is needed. But we saw failures w/o it.
             # We need to investigate how to remove the sleep to speed up

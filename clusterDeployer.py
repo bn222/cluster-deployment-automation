@@ -572,7 +572,7 @@ class ClusterDeployer(BaseDeployer):
         # libvirt also runs dnsmasq, and dnsmasq reads /etc/hosts.
         # For that reason, restart libvirt to re-read the changes.
         libvirt = Libvirt(host.LocalHost())
-        libvirt.restart()
+        libvirt.restart("network")
 
     def update_dnsmasq(self, *, setup: bool = True) -> None:
         cluster_name = self._cc.name
