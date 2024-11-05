@@ -35,7 +35,14 @@ class ImageRegistry:
     def ensure_running(self, *, delete_all: bool = False) -> tuple[str, int]:
         dir_name = self._registry_base_directory
 
-        ret = self.rsh.run(shlex.join(["podman", "inspect", CONTAINER_NAME, "--format", "{{.Id}}"]))
+        cmd = f"podman inspect -f {{{{.State.Running}}}} {CONTAINER_NAME}"
+        if self.rsh.run(cmd).out == "true":
+            return dir_name, self.listen_port
+        else:
+            self.rsh.run(f"podman start {CONTAINER_NAME}")
+
+        cmd = f"podman inspect {CONTAINER_NAME} --format {{{{.Id}}}}"
+        ret = self.rsh.run(cmd)
 
         if ret.success() and self.rsh.run(shlex.join(['test', '-d', dir_name])).success():
             if not delete_all:
