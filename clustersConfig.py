@@ -72,8 +72,6 @@ class ExtraConfigArgs:
                 raise ValueError("Building sriov_network_operator requires permissions to fetch. Get a token from https://oauth-openshift.apps.ci.l2s4.p1.openshiftapps.com/oauth/token/request and issue `podman login registry.ci.openshift.org`")
 
     def resolve_dpu_operator_path(self) -> str:
-        print(self.dpu_operator_path)
-        print(self.base_path)
         if self.dpu_operator_path[0] == "/":
             return self.dpu_operator_path
         else:
