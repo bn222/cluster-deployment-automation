@@ -45,28 +45,31 @@ def extract_microshift_kubeconfig(acc: host.Host) -> str:
     return to_write
 
 
+def masquarade(rsh: host.Host, cc: ClustersConfig) -> None:
+    wan_interface = cc.external_port
+    lan_interface = cc.network_api_port
+    ip_tables = "/sbin/iptables"
+    logger.info(f"Setting up ip forwarding on {rsh.hostname()} from {lan_interface} to {wan_interface}")
+    rsh.run_or_die("/bin/echo 1 > /proc/sys/net/ipv4/ip_forward")
+    rsh.run_or_die(f"{ip_tables} -t nat -A POSTROUTING -o {lan_interface} -j MASQUERADE")
+    rsh.run_or_die(f"{ip_tables} -A FORWARD -i {lan_interface} -o {wan_interface} -m state --state RELATED,ESTABLISHED -j ACCEPT ")
+    rsh.run_or_die(f"{ip_tables} -A FORWARD -i {wan_interface} -o {lan_interface} -j ACCEPT")
+    rsh.run_or_die(f"{ip_tables} -t nat -A POSTROUTING -o {wan_interface} -j MASQUERADE")
+    rsh.run_or_die(f"{ip_tables} -A FORWARD -i {wan_interface} -o {lan_interface} -m state --state RELATED,ESTABLISHED -j ACCEPT")
+    rsh.run_or_die(f"{ip_tables} -A FORWARD -i {lan_interface} -o {wan_interface} -j ACCEPT")
+
+
 def ExtraConfigMicroshift(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, Future[Optional[host.Result]]]) -> None:
     [f.result() for (_, f) in futures.items()]
     logger.info("Running post config step to start Microshift on the IPU")
 
     # Validate args
 
+    cc.prepare_external_port()
+
     # Enable NAT / IP forwarding on host to provide internet connectivity to ACC
     lh = host.LocalHost()
-    cc.prepare_external_port()
-    wan_interface = cc.external_port
-    lan_interface = cc.network_api_port
-    ip_tables = "/sbin/iptables"
-
-    logger.info(f"Setting up ip forwarding on {lh.hostname()} from {lan_interface} to {wan_interface}")
-
-    lh.run_or_die("/bin/echo 1 > /proc/sys/net/ipv4/ip_forward")
-    lh.run_or_die(f"{ip_tables} -t nat -A POSTROUTING -o {lan_interface} -j MASQUERADE")
-    lh.run_or_die(f"{ip_tables} -A FORWARD -i {lan_interface} -o {wan_interface} -m state --state RELATED,ESTABLISHED -j ACCEPT ")
-    lh.run_or_die(f"{ip_tables} -A FORWARD -i {wan_interface} -o {lan_interface} -j ACCEPT")
-    lh.run_or_die(f"{ip_tables} -t nat -A POSTROUTING -o {wan_interface} -j MASQUERADE")
-    lh.run_or_die(f"{ip_tables} -A FORWARD -i {wan_interface} -o {lan_interface} -m state --state RELATED,ESTABLISHED -j ACCEPT")
-    lh.run_or_die(f"{ip_tables} -A FORWARD -i {lan_interface} -o {wan_interface} -j ACCEPT")
+    masquarade(lh, cc)
 
     dpu_node = cc.masters[0]
     assert dpu_node.ip is not None
