@@ -23,6 +23,7 @@ def random_mac() -> str:
 
 @dataclass
 class ExtraConfigArgs:
+    base_path: str
     name: str
 
     # OVN-K extra configs:
@@ -69,6 +70,14 @@ class ExtraConfigArgs:
                 raise ValueError("\"sriov_network_operator_local\" can only be set to TRUE for name=\"sriov_network_operator\"")
             if not common.build_sriov_network_operator_check_permissions():
                 raise ValueError("Building sriov_network_operator requires permissions to fetch. Get a token from https://oauth-openshift.apps.ci.l2s4.p1.openshiftapps.com/oauth/token/request and issue `podman login registry.ci.openshift.org`")
+
+    def resolve_dpu_operator_path(self) -> str:
+        print(self.dpu_operator_path)
+        print(self.base_path)
+        if self.dpu_operator_path[0] == "/":
+            return self.dpu_operator_path
+        else:
+            return os.path.normpath(os.path.join(self.base_path, self.dpu_operator_path))
 
 
 @dataclass
@@ -243,10 +252,11 @@ class ClustersConfig:
         for e in cc["hosts"]:
             self.hosts.append(HostConfig(**e))
 
+        base_path = os.path.dirname(yaml_path)
         for c in cc["preconfig"]:
-            self.preconfig.append(ExtraConfigArgs(**c))
+            self.preconfig.append(ExtraConfigArgs(base_path, **c))
         for c in cc["postconfig"]:
-            self.postconfig.append(ExtraConfigArgs(**c))
+            self.postconfig.append(ExtraConfigArgs(base_path, **c))
 
         if test_only:
             # Skip the remaining steps. They access the system, which makes them
