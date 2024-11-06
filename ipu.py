@@ -40,40 +40,16 @@ This works by making some assumptions about the current state of the IPU:
 """
 
 
-class IPUClusterNodeVersion(ClusterNode):
-    external_port: str
-    network_api_port: str
-    cluster_node: ClusterNode
-
-    def __init__(self, config: NodeConfig, external_port: str, network_api_port: str):
-        super().__init__(config)
-        self.external_port = external_port
-        self.network_api_port = network_api_port
-        ipu_bmc = IPUBMC(config.bmc)
-        if ipu_bmc.version() == "1.8.0":
-            self.cluster_node = IPUClusterNode(config, external_port, network_api_port)
-        else:
-            self.cluster_node = IPUClusterNodeOld(config, external_port, network_api_port)
-
-    def start(self, iso_or_image_path: str, executor: ThreadPoolExecutor) -> None:
-        self.cluster_node.start(iso_or_image_path, executor)
-        self.future = self.cluster_node.future
-
-    def has_booted(self) -> bool:
-        return self.cluster_node.has_booted()
-
-    def post_boot(self, desired_ip_range: tuple[str, str]) -> bool:
-        return self.cluster_node.post_boot(desired_ip_range)
-
-
 class IPUClusterNode(ClusterNode):
     external_port: str
     network_api_port: str
+    config: NodeConfig
 
     def __init__(self, config: NodeConfig, external_port: str, network_api_port: str):
         super().__init__(config)
         self.external_port = external_port
         self.network_api_port = network_api_port
+        self.config = config
 
     def _boot_iso(self, iso: str) -> None:
         assert self.config.ip
@@ -87,6 +63,9 @@ class IPUClusterNode(ClusterNode):
         # configure_iso_network_port(self.network_api_port, self.config.ip)
 
     def start(self, iso_or_image_path: str, executor: ThreadPoolExecutor) -> None:
+        ipu_bmc = IPUBMC(self.config.bmc)
+        if ipu_bmc.version() != "1.8.0":
+            logger.error_and_exit(f"Unexpected version {ipu_bmc.version()}, should be 1.8.0")
         self.future = executor.submit(self._boot_iso, iso_or_image_path)
 
     def has_booted(self) -> bool:
@@ -128,101 +107,6 @@ class IPUClusterNode(ClusterNode):
         ipu_host_url = f"{ipu_host_name}-drac.anl.eng.bos2.dc.redhat.com"
         ipu_host_bmc = BMC.from_bmc(ipu_host_url, "root", "calvin")
         return host.Host(ipu_host_name, ipu_host_bmc)
-
-
-class IPUClusterNodeOld(ClusterNode):
-    external_port: str
-    network_api_port: str
-
-    def __init__(self, config: NodeConfig, external_port: str, network_api_port: str):
-        super().__init__(config)
-        self.external_port = external_port
-        self.network_api_port = network_api_port
-
-    def _boot_iso(self, iso: str) -> None:
-        self._redfish_boot_ipu(self.external_port, self.config, iso)
-        assert self.config.ip
-        dhcpConfig.configure_iso_network_port(self.network_api_port, self.config.ip)
-        dhcpConfig.configure_dhcpd(self.config)
-        self._enable_acc_connectivity()
-
-    def start(self, iso_or_image_path: str, executor: ThreadPoolExecutor) -> None:
-        self.future = executor.submit(self._boot_iso, iso_or_image_path)
-
-    def has_booted(self) -> bool:
-        return self.get_future_done()
-
-    def _redfish_boot_ipu(self, external_port: str, node: NodeConfig, iso: str) -> None:
-        def helper(node: NodeConfig) -> str:
-            logger.info(f"Booting {node.bmc} with {iso_address}")
-            bmc = BMC.from_bmc(node.bmc)
-            bmc.boot_iso_redfish(iso_path=iso_address, retries=5, retry_delay=15)
-
-            imc = host.Host(node.bmc)
-            imc.ssh_connect(node.bmc_user, node.bmc_password)
-            # TODO: Remove once https://issues.redhat.com/browse/RHEL-32696 is solved
-            logger.info("Waiting for 25m (workaround)")
-            time.sleep(25 * 60)
-            return f"Finished booting imc {node.bmc}"
-
-        # Ensure dhcpd is stopped before booting the IMC to avoid unintentionally setting the ACC hostname during the installation
-        # https://issues.redhat.com/browse/RHEL-32696
-        lh = host.LocalHost()
-        lh.run("systemctl stop dhcpd")
-
-        if is_http_url(iso):
-            iso_address = iso
-            logger.info(helper(node))
-        else:
-            logger.debug(f"Hosting local file {iso}")
-            if not os.path.exists(iso):
-                raise ValueError(f"ISO file {iso} does not exist, exiting")
-            serve_path = os.path.dirname(iso)
-            iso_name = os.path.basename(iso)
-            lh = host.LocalHost()
-            lh_ip = common.port_to_ip(lh, external_port)
-
-            with common.HttpServerManager(serve_path, 8000) as http_server:
-                iso_address = f"http://{lh_ip}:{str(http_server.port)}/{iso_name}"
-                logger.info(helper(node))
-
-    def _enable_acc_connectivity(self) -> None:
-        node = self.config
-        logger.info(f"Establishing connectivity to {node.name}")
-        ipu_imc = host.RemoteHost(node.bmc)
-        ipu_imc.ssh_connect(node.bmc_user, node.bmc_password)
-
-        # """
-        # We need to ensure the ACC physical port connectivity is enabled during reboot to ensure dhcp gets an ip.
-        # Trigger an acc reboot and try to run python /usr/bin/scripts/cfg_acc_apf_x2.py. This will fail until the
-        # ACC_LAN_APF_VPORTs are ready. Once this succeeds, we can try to connect to the ACC
-        # """
-        logger.info("Rebooting IMC to trigger ACC reboot")
-        ipu_imc.run("systemctl reboot")
-        time.sleep(30)
-        ipu_imc.ssh_connect(node.bmc_user, node.bmc_password)
-        logger.info(f"Attempting to enable ACC connectivity from IMC {node.bmc} on reboot")
-        retries = 30
-        for _ in range(retries):
-            ret = ipu_imc.run("/usr/bin/scripts/cfg_acc_apf_x2.py")
-            if ret.returncode == 0:
-                logger.info("Enabled ACC physical port connectivity")
-                break
-            logger.debug(f"ACC SPF script failed with returncode {ret.returncode}")
-            logger.debug(f"out: {ret.out}\n err: {ret.err}")
-            time.sleep(15)
-        else:
-            logger.error_and_exit("Failed to enable ACC connectivity")
-
-        ipu_acc = host.RemoteHost(str(node.ip))
-        ipu_acc.ping()
-        ipu_acc.ssh_connect("root", "redhat")
-        ipu_acc.run("nmcli con mod enp0s1f0 ipv4.route-metric 0")
-        ipu_acc.run("ip route delete default via 192.168.0.1")  # remove imc default route to avoid conflict
-        logger.info(f"{node.name} connectivity established")
-
-    def post_boot(self, desired_ip_range: tuple[str, str]) -> bool:
-        return True
 
 
 class IPUBMC(BMC):
@@ -375,6 +259,7 @@ nohup sh -c '
 
         imc = self._create_imc_rsh()
 
+        logger.info(f"Downloading repr(iso_path) on BMC")
         sleep_time = 60.0
         while True:
             time.sleep(sleep_time)
@@ -390,7 +275,7 @@ nohup sh -c '
                 percentage = float(downloaded_size) / float(expected_size) * 100.0
             else:
                 percentage = 100.0
-            logger.info(f"BMC downloaded {downloaded_size} of {expected_size} bytes ({percentage:.2f}%) of {repr(iso_path)}...")
+            logger.info(f"BMC downloaded {downloaded_size} of {expected_size} bytes ({percentage:.2f}%)")
 
     def _insert_media(self, iso_path: str, *, expected_size: int) -> None:
         url = f"https://{self.url}:8443/redfish/v1/Systems/1/VirtualMedia/1/Actions/VirtualMedia.InsertMedia"
