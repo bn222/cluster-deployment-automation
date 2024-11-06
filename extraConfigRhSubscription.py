@@ -6,6 +6,7 @@ from clustersConfig import ClustersConfig, NodeConfig
 from clustersConfig import ExtraConfigArgs
 import host
 from extraConfigMicroshift import masquarade
+from ktoolbox.common import unwrap
 
 
 def ExtraConfigRhSubscription(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, Future[Optional[host.Result]]]) -> None:
@@ -17,18 +18,12 @@ def ExtraConfigRhSubscription(cc: ClustersConfig, cfg: ExtraConfigArgs, futures:
 
     logger.info("Running post config step to attach Red Hat subscription")
 
-    if cfg.organization_id is None:
-        logger.error_and_exit("Error no organization id was specified to attach Red Hat subscription")
-
-    if cfg.activation_key is None:
-        logger.error_and_exit("Error no activation key was specified to attach Red Hat subscription")
-
     def helper(node: NodeConfig) -> host.Result:
         logger.info(f"attaching subscription on {node.name}")
         assert node.ip is not None
         h = host.Host(node.ip)
         h.ssh_connect("root", "redhat")
-        ret = h.run(f"rhc connect -o {cfg.organization_id} -a {cfg.activation_key}", quiet=True)
+        ret = h.run(f"rhc connect -o {unwrap(cfg.organization_id)} -a {unwrap(cfg.activation_key)}", quiet=True)
         return ret
 
     executor = ThreadPoolExecutor(max_workers=len(cc.all_nodes()))

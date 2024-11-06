@@ -35,4 +35,5 @@ clusters:
         foo: xfoo
     - name: "dpu_operator_host"
       dpu_net_interface: eth0
+      dpu_operator_path: ../
     - name: "dpu_operator_dpu"

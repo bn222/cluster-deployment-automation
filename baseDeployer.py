@@ -17,9 +17,9 @@ class BaseDeployer(abc.ABC):
         self._extra_config.run(to_run, self._futures)
 
     def _preconfig(self) -> None:
-        for e in self._cc.preconfig:
+        for e in self._cc.cluster_config.preconfig:
             self._prepost_config(e)
 
     def _postconfig(self) -> None:
-        for e in self._cc.postconfig:
+        for e in self._cc.cluster_config.postconfig:
             self._prepost_config(e)

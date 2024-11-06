@@ -40,7 +40,12 @@ def _test_parse_1(tfile: TFileConfig) -> None:
         tfile.check(tfile, cc)
 
     vdict = cc.cluster_config.serialize(show_secrets=True)
-    cluster_config2 = clustersConfig.ClusterConfig.parse(0, ".clusters[0]", vdict)
+    cluster_config2 = clustersConfig.ClusterConfig.parse(
+        0,
+        ".clusters[0]",
+        vdict,
+        yamlfile=yamlpath,
+    )
     assert cc.cluster_config == cluster_config2
 
     for yamlidx2, host in enumerate(cc.hosts.values()):
@@ -145,6 +150,8 @@ def check_test5(tfile: TFileConfig, cc: clustersConfig.ClustersConfig) -> None:
         ram=cc.masters[0].ram,
         cpu=cc.masters[0].cpu,
     )
+
+    assert cc.cluster_config.postconfig[1].dpu_operator_path == "../"
 
 
 TFILES = (

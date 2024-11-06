@@ -1,12 +1,12 @@
 from clustersConfig import ClustersConfig
 from k8sClient import K8sClient
 from configOperators import ConfigCVO
-import sys
 from concurrent.futures import Future
 from typing import Optional
 from logger import logger
 from clustersConfig import ExtraConfigArgs
 import host
+from ktoolbox.common import unwrap
 
 
 def ExtraConfigOvnK(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, Future[Optional[host.Result]]]) -> None:
@@ -14,11 +14,7 @@ def ExtraConfigOvnK(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str,
     logger.info("Running post config step to load custom OVN-K")
     iclient = K8sClient(cc.kubeconfig)
 
-    if cfg.image is None:
-        logger.info("Error image not provided to load custom OVN-K")
-        sys.exit(-1)
-
-    image = cfg.image
+    image = unwrap(cfg.image)
 
     logger.info(f"Image {image} provided to load custom OVN-K")
 
@@ -42,7 +38,7 @@ def ExtraConfigOvnK(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str,
     iclient.oc_run_or_die("rollout restart daemonset/ovnkube-node")
 
     # Wait for the new image to roll out.
-    iclient.oc_run_or_die(f"rollout status --timeout={cfg.ovnk_rollout_timeout} daemonset/ovnkube-node")
+    iclient.oc_run_or_die(f"rollout status --timeout={unwrap(cfg.ovnk_rollout_timeout)} daemonset/ovnkube-node")
 
 
 def main() -> None:
