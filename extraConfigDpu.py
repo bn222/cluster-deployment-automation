@@ -16,7 +16,7 @@ from imageRegistry import ImageRegistry
 DPU_OPERATOR_REPO = "https://github.com/openshift/dpu-operator.git"
 MICROSHIFT_KUBECONFIG = "/root/kubeconfig.microshift"
 OSE_DOCKERFILE = "https://pkgs.devel.redhat.com/cgit/containers/dpu-operator/tree/Dockerfile?h=rhaos-4.17-rhel-9"
-P4_IMG = "wsfd-advnetlab239.anl.eng.bos2.dc.redhat.com:5000/intel-ipu-p4-sdk:10-9-2024"
+P4_IMG = "wsfd-advnetlab240.anl.eng.bos2.dc.redhat.com:5000/intel-ipu-p4-sdk:10-9-2024"
 
 KERNEL_RPMS = [
     "https://download-01.beak-001.prod.iad2.dc.redhat.com/brewroot/vol/rhel-9/packages/kernel/5.14.0/427.2.1.el9_4/x86_64/kernel-5.14.0-427.2.1.el9_4.x86_64.rpm",

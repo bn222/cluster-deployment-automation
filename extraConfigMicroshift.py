@@ -94,6 +94,7 @@ def ExtraConfigMicroshift(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dic
 
     # Check on the status of the cluster
     acc.write("/etc/yum.repos.d/microshift-canidate.repo", early_access_microshift())
+    time.sleep(1)
 
     logger.info("Installing microshift 4.16")
     acc.run_or_die("dnf install -y microshift microshift-multus")
