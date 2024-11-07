@@ -206,7 +206,7 @@ nohup sh -c '
             return None
         return val
 
-    def _cleanup_iso(self, iso_path: str) -> None:
+    def _cleanup_iso(self) -> None:
         imc = self._create_imc_rsh()
         imc.run("rm -f /mnt/imc/acc-os.iso")
 
@@ -217,12 +217,15 @@ nohup sh -c '
         self._prepare_imc(extract_server(iso_path))
         logger.info("restarting Redfish")
         self._restart_redfish()
+        imc = self._create_imc_rsh()
         # W/A delete iso before downloading it if partially downladed
         # https://issues.redhat.com/browse/IIC-382
-        logger.info("Cleaning up iso")
-        self._cleanup_iso(iso_path)
-        logger.info("inserting iso")
-        self._insert_media(iso_path, expected_size=expected_size)
+        # also, if the size is as pected, skip inserting iso which takes 10 minutes
+        if expected_size != self._get_file_size(imc, "/mnt/imc/acc-os.iso"):
+            logger.info("Cleaning up iso")
+            self._cleanup_iso()
+            logger.info("inserting iso")
+            self._insert_media(iso_path, expected_size=expected_size)
         logger.info("setting boot source override")
         self._bootsource_override_cd()
         logger.info("triggering reboot")
