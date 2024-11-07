@@ -2,3 +2,7 @@
 line-length = 250
 skip-string-normalization = 1
 
+[tool.mypy]
+ignore_missing_imports = true
+strict = true
+files = "."

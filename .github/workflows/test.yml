@@ -45,7 +45,7 @@ jobs:
     - name: mypy
       run: |
         mypy --version
-        mypy --strict --config-file mypy.ini .
+        mypy
     - name: pytest
       # Tests may want to know whether they run under CI in github actions.
       #
