@@ -259,7 +259,7 @@ nohup sh -c '
 
         imc = self._create_imc_rsh()
 
-        logger.info(f"Downloading repr(iso_path) on BMC")
+        logger.info(f"Downloading {repr(iso_path)} on BMC")
         sleep_time = 60.0
         while True:
             time.sleep(sleep_time)
