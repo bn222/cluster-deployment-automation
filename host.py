@@ -52,15 +52,22 @@ class Login(ABC):
     def debug_details(self) -> str:
         return str({k: v for k, v in vars(self).items() if k not in ['_key', '_password']})
 
-    @abstractmethod
     def login(self) -> paramiko.SSHClient:
-        pass
+        self._log()
+        return self.quiet_login()
 
     def _host(self) -> paramiko.SSHClient:
         host = paramiko.SSHClient()
         host.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         return host
 
+    @abstractmethod
+    def quiet_login(self) -> paramiko.SSHClient:
+        pass
+
+    @abstractmethod
+    def _log(self) -> None:
+        pass
 
 class KeyLogin(Login):
     def __init__(self, hostname: str, username: str, key_path: str) -> None:
@@ -84,11 +91,13 @@ class KeyLogin(Login):
         logger.debug(result.out)
         return "---[RSA " in result.out
 
-    def login(self) -> paramiko.SSHClient:
-        logger.info(f"Logging in into {self._hostname} with {self._key_path}")
+    def quiet_login(self) -> paramiko.SSHClient:
         host = self._host()
         host.connect(self._hostname, username=self._username, pkey=self._pkey, look_for_keys=False, allow_agent=False)
         return host
+
+    def _log(self) -> None:
+        logger.info(f"Logging in into {self._hostname} with {self._key_path}")
 
 
 class PasswordLogin(Login):
@@ -96,23 +105,25 @@ class PasswordLogin(Login):
         super().__init__(hostname, username)
         self._password = password
 
-    def login(self) -> paramiko.SSHClient:
-        logger.info(f"Logging into {self._hostname} with password")
+    def quiet_login(self) -> paramiko.SSHClient:
         host = self._host()
         host.connect(self._hostname, username=self._username, password=self._password, look_for_keys=False, allow_agent=False)
         return host
 
+    def _log(self) -> None:
+        logger.info(f"Logging into {self._hostname} with password")
 
 class AutoLogin(Login):
     def __init__(self, hostname: str, username: str) -> None:
         super().__init__(hostname, username)
 
-    def login(self) -> paramiko.SSHClient:
-        logger.info(f"Logging into {self._hostname} with Paramiko 'Auto key discovery' & 'Ssh-Agent'")
+    def quiet_login(self) -> paramiko.SSHClient:
         host = self._host()
         host.connect(self._hostname, username=self._username, look_for_keys=True, allow_agent=True)
         return host
 
+    def _log(self) -> None:
+        logger.info(f"Logging into {self._hostname} with Paramiko 'Auto key discovery' & 'Ssh-Agent'")
 
 class Host:
     def __new__(cls, hostname: str, bmc: Optional[BMC] = None) -> 'Host':
@@ -174,7 +185,7 @@ class Host:
         while time.monotonic() < end_time:
             for login in logins:
                 try:
-                    self._host = login.login()
+                    self._host = login.quiet_login()
                     logger.info(f"Login successful on {self._hostname}")
                     return
                 except (ssh_exception.AuthenticationException, ssh_exception.NoValidConnectionsError, ssh_exception.SSHException, socket.error, socket.timeout) as e:
