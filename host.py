@@ -69,6 +69,7 @@ class Login(ABC):
     def _log(self) -> None:
         pass
 
+
 class KeyLogin(Login):
     def __init__(self, hostname: str, username: str, key_path: str) -> None:
         super().__init__(hostname, username)
@@ -113,6 +114,7 @@ class PasswordLogin(Login):
     def _log(self) -> None:
         logger.info(f"Logging into {self._hostname} with password")
 
+
 class AutoLogin(Login):
     def __init__(self, hostname: str, username: str) -> None:
         super().__init__(hostname, username)
@@ -124,6 +126,7 @@ class AutoLogin(Login):
 
     def _log(self) -> None:
         logger.info(f"Logging into {self._hostname} with Paramiko 'Auto key discovery' & 'Ssh-Agent'")
+
 
 class Host:
     def __new__(cls, hostname: str, bmc: Optional[BMC] = None) -> 'Host':
