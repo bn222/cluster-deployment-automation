@@ -226,6 +226,8 @@ nohup sh -c '
             self._cleanup_iso()
             logger.info("inserting iso")
             self._insert_media(iso_path, expected_size=expected_size)
+        else:
+            logger.info("Skipping with cleaning up iso and inserting it since size is the same")
         logger.info("setting boot source override")
         self._bootsource_override_cd()
         logger.info("triggering reboot")
