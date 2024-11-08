@@ -50,7 +50,7 @@ def masquarade(rsh: host.Host, cc: ClustersConfig) -> None:
     lan_interface = cc.network_api_port
     ip_tables = "/sbin/iptables"
     logger.info(f"Setting up ip forwarding on {rsh.hostname()} from {lan_interface} to {wan_interface}")
-    rsh.run_or_die("/bin/echo 1 > /proc/sys/net/ipv4/ip_forward")
+    rsh.run_or_die("sysctl -w net.ipv4.ip_forward=1")
     rsh.run_or_die(f"{ip_tables} -t nat -A POSTROUTING -o {lan_interface} -j MASQUERADE")
     rsh.run_or_die(f"{ip_tables} -A FORWARD -i {lan_interface} -o {wan_interface} -m state --state RELATED,ESTABLISHED -j ACCEPT ")
     rsh.run_or_die(f"{ip_tables} -A FORWARD -i {wan_interface} -o {lan_interface} -j ACCEPT")
