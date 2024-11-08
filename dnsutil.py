@@ -211,8 +211,10 @@ def dnsmasq_update(cluster_name: str, api_vip: Optional[str] = None) -> None:
             content += f"servers-file={DNSMASQ_SERVERS_FILE}\n"
             file.write(content)
 
+        ret = lh.run("systemctl unmask dnsmasq.service")
+        ret = lh.run("systemctl enable dnsmasq.service")
+
         if servers_changed or not lh.run("systemctl is-active --quiet dnsmasq.service").success():
-            ret = lh.run("systemctl unmask dnsmasq.service")
             ret = lh.run("systemctl restart dnsmasq.service")
             if not ret.success():
                 logger.warning(f"dnsmasq: failure to start dnsmasq service: {ret}")
