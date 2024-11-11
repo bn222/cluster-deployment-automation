@@ -184,7 +184,7 @@ def ExtraConfigDpu(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, 
     [f.result() for (_, f) in futures.items()]
     logger.info("Running post config step to start DPU operator on IPU")
 
-    repo = cfg.resolve_dpu_operator_path()
+    repo = unwrap(cfg.dpu_operator_path_abs)
     dpu_node = cc.masters[0]
     assert dpu_node.ip is not None
     acc = host.Host(dpu_node.ip)
@@ -243,7 +243,7 @@ def ExtraConfigDpuHost(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[s
     logger.info("Running post config step to start DPU operator on Host")
     lh = host.LocalHost()
     client = K8sClient(cc.kubeconfig)
-    repo = cfg.resolve_dpu_operator_path()
+    repo = unwrap(cfg.dpu_operator_path_abs)
 
     imgReg = _ensure_local_registry_running(lh, delete_all=False)
     imgReg.ocp_trust(client)

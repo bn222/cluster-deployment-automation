@@ -8,6 +8,7 @@ from typing import Optional
 import xml.etree.ElementTree as et
 import jinja2
 from yaml import safe_load
+import json
 import host
 from bmc import BMC
 from logger import logger
@@ -82,7 +83,6 @@ class ClusterConfigStructParseBase(kcommon.StructParseBaseNamed):
 @kcommon.strict_dataclass
 @dataclass(frozen=True, kw_only=True)
 class ExtraConfigArgs(ClusterConfigStructParseBase):
-    base_path: str
     name: str
 
     # Either "preconfig" or "postconfig"
@@ -157,7 +157,6 @@ class ExtraConfigArgs(ClusterConfigStructParseBase):
         yamlpath: str,
         arg: Any,
         *,
-        base_path: str,
         config_type: str,
     ) -> "ExtraConfigArgs":
         with kcommon.structparse_with_strdict(arg, yamlpath) as varg:
@@ -329,7 +328,6 @@ class ExtraConfigArgs(ClusterConfigStructParseBase):
         return ExtraConfigArgs(
             yamlidx=yamlidx,
             yamlpath=yamlpath,
-            base_path=base_path,
             name=name,
             config_type=config_type,
             image=image,
@@ -345,12 +343,11 @@ class ExtraConfigArgs(ClusterConfigStructParseBase):
             ipu_plugin_sha=ipu_plugin_sha,
         )
 
-    def resolve_dpu_operator_path(self) -> str:
-        assert self.dpu_operator_path
-        if self.dpu_operator_path[0] == "/":
-            return self.dpu_operator_path
-        else:
-            return os.path.normpath(os.path.join(self.base_path, self.dpu_operator_path))
+    @property
+    def dpu_operator_path_abs(self) -> Optional[str]:
+        if self.dpu_operator_path is None:
+            return None
+        return self.cluster_config.main_config.resolve_path(self.dpu_operator_path)
 
     def pre_check(self) -> None:
         if self.sriov_network_operator_local:
@@ -733,6 +730,10 @@ class ClusterConfig(kcommon.StructParseBaseNamed):
         for e in self.postconfig:
             e._owner_reference.init(self)
 
+    @property
+    def main_config(self) -> 'MainConfig':
+        return self._owner_reference.get(MainConfig)
+
     def serialize(self, *, show_secrets: bool = False) -> dict[str, Any]:
         extra_1: dict[str, Any] = {}
         kcommon.dict_add_optional(extra_1, "kubeconfig", self.kubeconfig)
@@ -765,11 +766,9 @@ class ClusterConfig(kcommon.StructParseBaseNamed):
         yamlpath: str,
         arg: Any,
         *,
-        yamlfile: str,
         basedir: Optional[str] = None,
         rnd_seed: Optional[str] = None,
     ) -> "ClusterConfig":
-        yamlfile = os.path.normpath(os.path.abspath(yamlfile))
         if basedir is None:
             basedir = os.getcwd()
 
@@ -905,15 +904,12 @@ class ClusterConfig(kcommon.StructParseBaseNamed):
                 default_network_api_port=network_api_port,
             )
 
-            base_path = os.path.dirname(yamlfile)
-
             preconfig = kcommon.structparse_pop_objlist(
                 *varg.for_key("preconfig"),
                 construct=lambda yamlpath2, yamlidx2, arg2: ExtraConfigArgs.parse(
                     yamlpath2,
                     yamlidx2,
                     arg2,
-                    base_path=base_path,
                     config_type="preconfig",
                 ),
             )
@@ -924,7 +920,6 @@ class ClusterConfig(kcommon.StructParseBaseNamed):
                     yamlpath2,
                     yamlidx2,
                     arg2,
-                    base_path=base_path,
                     config_type="postconfig",
                 ),
             )
@@ -1052,9 +1047,182 @@ class ClusterConfig(kcommon.StructParseBaseNamed):
         return self._is_sno(self.kind, len(self.masters))
 
 
+@kcommon.strict_dataclass
+@dataclass(frozen=True, kw_only=True)
+class MainConfig(kcommon.StructParseBase):
+    # This is the (absolute, normalized) file name of the cluster YAML file.
+    # Paths inside the YAML shall be relative to dirname(yamlfile). See also
+    # the "yamldir" property.
+    yamlfile: str
+
+    clusters: tuple[ClusterConfig, ...]
+
+    def __post_init__(self) -> None:
+        for c in self.clusters:
+            c._owner_reference.init(self)
+
+    @property
+    def clusters_config(self) -> 'ClustersConfig':
+        return self._owner_reference.get(ClustersConfig)
+
+    def serialize(self, *, show_secrets: bool = False) -> dict[str, Any]:
+        return {
+            "clusters": [n.serialize(show_secrets=show_secrets) for n in self.clusters],
+        }
+
+    def serialize_json(self, *, show_secrets: bool = False) -> str:
+        return json.dumps(self.serialize(show_secrets=show_secrets))
+
+    @staticmethod
+    def parse(
+        yamlidx: int,
+        yamlpath: str,
+        arg: Any,
+        *,
+        yamlfile: str,
+        basedir: Optional[str] = None,
+        rnd_seed: Optional[str] = None,
+    ) -> "MainConfig":
+        yamlfile = os.path.normpath(os.path.abspath(yamlfile))
+        if basedir is None:
+            basedir = os.getcwd()
+
+        with kcommon.structparse_with_strdict(arg, yamlpath) as varg:
+            clusters = kcommon.structparse_pop_objlist(
+                *varg.for_key("clusters"),
+                construct=lambda yamlidx2, yamlpath2, arg2: ClusterConfig.parse(
+                    yamlidx2,
+                    yamlpath2,
+                    arg2,
+                    basedir=basedir,
+                    rnd_seed=rnd_seed,
+                ),
+                allow_empty=False,
+            )
+
+        if len(clusters) > 1:
+            raise ValueError(f"\"{yamlpath}.clusters\": currently only one entry in the clusters list is supported")
+
+        return MainConfig(
+            yamlidx=yamlidx,
+            yamlpath=yamlpath,
+            yamlfile=yamlfile,
+            clusters=clusters,
+        )
+
+    @staticmethod
+    def _apply_jinja(
+        contents: str,
+        *,
+        cluster_name: Optional[str],
+        cluster_info_loader: clusterInfo.ClusterInfoLoader,
+    ) -> str:
+        @functools.cache
+        def _ci() -> clusterInfo.ClusterInfo:
+            lh = host.LocalHost()
+            current_host = lh.run("hostname -f").out.strip()
+            return cluster_info_loader.get(current_host, required=True)
+
+        def _get_worker_number(a: int) -> str:
+            name = _ci().workers[a]
+            lab_match = re.search(r"lab(\d+)", name)
+            if lab_match:
+                return lab_match.group(1)
+            else:
+                return re.sub("[^0-9]", "", name)
+
+        tmpl = jinja2.Template(contents)
+        tmpl.globals['worker_number'] = _get_worker_number
+        tmpl.globals['worker_name'] = lambda a: _ci().workers[a]
+        tmpl.globals['api_network'] = lambda: _ci().network_api_port
+        tmpl.globals['iso_server'] = lambda: _ci().iso_server
+        tmpl.globals['bmc'] = lambda a: _ci().bmcs[a]
+        tmpl.globals['activation_key'] = lambda: _ci().activation_key
+        tmpl.globals['organization_id'] = lambda: _ci().organization_id
+        tmpl.globals['IMC_hostname'] = lambda a: _ci().bmc_imc_hostnames[a]
+        tmpl.globals['IPU_mac_address'] = lambda a: _ci().ipu_mac_addresses[a]
+
+        kwargs: dict[str, str] = {}
+        kcommon.dict_add_optional(kwargs, "cluster_name", cluster_name)
+        result: str = tmpl.render(**kwargs)
+
+        return result
+
+    @staticmethod
+    def load(
+        filename: str,
+        *,
+        with_jinja: bool = True,
+        cluster_info_loader: Optional[clusterInfo.ClusterInfoLoader] = None,
+        basedir: Optional[str] = None,
+        rnd_seed: Optional[str] = None,
+    ) -> 'MainConfig':
+        if not os.path.exists(filename):
+            raise ValueError(f"Missing YAML configuration at {repr(filename)}")
+
+        try:
+            with open(filename, 'r') as f:
+                contents = f.read()
+        except Exception as e:
+            raise ValueError(f"Error reading YAML configuration at {repr(filename)}: {e}")
+
+        try:
+            yamldata = safe_load(io.StringIO(contents))
+        except Exception as e:
+            raise ValueError(f"Error reading YAML file {repr(filename)}{' before Jinja2 templating' if with_jinja else ''}: {e}")
+
+        if with_jinja:
+            try:
+                cluster_name = yamldata["clusters"][0]["name"]
+            except Exception:
+                cluster_name = None
+
+            if cluster_info_loader is None:
+                cluster_info_loader = clusterInfo.ClusterInfoLoader()
+
+            contents = MainConfig._apply_jinja(
+                contents,
+                cluster_name=cluster_name,
+                cluster_info_loader=cluster_info_loader,
+            )
+
+            try:
+                yamldata = safe_load(io.StringIO(contents))
+            except Exception as e:
+                raise ValueError(f"Error reading YAML file {repr(filename)} after Jinja2 templating: {e}")
+
+        try:
+            cc = MainConfig.parse(
+                0,
+                "",
+                yamldata,
+                yamlfile=filename,
+                basedir=basedir,
+                rnd_seed=rnd_seed,
+            )
+        except Exception as e:
+            raise ValueError(f"Error loading YAML file {repr(filename)}: {e}")
+
+        return cc
+
+    @property
+    def yamldir(self) -> str:
+        return os.path.dirname(self.yamlfile)
+
+    def resolve_path(self, path: str) -> str:
+        # If "path" is a relative path, then make it absolute based on the
+        # yamldir (that is, relative to the cluster YAML file).
+        if not path:
+            raise ValueError("invalid empty path")
+        if not os.path.isabs(path):
+            path = os.path.join(self.yamldir, path)
+        return os.path.normpath(path)
+
+
 class ClustersConfig:
     yaml_path: str
     worker_range: common.RangeList
+    main_config: MainConfig
     external_port: str
     local_bridge_config: BridgeConfig
     remote_bridge_config: BridgeConfig
@@ -1067,6 +1235,7 @@ class ClustersConfig:
         *,
         secrets_path: str = "",
         worker_range: common.RangeList = common.RangeList.UNLIMITED,
+        basedir: Optional[str] = None,
         rnd_seed: Optional[str] = None,
         test_only: bool = False,
     ):
@@ -1075,15 +1244,13 @@ class ClustersConfig:
 
         self.base_path = os.path.dirname(os.path.abspath(yaml_path))
 
-        cc = self._load_full_config(yaml_path)
-
-        self.cluster_config = ClusterConfig.parse(
-            0,
-            ".clusters[0]",
-            cc,
-            yamlfile=yaml_path,
+        self.main_config = MainConfig.load(
+            yaml_path,
+            basedir=basedir,
             rnd_seed=rnd_seed,
         )
+
+        self.main_config._owner_reference.init(self)
 
         self.external_port = self.cluster_config.external_port or "auto"
 
@@ -1098,10 +1265,11 @@ class ClustersConfig:
         if self.cluster_config.kind == "openshift":
             self.configure_ip_range(self.cluster_config)
 
-        for c in self.cluster_config.preconfig:
-            c.pre_check()
-        for c in self.cluster_config.postconfig:
-            c.pre_check()
+        for cluster_config in self.main_config.clusters:
+            for c in cluster_config.preconfig:
+                c.pre_check()
+            for c in cluster_config.postconfig:
+                c.pre_check()
 
     def configure_ip_range(self, cluster_config: ClusterConfig) -> None:
         # Reserve IPs for AI, masters and workers.
@@ -1129,6 +1297,10 @@ class ClustersConfig:
         dynamic_ip_range = common.ip_range(self.ip_range[1], common.ip_range_size(ip_range) - common.ip_range_size(self.ip_range))
         self.local_bridge_config = BridgeConfig(ip=self.ip_range[0], mask=ip_mask, dynamic_ip_range=dynamic_ip_range)
         self.remote_bridge_config = BridgeConfig(ip=ip_range[1], mask=ip_mask)
+
+    @property
+    def cluster_config(self) -> ClusterConfig:
+        return self.main_config.clusters[0]
 
     @property
     def name(self) -> str:
@@ -1190,24 +1362,6 @@ class ClustersConfig:
             return last_ip
         return None
 
-    @staticmethod
-    def _load_full_config(yaml_path: str) -> dict[str, Any]:
-        if not os.path.exists(yaml_path):
-            logger.error(f"could not find config in path: '{yaml_path}'")
-            sys.exit(1)
-
-        with open(yaml_path, 'r') as f:
-            contents = f.read()
-
-        # load it twice, to get the name of the cluster so
-        # that that can be used as a var
-        loaded = safe_load(io.StringIO(contents))["clusters"][0]
-        contents = ClustersConfig._apply_jinja(contents, loaded["name"])
-        cc = safe_load(io.StringIO(contents))["clusters"][0]
-        if not isinstance(cc, dict) or not all(isinstance(k, str) for k in cc):
-            raise RuntimeError(f"YAML {yaml_path} does not contain a usable dictionary")
-        return cc
-
     def autodetect_external_port(self) -> None:
         candidate = common.route_to_port(host.LocalHost(), "default")
         if candidate is None:
@@ -1232,67 +1386,6 @@ class ClustersConfig:
 
     def validate_external_port(self) -> bool:
         return bool(common.ip_links(host.LocalHost(), ifname=self.external_port))
-
-    @staticmethod
-    def _apply_jinja(contents: str, cluster_name: str) -> str:
-        cluster_info_loader = clusterInfo.ClusterInfoLoader()
-
-        @functools.cache
-        def _ci() -> clusterInfo.ClusterInfo:
-            lh = host.LocalHost()
-            current_host = lh.run("hostname -f").out.strip()
-            return cluster_info_loader.get(current_host, required=True)
-
-        def worker_number(a: int) -> str:
-            name = _ci().workers[a]
-            lab_match = re.search(r"lab(\d+)", name)
-            if lab_match:
-                return lab_match.group(1)
-            else:
-                return re.sub("[^0-9]", "", name)
-
-        def worker_name(a: int) -> str:
-            return _ci().workers[a]
-
-        def bmc(a: int) -> str:
-            return _ci().bmcs[a]
-
-        def api_network() -> str:
-            return _ci().network_api_port
-
-        def iso_server() -> str:
-            return _ci().iso_server
-
-        def activation_key() -> str:
-            return _ci().activation_key
-
-        def organization_id() -> str:
-            return _ci().organization_id
-
-        def imc_hostname(a: int) -> str:
-            return _ci().bmc_imc_hostnames[a]
-
-        def ipu_mac_address(a: int) -> str:
-            return _ci().ipu_mac_addresses[a]
-
-        format_string = contents
-
-        template = jinja2.Template(format_string)
-        template.globals['worker_number'] = worker_number
-        template.globals['worker_name'] = worker_name
-        template.globals['api_network'] = api_network
-        template.globals['iso_server'] = iso_server
-        template.globals['bmc'] = bmc
-        template.globals['activation_key'] = activation_key
-        template.globals['organization_id'] = organization_id
-        template.globals['IMC_hostname'] = imc_hostname
-        template.globals['IPU_mac_address'] = ipu_mac_address
-
-        kwargs = {}
-        kwargs["cluster_name"] = cluster_name
-
-        t: str = template.render(**kwargs)
-        return t
 
     def all_nodes(self) -> list[NodeConfig]:
         return self.masters + self.workers
