@@ -20,6 +20,7 @@ class AssistedClientClusterInfo:
 
 @dataclass
 class AssistedClientHostInfo:
+    name: str
     status: str
     inventory: str
 
@@ -171,11 +172,16 @@ class AssistedClientAutomation(AssistedClient):  # type: ignore
             time.sleep(10)
         logger.info(f"Took {tries} tries to start cluster {cluster_name}")
 
-    def get_ai_host(self, name: str) -> Optional[AssistedClientHostInfo]:
+    def list_ai_hosts(self) -> list[AssistedClientHostInfo]:
+        ret = []
         for h in filter(lambda x: "inventory" in x, self.list_hosts()):
-            rhn = h["requested_hostname"]
-            if rhn == name:
-                return AssistedClientHostInfo(h["status"], h["inventory"])
+            ret.append(AssistedClientHostInfo(h["requested_hostname"], h["status"], h["inventory"]))
+        return ret
+
+    def get_ai_host(self, name: str) -> Optional[AssistedClientHostInfo]:
+        for h in self.list_ai_hosts():
+            if h.name == name:
+                return h
         return None
 
     def get_ai_ip(self, name: str, ip_range: tuple[str, str]) -> Optional[str]:

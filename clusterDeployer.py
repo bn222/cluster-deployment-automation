@@ -585,6 +585,11 @@ class ClusterDeployer(BaseDeployer):
             api_vip = None
         dnsutil.dnsmasq_update(cluster_name, api_vip)
 
+    def check_any_host_error(self) -> None:
+        for h in self._ai.list_ai_hosts():
+            if h.status == "error":
+                logger.error_and_exit(f"Host {h.name} in error state")
+
     def wait_for_workers(self) -> None:
         logger.info(f'waiting for {len(self._cc.workers)} workers')
         lh = host.LocalHost()
@@ -594,6 +599,7 @@ class ClusterDeployer(BaseDeployer):
         for try_count in itertools.count(0):
             workers = [w.name for w in self._cc.workers]
             ready_count = sum(self.client().is_ready(w) for w in workers)
+            self.check_any_host_error()
 
             if prev_ready != ready_count:
                 logger.info(f"{ready_count}/{len(workers)} is ready (try #{try_count})")
