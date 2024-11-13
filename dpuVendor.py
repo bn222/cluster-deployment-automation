@@ -68,6 +68,9 @@ class IpuPlugin(VendorPlugin):
         if h.is_localhost():
             env = os.environ.copy()
             env["IMGTOOL"] = "podman"
+            env["P4_NAME"] = "fxp-net_linux-networking"
+            env["P4_DIR"] = "fxp-net_linux-networking"
+
             ret = h.run("make -C /root/ipu-opi-plugins/ipu-plugin image", env=env)
         else:
             ret = h.run("IMGTOOL=podman make -C /root/ipu-opi-plugins/ipu-plugin image")

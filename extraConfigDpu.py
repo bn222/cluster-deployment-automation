@@ -16,7 +16,7 @@ from imageRegistry import ImageRegistry
 DPU_OPERATOR_REPO = "https://github.com/openshift/dpu-operator.git"
 MICROSHIFT_KUBECONFIG = "/root/kubeconfig.microshift"
 OSE_DOCKERFILE = "https://pkgs.devel.redhat.com/cgit/containers/dpu-operator/tree/Dockerfile?h=rhaos-4.17-rhel-9"
-P4_IMG = "wsfd-advnetlab240.anl.eng.bos2.dc.redhat.com:5000/intel-ipu-p4-sdk:10-9-2024"
+P4_IMG = "wsfd-advnetlab223.anl.eng.bos2.dc.redhat.com:5000/intel-ipu-sdk:kubecon-aarch64"
 
 KERNEL_RPMS = [
     "https://download-01.beak-001.prod.iad2.dc.redhat.com/brewroot/vol/rhel-9/packages/kernel/5.14.0/427.2.1.el9_4/x86_64/kernel-5.14.0-427.2.1.el9_4.x86_64.rpm",
@@ -151,16 +151,16 @@ def wait_vsp_ds_running(client: K8sClient) -> None:
 
 def ensure_p4_pod_running(lh: host.Host, acc: host.Host, imgReg: ImageRegistry) -> None:
     lh.run_or_die(f"podman pull --tls-verify=false {P4_IMG}")
-    lh.run_or_die(f"podman tag {P4_IMG} {imgReg.url()}/intel-ipu-p4-sdk:10-9-2024")
-    lh.run_or_die(f"podman push {imgReg.url()}/intel-ipu-p4-sdk:10-9-2024")
+    lh.run_or_die(f"podman tag {P4_IMG} {imgReg.url()}/kubecon-aarch64")
+    lh.run_or_die(f"podman push {imgReg.url()}/kubecon-aarch64")
     uname = acc.run("uname -r").out.strip()
     logger.info("Manually starting P4 container")
-    cmd = f"podman run --network host -d --privileged --entrypoint='[\"/bin/sh\", \"-c\", \"sleep 5; sh /entrypoint.sh\"]' -v /lib/modules/{uname}:/lib/modules/{uname} -v data1:/opt/p4 {imgReg.url()}/intel-ipu-p4-sdk:10-9-2024"
+    cmd = f"podman run -d --privileged -v /lib/modules/{uname}:/lib/modules/{uname} -v /opt/p4/p4-cp-nws/var/run:/opt/p4/p4-cp-nws/var/run -v /sys:/sys -p 9559:9559 {imgReg.url()}/kubecon-aarch64"
     acc.run_or_die(cmd)
     # Occasionally the P4 pod fails to start
     while True:
         time.sleep(10)
-        if "intel-ipu-p4-sdk:10-9-2024" in acc.run("podman ps").out:
+        if "kubecon-aarch64" in acc.run("podman ps").out:
             break
         logger.info("Failed to start p4 container, retrying")
         acc.run_or_die(cmd)
