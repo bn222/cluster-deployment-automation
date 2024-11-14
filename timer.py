@@ -13,6 +13,10 @@ class Timer:
     def stop(self) -> None:
         self.end_time = time.time()
 
+    def start_stop(self) -> None:
+        self.start_time = time.time()
+        self.end_time = self.start_time
+
     def duration(self) -> str:
         if self.start_time is None:
             raise ValueError("Timer not started")
