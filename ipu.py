@@ -337,10 +337,10 @@ nohup sh -c '
         data = self._requests_get(url)
         fwversion = data.get("FirmwareVersion")
         if not isinstance(fwversion, str):
-            logger.error_and_exit(f"Failed to get FirmwareVersion")
+            logger.error_and_exit("Failed to get FirmwareVersion")
         match = re.search(r"^MEV-.*\.([0-9]+\.[0-9]+\.[0-9]+)\.[0-9]+$", fwversion.strip())
         if not match:
-            logger.error_and_exit(f"Failed to extract version")
+            logger.error_and_exit("Failed to extract version")
         return match.group(1)
 
     def _version_via_ssh(self) -> Optional[str]:
@@ -358,7 +358,7 @@ nohup sh -c '
         else:
             fwversion = self._version_via_ssh()
             if not fwversion:
-                raise RuntimeError(f"Failed to detect imc version thourgh ssh")
+                raise RuntimeError("Failed to detect imc version thourgh ssh")
             return fwversion
 
 
