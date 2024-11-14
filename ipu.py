@@ -115,16 +115,6 @@ class IPUBMC(BMC):
             password = "calvincalvincalvin"
         super().__init__(full_url, user, password)
 
-    def _run_curl(self, command: str, *, quiet: bool = False) -> host.Result:
-        lh = host.LocalHost()
-        if not quiet:
-            logger.info(command)
-        lvl = -1 if quiet else logging.DEBUG
-        result = lh.run(f"curl -v -u {self.user}:{self.password} {command}", log_level=lvl)
-        if not quiet:
-            logger.info(result)
-        return result
-
     def _restart_redfish(self) -> None:
         rh = host.RemoteHost(self.url)
         rh.ssh_connect("root", password="", discover_auth=False)
@@ -240,22 +230,24 @@ nohup sh -c '
         self._unset_bootsource_override()
 
     def _virtual_media_is_inserted(self, filename: str) -> bool:
-        cmd = f"-k 'https://{self.url}:8443/redfish/v1/Systems/1/VirtualMedia/1'"
-        result = self._run_curl(cmd, quiet=True)
-        if result.returncode != 0:
-            return False
+        url = f"https://{self.url}:8443/redfish/v1/Systems/1/VirtualMedia/1"
         try:
-            data = json.loads(result.out)
-        except Exception:
+            response = requests.get(url, auth=(self.user, self.password), verify=False)
+            response.raise_for_status()
+            data = response.json()
+            inserted = data.get("Inserted")
+            if not isinstance(inserted, bool) or not inserted:
+                return False
+            image_name = data.get("ImageName")
+            if not isinstance(image_name, str) or image_name != filename:
+                return False
+            return True
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Request failed: {e}")
             return False
-        v_inserted = data.get("Inserted")
-        if not isinstance(v_inserted, bool) or not v_inserted:
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse JSON: {e}")
             return False
-        v_imageName = data.get("ImageName")
-        if not isinstance(v_imageName, str) or v_imageName != filename:
-            return False
-
-        return True
 
     def _wait_iso_downloaded(self, iso_path: str, *, expected_size: int) -> None:
         logger.info(f"Waiting for iso_path {repr(iso_path)} ({expected_size} bytes) to be inserted as VirtualMedia")
@@ -285,27 +277,42 @@ nohup sh -c '
     def _insert_media(self, iso_path: str, *, expected_size: int) -> None:
         url = f"https://{self.url}:8443/redfish/v1/Systems/1/VirtualMedia/1/Actions/VirtualMedia.InsertMedia"
         data = {"Image": iso_path, "TransferMethod": "Upload"}
-        json_data = json.dumps(data)
-        self._run_curl(f"-k -X POST {url} -d '{json_data}'")
+        try:
+            response = requests.post(url, json=data, auth=(self.user, self.password), verify=False)
+            response.raise_for_status()
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Request failed: {e}")
         self._wait_iso_downloaded(iso_path, expected_size=expected_size)
 
     def _bootsource_override_cd(self) -> None:
         url = f"https://{self.url}:8443/redfish/v1/Systems/1"
         data = {"Boot": {"BootSourceOverrideEnabled": "Once", "BootSourceOverrideTarget": "Cd"}}
-        json_data = json.dumps(data)
-        self._run_curl(f"-k -X PATCH {url} -d '{json_data}' --write-out 'HTTP Code: %{{http_code}}\n'")
+        try:
+            response = requests.patch(url, json=data, auth=(self.user, self.password), verify=False)
+            response.raise_for_status()
+            logger.info(f"HTTP Code: {response.status_code}")
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Request failed: {e}")
 
     def _reboot(self) -> None:
         url = f"https://{self.url}:8443/redfish/v1/Managers/1/Actions/Manager.Reset"
         data = {"ResetType": "ForceRestart"}
-        json_data = json.dumps(data)
-        self._run_curl(f"-k -d '{json_data}' -X POST {url} --write-out 'HTTP Code: %{{http_code}}\n'")
+        try:
+            response = requests.post(url, json=data, auth=(self.user, self.password), verify=False)
+            response.raise_for_status()
+            logger.info(f"HTTP Code: {response.status_code}")
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Request failed: {e}")
 
     def _unset_bootsource_override(self) -> None:
         url = f"https://{self.url}:8443/redfish/v1/Systems/1"
         data = {"Boot": {"BootSourceOverrideEnabled": "Disabled"}}
-        json_data = json.dumps(data)
-        self._run_curl(f"-k -X PATCH {url} -d '{json_data}' --write-out 'HTTP Code: %{{http_code}}\n'")
+        try:
+            response = requests.patch(url, json=data, auth=(self.user, self.password), verify=False)
+            response.raise_for_status()
+            logger.info(f"HTTP Code: {response.status_code}")
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Request failed: {e}")
 
     def stop(self) -> None:
         pass
@@ -318,13 +325,17 @@ nohup sh -c '
 
     def _version_via_redfish(self) -> Optional[str]:
         url = f"https://{self.url}:8443/redfish/v1/Managers/1"
-        res = self._run_curl(f"-k '{url}'")
-        if res.returncode != 0:
-            return None
         try:
-            data = json.loads(res.out)
-        except Exception:
+            response = requests.get(url, auth=(self.user, self.password), verify=False)
+            response.raise_for_status()
+        except requests.exceptions.RequestException:
             return None
+
+        try:
+            data = response.json()
+        except json.JSONDecodeError:
+            return None
+
         fwversion = data.get("FirmwareVersion")
         if not isinstance(fwversion, str):
             return None
