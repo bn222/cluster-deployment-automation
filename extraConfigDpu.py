@@ -16,7 +16,7 @@ from imageRegistry import ImageRegistry
 DPU_OPERATOR_REPO = "https://github.com/openshift/dpu-operator.git"
 MICROSHIFT_KUBECONFIG = "/root/kubeconfig.microshift"
 OSE_DOCKERFILE = "https://pkgs.devel.redhat.com/cgit/containers/dpu-operator/tree/Dockerfile?h=rhaos-4.17-rhel-9"
-P4_IMG = "wsfd-advnetlab240.anl.eng.bos2.dc.redhat.com:5000/intel-ipu-p4-sdk:10-9-2024"
+P4_IMG = "wsfd-advnetlab223.anl.eng.bos2.dc.redhat.com:5000/intel-ipu-sdk:kubecon-aarch64"
 
 KERNEL_RPMS = [
     "https://download-01.beak-001.prod.iad2.dc.redhat.com/brewroot/vol/rhel-9/packages/kernel/5.14.0/427.2.1.el9_4/x86_64/kernel-5.14.0-427.2.1.el9_4.x86_64.rpm",
@@ -151,19 +151,32 @@ def wait_vsp_ds_running(client: K8sClient) -> None:
 
 def ensure_p4_pod_running(lh: host.Host, acc: host.Host, imgReg: ImageRegistry) -> None:
     lh.run_or_die(f"podman pull --tls-verify=false {P4_IMG}")
-    lh.run_or_die(f"podman tag {P4_IMG} {imgReg.url()}/intel-ipu-p4-sdk:10-9-2024")
-    lh.run_or_die(f"podman push {imgReg.url()}/intel-ipu-p4-sdk:10-9-2024")
+    local_img = f"{imgReg.url()}/intel-ipu-p4-sdk:kubecon-aarch64"
+    lh.run_or_die(f"podman tag {P4_IMG} {local_img}")
+    lh.run_or_die(f"podman push {local_img}")
     uname = acc.run("uname -r").out.strip()
+    # If p4 pod already exists from previous run, kill this first.
+    acc.run(f"podman ps --filter ancestor={local_img} --format '{{{{.ID}}}}' | xargs -r podman kill")
     logger.info("Manually starting P4 container")
-    cmd = f"podman run --network host -d --privileged --entrypoint='[\"/bin/sh\", \"-c\", \"sleep 5; sh /entrypoint.sh\"]' -v /lib/modules/{uname}:/lib/modules/{uname} -v data1:/opt/p4 {imgReg.url()}/intel-ipu-p4-sdk:10-9-2024"
+    acc.run_or_die("mkdir -p /opt/p4/p4-cp-nws/var/run/openvswitch")  # WA https://issues.redhat.com/browse/IIC-421
+    cmd = f"podman run -d --privileged -v /lib/modules/{uname}:/lib/modules/{uname} -v /opt/p4/p4-cp-nws/var/run:/opt/p4/p4-cp-nws/var/run -v /sys:/sys -p 9559:9559 {local_img}"
     acc.run_or_die(cmd)
     # Occasionally the P4 pod fails to start
     while True:
         time.sleep(10)
-        if "intel-ipu-p4-sdk:10-9-2024" in acc.run("podman ps").out:
+        if "intel-ipu-p4-sdk" in acc.run("podman ps").out:
             break
         logger.info("Failed to start p4 container, retrying")
         acc.run_or_die(cmd)
+
+    # WA: https://issues.redhat.com/browse/IIC-425 There is a race condition if the vsp initializes before the p4 has finished programming the default routes
+    logger.info("Waiting for P4 container to finish initialization")
+    container_id = acc.run_or_die(f"podman ps --filter ancestor={local_img} --format '{{{{.ID}}}}'").out.strip()
+    while True:
+        logs = acc.run_or_die(f"podman logs {container_id} 2>&1").out
+        if "Attempting P4RT communication" in logs:
+            break
+        time.sleep(5)
 
 
 def ExtraConfigDpu(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, Future[Optional[host.Result]]]) -> None:
