@@ -159,7 +159,7 @@ def ensure_p4_pod_running(lh: host.Host, acc: host.Host, imgReg: ImageRegistry) 
     acc.run(f"podman ps --filter ancestor={local_img} --format '{{{{.ID}}}}' | xargs -r podman kill")
     logger.info("Manually starting P4 container")
     acc.run_or_die("mkdir -p /opt/p4/p4-cp-nws/var/run/openvswitch")  # WA https://issues.redhat.com/browse/IIC-421
-    cmd = f"podman run -d --privileged -v /lib/modules/{uname}:/lib/modules/{uname} -v /opt/p4/p4-cp-nws/var/run:/opt/p4/p4-cp-nws/var/run -v /sys:/sys -p 9559:9559 {local_img}"
+    cmd = f"podman run -d --privileged -v /lib/modules/{uname}:/lib/modules/{uname} -v /opt/p4/p4-cp-nws/var/run:/opt/p4/p4-cp-nws/var/run -v /sys:/sys -v /dev:/dev -p 9559:9559 {local_img}"
     acc.run_or_die(cmd)
     # Occasionally the P4 pod fails to start
     while True:
