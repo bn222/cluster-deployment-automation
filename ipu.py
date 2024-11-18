@@ -148,15 +148,15 @@ systemctl restart redfish
 #  workaround to ensure acc has connectivity https://issues.redhat.com/browse/IIC-266
 nohup sh -c '
     while true; do
-        sleep 1
         if [ -f /work/scripts/ipu_port1_setup.sh ]; then
             ping -c 1 -W 2 192.168.0.2
             if [ $? -eq 0 ]; then
-                /work/scripts/ipu_port1_setup.sh
-                sleep 2
-                /work/scripts/ipu_port1_setup.sh
-                sleep 5
-                /work/scripts/ipu_port1_setup.sh
+                count=0
+                while [ $count -lt 20 ]; do
+                    /work/scripts/ipu_port1_setup.sh
+                    count=$((count + 1))
+                    sleep $count
+                done
                 break
             fi
         else
@@ -164,6 +164,7 @@ nohup sh -c '
         fi
     done
 ' &
+
 
         """
         server = host.RemoteHost(server_with_key)
