@@ -151,13 +151,8 @@ nohup sh -c '
         if [ -f /work/scripts/ipu_port1_setup.sh ]; then
             ping -c 1 -W 2 192.168.0.2
             if [ $? -eq 0 ]; then
-                count=0
-                while [ $count -lt 20 ]; do
-                    /work/scripts/ipu_port1_setup.sh
-                    count=$((count + 1))
-                    sleep $count
-                done
-                break
+                /work/scripts/ipu_port1_setup.sh
+                sleep 1
             fi
         else
             break
