@@ -63,6 +63,7 @@ class ExtraConfigArgs:
     rebuild_dpu_operators_images: bool = True
 
     dpu_net_interface: Optional[str] = "ens2f0"
+    host_side_bmc: str = ""
 
     def pre_check(self) -> None:
         if self.sriov_network_operator_local:

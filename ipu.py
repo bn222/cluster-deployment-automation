@@ -238,16 +238,27 @@ nohup sh -c '
         logger.info("restarting Redfish")
         self._restart_redfish()
         imc = self._create_imc_rsh()
-        # W/A delete iso before downloading it if partially downladed
-        # https://issues.redhat.com/browse/IIC-382
-        # also, if the size is as pected, skip inserting iso which takes 10 minutes
-        if expected_size != self._get_file_size(imc, "/mnt/imc/acc-os.iso"):
+        imc_url_path = "/work/url"
+
+        def matching_url(imc: host.Host) -> bool:
+            try:
+                contents = imc.read_file(imc_url_path)
+            except Exception:
+                return False
+            return contents == iso_path
+
+        def same_size(imc: host.Host, expected_size: int) -> bool:
+            fs = self._get_file_size(imc, "/mnt/imc/acc-os.iso")
+            return fs is not None and expected_size == fs
+
+        if not matching_url(imc) or not same_size(imc, expected_size):
             logger.info("Cleaning up iso")
             self._cleanup_iso()
             logger.info("inserting iso")
             self._insert_media(iso_path, expected_size=expected_size)
         else:
             logger.info("Skipping with cleaning up iso and inserting it since size is the same")
+        imc.write(imc_url_path, iso_path)
         logger.info("setting boot source override")
         self._bootsource_override_cd()
         logger.info("triggering reboot")
