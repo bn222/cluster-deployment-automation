@@ -147,8 +147,9 @@ class Host:
 
     def ssh_connect(self, username: str, password: Optional[str] = None, discover_auth: bool = True, rsa_path: str = default_id_rsa_path(), ed25519_path: str = default_ed25519_path()) -> None:
         assert not self.is_localhost()
-        logger.info(f"waiting for '{self._hostname}' to respond to ping")
-        self.wait_ping()
+        if not self.ping():
+            logger.info(f"waiting for '{self._hostname}' to respond to ping")
+            self.wait_ping()
         logger.info(f"{self._hostname} up, connecting with {username}")
 
         self._logins = []

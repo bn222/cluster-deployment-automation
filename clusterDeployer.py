@@ -465,7 +465,6 @@ class ClusterDeployer(BaseDeployer):
 
         logger.info("starting infra env")
         self._ai.start_infraenv(infra_env)
-        logger.info("waiting for workers to be ready")
         self.wait_for_workers()
 
         logger.info("Setting password to for root to redhat")
@@ -591,7 +590,7 @@ class ClusterDeployer(BaseDeployer):
                 logger.error_and_exit(f"Host {h.name} in error state")
 
     def wait_for_workers(self) -> None:
-        logger.info(f'waiting for {len(self._cc.workers)} workers')
+        logger.info(f'waiting for {len(self._cc.workers)} workers to be ready')
         lh = host.LocalHost()
         bf_workers = [x for x in self._cc.workers if x.kind == "bf"]
         connections: dict[str, host.Host] = {}
