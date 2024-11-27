@@ -319,29 +319,27 @@ nohup sh -c '
         return True
 
     def _wait_iso_downloaded(self, iso_path: str, *, expected_size: int) -> None:
-        logger.info(f"Waiting for iso_path {repr(iso_path)} ({expected_size} bytes) to be inserted as VirtualMedia")
+        def log_progress() -> None:
+            downloaded_size = self._get_file_size(imc, "/mnt/imc/acc-os.iso") or 0
+            percentage = float(downloaded_size) / float(expected_size) * 100.0
+            logger.info(f"BMC downloaded {downloaded_size} of {expected_size} bytes ({percentage:.2f}%)")
+
+        logger.info(f"Waiting for {repr(iso_path)} ({expected_size} bytes) to be inserted as VirtualMedia")
         wait_until = time.monotonic() + 3600
         filename = url_extract_filename(iso_path)
 
         imc = self._create_imc_rsh()
 
         logger.info(f"Downloading {repr(iso_path)} on BMC")
-        sleep_time = 60.0
-        while True:
-            time.sleep(sleep_time)
-            sleep_time = max(5.0, sleep_time / 1.1)
-            if self._virtual_media_is_inserted(filename):
-                logger.info(f"Done iso_path {repr(iso_path)} is inserted as VirtualMedia")
-                return
+        loop_count = 0
+        while not self._virtual_media_is_inserted(filename):
+            time.sleep(10)
             if time.monotonic() >= wait_until:
-                raise RuntimeError("Timeout waiting for iso_path {repr(iso_path)} to be inserted as VirtualMedia")
-
-            downloaded_size = self._get_file_size(imc, "/mnt/imc/acc-os.iso")
-            if downloaded_size is not None and downloaded_size < expected_size:
-                percentage = float(downloaded_size) / float(expected_size) * 100.0
-            else:
-                percentage = 100.0
-            logger.info(f"BMC downloaded {downloaded_size} of {expected_size} bytes ({percentage:.2f}%)")
+                raise RuntimeError(f"Timeout waiting for {repr(iso_path)} to be inserted as VirtualMedia")
+            if loop_count % 6 == 0:
+                log_progress()
+            loop_count += 1
+        logger.info(f"Done iso_path {repr(iso_path)} is inserted as VirtualMedia")
 
     def _insert_media(self, iso_path: str, *, expected_size: int) -> None:
         url = f"https://{self.url}:8443/redfish/v1/Systems/1/VirtualMedia/1/Actions/VirtualMedia.InsertMedia"
