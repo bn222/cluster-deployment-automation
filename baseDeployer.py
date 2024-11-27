@@ -4,6 +4,8 @@ from clustersConfig import ClustersConfig, ExtraConfigArgs
 import host
 from typing import Optional
 from concurrent.futures import Future
+import timer
+import collections
 
 
 class BaseDeployer(abc.ABC):
@@ -23,3 +25,6 @@ class BaseDeployer(abc.ABC):
     def _postconfig(self) -> None:
         for e in self._cc.postconfig:
             self._prepost_config(e)
+
+    def _empty_timers(self) -> dict[str, timer.Timer]:
+        return collections.defaultdict(lambda: timer.Timer.EmptyTimer())

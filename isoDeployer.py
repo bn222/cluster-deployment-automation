@@ -1,14 +1,13 @@
 import host
 import common
 from logger import logger
-from arguments import PRE_STEP, MASTERS_STEP, POST_STEP, WORKERS_STEP
+from arguments import PRE_STEP, MASTERS_STEP, POST_STEP
 import isoCluster
 import ipu
 from baseDeployer import BaseDeployer
 from clustersConfig import ClustersConfig
 from concurrent.futures import ThreadPoolExecutor
 import sys
-import timer
 
 
 class IsoDeployer(BaseDeployer):
@@ -33,7 +32,7 @@ class IsoDeployer(BaseDeployer):
             logger.error_and_exit(f"Network API port with connection to {self._cc.name} must be specified, exiting")
 
     def deploy(self) -> None:
-        duration = {k: timer.Timer() for k in self.steps}
+        duration = self._empty_timers()
         if self._cc.masters:
             if PRE_STEP in self.steps:
                 duration[PRE_STEP].start()
@@ -48,7 +47,6 @@ class IsoDeployer(BaseDeployer):
                 duration[MASTERS_STEP].stop()
             else:
                 logger.info("Skipping master creation.")
-            duration[WORKERS_STEP].start_stop()
 
         if POST_STEP in self.steps:
             duration[POST_STEP].start()

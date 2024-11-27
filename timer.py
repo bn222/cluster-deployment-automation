@@ -7,6 +7,12 @@ class Timer:
         self.start_time: Optional[float] = None
         self.end_time: Optional[float] = None
 
+    @staticmethod
+    def EmptyTimer() -> 'Timer':
+        ret = Timer()
+        ret.start_stop()
+        return ret
+
     def start(self) -> None:
         self.start_time = time.time()
 

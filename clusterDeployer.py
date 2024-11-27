@@ -2,7 +2,6 @@ import itertools
 import os
 import sys
 import time
-import timer
 import json
 import shutil
 from concurrent.futures import ThreadPoolExecutor
@@ -185,7 +184,7 @@ class ClusterDeployer(BaseDeployer):
         return remote_masters != 0 or remote_workers != 0 or len(vm_bm) != 0
 
     def deploy(self) -> None:
-        duration = {k: timer.Timer() for k in self.steps}
+        duration = self._empty_timers()
         if self._cc.masters:
             if PRE_STEP in self.steps:
                 duration[PRE_STEP].start()

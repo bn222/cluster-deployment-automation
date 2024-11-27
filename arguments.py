@@ -13,16 +13,19 @@ PRE_STEP = "pre"
 MASTERS_STEP = "masters"
 WORKERS_STEP = "workers"
 POST_STEP = "post"
-VALID_STEPS = [PRE_STEP, MASTERS_STEP, WORKERS_STEP, POST_STEP]
+
+
+def all_steps() -> list[str]:
+    return [PRE_STEP, MASTERS_STEP, WORKERS_STEP, POST_STEP]
 
 
 def fuzzy_match(step: str) -> Optional[str]:
-    matches = difflib.get_close_matches(step, VALID_STEPS, n=1, cutoff=0.5)
+    matches = difflib.get_close_matches(step, all_steps(), n=1, cutoff=0.5)
     return matches[0] if matches else None
 
 
 def join_valid_steps() -> str:
-    return ','.join(VALID_STEPS)
+    return ','.join(all_steps())
 
 
 def yaml_completer(prefix: str, parsed_args: str, **kwargs: str) -> list[str]:
@@ -31,17 +34,17 @@ def yaml_completer(prefix: str, parsed_args: str, **kwargs: str) -> list[str]:
 
 def step_completer(prefix: str, parsed_args: str, **kwargs: str) -> list[str]:
     if not prefix:
-        return VALID_STEPS
+        return all_steps()
 
     steps_entered = prefix.split(',')
 
-    available_steps = set(VALID_STEPS) - set(steps_entered)
+    available_steps = set(all_steps()) - set(steps_entered)
 
     suggestions = []
     for step in available_steps:
         if step.startswith(steps_entered[-1]):
             suggestion = ','.join(steps_entered[:-1] + [step])
-            if len(steps_entered) < len(VALID_STEPS) - 1:
+            if len(steps_entered) < len(all_steps()) - 1:
                 suggestion += ','
             suggestions.append(suggestion)
 
@@ -105,7 +108,7 @@ def parse_args() -> argparse.Namespace:
         args.steps = remove_empty_strings(args.steps)
         args.skip_steps = remove_empty_strings(args.skip_steps)
 
-        invalid_steps = [step for step in args.steps + args.skip_steps if step not in VALID_STEPS]
+        invalid_steps = [step for step in args.steps + args.skip_steps if step not in all_steps()]
         if invalid_steps:
             for step in invalid_steps:
                 suggested_step = fuzzy_match(step)
