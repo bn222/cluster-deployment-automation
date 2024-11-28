@@ -257,7 +257,7 @@ nohup sh -c '
             logger.info("inserting iso")
             self._insert_media(iso_path, expected_size=expected_size)
         else:
-            logger.info("Skipping with cleaning up iso and inserting it since size is the same")
+            logger.info("Keeping existing iso since url and size didn't change")
         imc.write(imc_url_path, iso_path)
         logger.info("setting boot source override")
         self._bootsource_override_cd()
