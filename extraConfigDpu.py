@@ -12,6 +12,7 @@ import imageRegistry
 from common import git_repo_setup
 from dpuVendor import init_vendor_plugin, IpuPlugin
 from imageRegistry import ImageRegistry
+import jinja2
 
 DPU_OPERATOR_REPO = "https://github.com/openshift/dpu-operator.git"
 MICROSHIFT_KUBECONFIG = "/root/kubeconfig.microshift"
@@ -149,34 +150,34 @@ def wait_vsp_ds_running(client: K8sClient) -> None:
         logger.error_and_exit("Vsp pods failed to reach ready state")
 
 
-def ensure_p4_pod_running(lh: host.Host, acc: host.Host, imgReg: ImageRegistry) -> None:
+def ensure_p4_pod_running(lh: host.Host, acc: host.Host, imgReg: ImageRegistry, client: K8sClient) -> None:
     lh.run_or_die(f"podman pull --tls-verify=false {P4_IMG}")
     local_img = f"{imgReg.url()}/intel-ipu-p4-sdk:kubecon-aarch64"
     lh.run_or_die(f"podman tag {P4_IMG} {local_img}")
     lh.run_or_die(f"podman push {local_img}")
-    uname = acc.run("uname -r").out.strip()
+
     # If p4 pod already exists from previous run, kill this first.
     acc.run(f"podman ps --filter ancestor={local_img} --format '{{{{.ID}}}}' | xargs -r podman kill")
-    logger.info("Manually starting P4 container")
+    logger.info("Manually starting P4 pod")
     acc.run_or_die("mkdir -p /opt/p4/p4-cp-nws/var/run/openvswitch")  # WA https://issues.redhat.com/browse/IIC-421
-    cmd = f"podman run -d --privileged -v /lib/modules/{uname}:/lib/modules/{uname} -v /opt/p4/p4-cp-nws/var/run:/opt/p4/p4-cp-nws/var/run -v /sys:/sys -v /dev:/dev -p 9559:9559 {local_img}"
-    acc.run_or_die(cmd)
-    # Occasionally the P4 pod fails to start
-    while True:
-        time.sleep(10)
-        if "intel-ipu-p4-sdk" in acc.run("podman ps").out:
-            break
-        logger.info("Failed to start p4 container, retrying")
-        acc.run_or_die(cmd)
-
+    with open("manifests/dpu/dpu_vsp_ds.yaml.j2") as f:
+        j2_template = jinja2.Template(f.read())
+        rendered = j2_template.render(ipu_vsp_p4=local_img)
+        tmp_file = "/tmp/dpu_vsp_ds.yaml"
+        with open(tmp_file, "w") as f:
+            f.write(rendered)
+        client.oc(f"create -f {tmp_file}")
+    # client.oc_run_or_die("wait --for=condition=Ready pod --all -n openshift-dpu-operator --timeout=5m")
     # WA: https://issues.redhat.com/browse/IIC-425 There is a race condition if the vsp initializes before the p4 has finished programming the default routes
-    logger.info("Waiting for P4 container to finish initialization")
-    container_id = acc.run_or_die(f"podman ps --filter ancestor={local_img} --format '{{{{.ID}}}}'").out.strip()
-    while True:
-        logs = acc.run_or_die(f"podman logs {container_id} 2>&1").out
-        if "Attempting P4RT communication" in logs:
-            break
-        time.sleep(5)
+    time.sleep(300)
+
+    # logger.info("Waiting for P4 container to finish initialization")
+    # container_id = acc.run_or_die(f"podman ps --filter ancestor={local_img} --format '{{{{.ID}}}}'").out.strip()
+    # while True:
+    #     logs = acc.run_or_die(f"podman logs {container_id} 2>&1").out
+    #     if "Attempting P4RT communication" in logs:
+    #         break
+    #     time.sleep(5)
 
 
 def ExtraConfigDpu(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, Future[Optional[host.Result]]]) -> None:
@@ -202,7 +203,7 @@ def ExtraConfigDpu(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, 
     if isinstance(vendor_plugin, IpuPlugin):
         # TODO: Remove when this container is properly started by the vsp
         # We need to manually start the p4 sdk container currently for the IPU plugin
-        ensure_p4_pod_running(lh, acc, imgReg)
+        ensure_p4_pod_running(lh, acc, imgReg, client)
 
         # Build on the ACC since an aarch based server is needed for the build
         # (the Dockerfile needs to be fixed to allow layered multi-arch build

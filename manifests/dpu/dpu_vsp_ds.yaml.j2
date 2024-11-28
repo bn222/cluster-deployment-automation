@@ -1,40 +1,43 @@
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
-  name: vsp
+  name: vsp-p4
 spec:
   selector:
     matchLabels:
-      name: vsp
+      app: vsp-p4
   template:
     metadata:
       labels:
-        name: vsp
+        app: vsp-p4
     spec:
+      nodeSelector:
+        dpu: "true"
       hostNetwork: true
-      automountServiceAccountToken: false
       containers:
-      - name: appcntr1
-        imagePullPolicy: Always
-        image: {{ipu_plugin_image}}
+      - name: my-container
+        image: {{ipu_vsp_p4}}
         securityContext:
           privileged: true
-        command: [ "/usr/bin/ipuplugin" ]
-        args: [ "--bridgeType=linux", "--interface=enp0s1f0d3", "--portMuxVsi=0x0e", "--ovsCliDir=/opt/p4/p4-cp-nws", "-v=debug"]
         volumeMounts:
-        - name: vendor-plugin-sock
-          mountPath: /var/run/dpu-daemon/
-        - name: host-opt
-          mountPath: /opt/p4
-          mountPropagation: Bidirectional
+        - name: lib-modules
+          mountPath: /lib/modules/
+        - name: var-run
+          mountPath: /opt/p4/p4-cp-nws/var/run
+        - name: sys
+          mountPath: /sys
+        - name: dev
+          mountPath: /dev
       volumes:
-      - name: host-opt
+      - name: lib-modules
         hostPath:
-          path: /var/lib/containers/storage/volumes/data1/_data/
-      - name: host-libmodules
+          path: /lib/modules/
+      - name: var-run
         hostPath:
-          path: /lib/modules
-          type: DirectoryOrCreate
-      - name: vendor-plugin-sock
+          path: /opt/p4/p4-cp-nws/var/run
+      - name: sys
         hostPath:
-          path: /var/run/dpu-daemon/
+          path: /sys
+      - name: dev
+        hostPath:
+          path: /dev

@@ -263,8 +263,8 @@ nohup sh -c '
         self._bootsource_override_cd()
         logger.info("triggering reboot")
         self._reboot()
-        logger.info("sleeping 10 minutes")
-        time.sleep(600)
+        logger.info("sleeping 7 minutes")
+        time.sleep(7*60)
         logger.info("restarting Redfish")
         self._restart_redfish()  # make sure redfish is started after IP has been assigned
         logger.info("unsetting boot source override")
