@@ -7,6 +7,7 @@ from clustersConfig import ExtraConfigArgs
 import host
 import yaml
 import time
+import sys
 
 
 def early_access_microshift() -> str:
@@ -34,7 +35,7 @@ skip_if_unavailable=0
 """
 
 
-def extract_microshift_kubeconfig(acc: host.Host) -> str:
+def read_prep_microshift_kubeconfig(acc: host.Host) -> str:
     kubeconfig_path = "/var/lib/microshift/resources/kubeadmin/kubeconfig"
     kubeconfig: Dict[str, Any] = yaml.safe_load(acc.read_file(kubeconfig_path))
     kubeconfig["clusters"][0]["cluster"]["insecure-skip-tls-verify"] = True
@@ -43,6 +44,12 @@ def extract_microshift_kubeconfig(acc: host.Host) -> str:
     key = "certificate-authority-data"
     to_write = to_write.replace(f"{key}:", f"# {key}:")
     return to_write
+
+
+def write_microshift_kubeconfig(contents: str, rh: host.Host) -> str:
+    path = "/root/kubeconfig.microshift"
+    rh.write(path, contents)
+    return path
 
 
 def masquarade(rsh: host.Host, cc: ClustersConfig) -> None:
@@ -108,10 +115,8 @@ def ExtraConfigMicroshift(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dic
     acc.run("systemctl restart microshift")
     acc.run("systemctl enable microshift")
 
-    contents = extract_microshift_kubeconfig(acc)
-    kubeconfig = "/root/kubeconfig.microshift"
-    with open(kubeconfig, "w") as f:
-        f.write(contents)
+    contents = read_prep_microshift_kubeconfig(acc)
+    kubeconfig = write_microshift_kubeconfig(contents, host.LocalHost())
 
     acc.run("systemctl stop firewalld")
     acc.run("systemctl disable firewalld")
@@ -127,3 +132,14 @@ def ExtraConfigMicroshift(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dic
         except Exception:
             time.sleep(30)
             pass
+
+
+def main() -> None:
+    ip = sys.argv[1]
+    acc = host.Host(ip)
+    acc.ssh_connect("root", "redhat")
+    write_microshift_kubeconfig(read_prep_microshift_kubeconfig(acc), host.LocalHost())
+
+
+if __name__ == "__main__":
+    main()
