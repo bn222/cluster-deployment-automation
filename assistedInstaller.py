@@ -216,3 +216,10 @@ class AssistedClientAutomation(AssistedClient):  # type: ignore
             sys.exit(-1)
 
         return AssistedClientClusterInfo(cluster_info.id, cluster_info.api_vips[0].ip)
+
+    def delete(self, host_name: str) -> None:
+        if self.exists(host_name):
+            self.delete_host(host_name)
+
+    def exists(self, host_name: str) -> bool:
+        return host_name in [x.name for x in self.list_ai_hosts()]

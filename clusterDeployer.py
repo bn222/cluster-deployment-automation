@@ -171,7 +171,7 @@ class ClusterDeployer(BaseDeployer):
         for w in self._cc.workers:
             logger.info(f"Deleting worker {w.name}")
             self.client().delete_node(w.name)
-            self._ai.delete_host(w.name)
+            self._ai.delete(w.name)
 
     def need_external_network(self) -> bool:
         vm_bm = [x for x in self._cc.workers if x.kind == "vm" and x.node != "localhost"]
