@@ -192,7 +192,7 @@ class Host:
                     self._host = login.quiet_login()
                     logger.info(f"Login successful on {self._hostname}")
                     return
-                except (ssh_exception.AuthenticationException, ssh_exception.NoValidConnectionsError, ssh_exception.SSHException, socket.error, socket.timeout) as e:
+                except (ssh_exception.AuthenticationException, ssh_exception.NoValidConnectionsError, ssh_exception.SSHException, socket.error, socket.timeout, EOFError) as e:
                     if first_attempt:
                         logger.info(f"{type(e).__name__} - {str(e)} for login {login.debug_details()} on host {self._hostname}")
                         first_attempt = False
