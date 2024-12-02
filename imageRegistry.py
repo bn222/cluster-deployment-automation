@@ -14,7 +14,7 @@ class ImageRegistry:
         self.rsh = rsh
 
         ret = self.rsh.run("hostname -f")
-        h = ret.out.strip()
+        h = ret.out.strip().lower()
         if not ret.success() or not h:
             raise RuntimeError("Failure to get hostname")
         self.hostname = h
@@ -143,7 +143,7 @@ class ImageRegistry:
         lh.write("/tmp/crt", crt_file)
         logger.info(f"trusting registry running on {self.rsh.hostname()} in ocp with file /tmp/crt")
         client.oc(f"delete cm -n openshift-config {shlex.quote(cm_name)}")
-        client.oc(f"create cm -n openshift-config {cm_name} --from-file={self.hostname}..{self.listen_port}=/tmp/crt")
+        client.oc_run_or_die(f"create cm -n openshift-config {cm_name} --from-file={self.hostname}..{self.listen_port}=/tmp/crt")
         lh.remove("/tmp/crt")
 
         data = {"spec": {"additionalTrustedCA": {"name": cm_name}}}
