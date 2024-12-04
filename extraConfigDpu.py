@@ -176,9 +176,17 @@ def ensure_p4_pod_running(lh: host.Host, acc: host.Host, imgReg: ImageRegistry, 
     while True:
         logs = client.oc_run_or_die(f"logs {pod}").out
         if "Attempting P4RT communication" in logs:
-            logger.info("p4 pod initalized, waiting for commention from vsp")
+            logger.info("p4 pod initalized, waiting for connection from vsp")
             break
         time.sleep(5)
+
+
+def cold_boot_acc_host(acc: host.Host, imc: str, host_side_bmc: str) -> None:
+    logger.info("Workaround: cold booting the host since currently driver can't deal with host rebooting without coordination")
+    ipu_host_bmc = BMC.from_bmc(host_side_bmc)
+    ipu_host_bmc.cold_boot()
+    logger.info("waiting for ACC to come back up after cold boot")
+    wait_for_acc_with_retry(acc=acc, imc_addr=imc, timeout=300)
 
 
 def ExtraConfigDpu(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, Future[Optional[host.Result]]]) -> None:
@@ -192,6 +200,11 @@ def ExtraConfigDpu(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, 
     lh = host.LocalHost()
     acc.ssh_connect("root", "redhat")
     client = K8sClient(MICROSHIFT_KUBECONFIG)
+
+    # Workaround. We need to ensure idpf is in a good state (it may have crashed due to IMC reboot during installation). Cold boot host system to ensure
+    cold_boot_acc_host(acc, dpu_node.bmc, cfg.host_side_bmc)
+    client.oc_run_or_die("wait --for=condition=Ready pod --all --all-namespaces --timeout=3m")
+
     imgReg = _ensure_local_registry_running(lh, delete_all=False)
     imgReg.trust(acc)
     acc.run("systemctl restart crio")
@@ -238,13 +251,6 @@ def ExtraConfigDpu(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, 
     client.wait_ds_running(ds="vsp", namespace="openshift-dpu-operator")
     client.oc_run_or_die("wait --for=condition=Ready pod --all --all-namespaces --timeout=3m")
     logger.info("Finished setting up dpu operator on dpu")
-
-    logger.info("Warkaround: cold booting the host since currently driver can't deal with host rebooting without coordination")
-    ipu_host_bmc = BMC.from_bmc(cfg.host_side_bmc)
-    ipu_host_bmc.cold_boot()
-    logger.info("waiting for ACC to come back up after cold boot")
-    wait_for_acc_with_retry(acc, dpu_node.bmc)
-    client.oc_run_or_die("wait --for=condition=Ready pod --all --all-namespaces --timeout=3m")
 
 
 def ExtraConfigDpuHost(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, Future[Optional[host.Result]]]) -> None:

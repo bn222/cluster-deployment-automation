@@ -27,10 +27,9 @@ def is_http_url(url: str) -> bool:
         return False
 
 
-def wait_for_acc_with_retry(acc: host.Host, imc_addr: str) -> None:
+def wait_for_acc_with_retry(acc: host.Host, imc_addr: str, timeout: int = 1200) -> None:
     # Typically if the acc booted properly it will take < 20 minutes to come up (including the 10 min sleep we do during boot)
     logger.info("Waiting for ACC to come up")
-    timeout = 1200
     while True:
         if acc.ping():
             logger.info("ACC responded to ping, connecting")
