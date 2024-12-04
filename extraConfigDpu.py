@@ -189,6 +189,19 @@ def cold_boot_acc_host(acc: host.Host, imc: str, host_side_bmc: str) -> None:
     wait_for_acc_with_retry(acc=acc, imc_addr=imc, timeout=300)
 
 
+def wait_for_microshift_restart(client: K8sClient) -> None:
+    ret = client.oc("wait --for=condition=Ready pod --all --all-namespaces --timeout=3m")
+    retries = 3
+    while not ret.success():
+        if retries == 0:
+            logger.error_and_exit(f"Microshift failed to restart: \n err: {ret.err} {ret.returncode}")
+        logger.info(f"Waiting for pods to come up failed with err {ret.err} retrying")
+        time.sleep(20)
+        ret = client.oc("wait --for=condition=Ready pod --all --all-namespaces --timeout=3m")
+        retries -= 1
+    logger.info("Microshift restarted")
+
+
 def ExtraConfigDpu(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, Future[Optional[host.Result]]]) -> None:
     [f.result() for (_, f) in futures.items()]
     logger.info("Running post config step to start DPU operator on IPU")
@@ -203,7 +216,7 @@ def ExtraConfigDpu(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, 
 
     # Workaround. We need to ensure idpf is in a good state (it may have crashed due to IMC reboot during installation). Cold boot host system to ensure
     cold_boot_acc_host(acc, dpu_node.bmc, cfg.host_side_bmc)
-    client.oc_run_or_die("wait --for=condition=Ready pod --all --all-namespaces --timeout=3m")
+    wait_for_microshift_restart(client)
 
     imgReg = _ensure_local_registry_running(lh, delete_all=False)
     imgReg.trust(acc)
