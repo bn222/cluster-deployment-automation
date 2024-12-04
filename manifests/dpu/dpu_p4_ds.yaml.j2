@@ -11,11 +11,8 @@ spec:
       labels:
         app: vsp-p4
     spec:
-      nodeSelector:
-        dpu: "true"
-      hostNetwork: true
       containers:
-      - name: my-container
+      - name: p4-container
         image: {{ipu_vsp_p4}}
         securityContext:
           privileged: true

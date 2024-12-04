@@ -158,13 +158,15 @@ def ensure_p4_pod_running(lh: host.Host, acc: host.Host, imgReg: ImageRegistry, 
 
     logger.info("Manually starting P4 pod")
     acc.run_or_die("mkdir -p /opt/p4/p4-cp-nws/var/run/openvswitch")  # WA https://issues.redhat.com/browse/IIC-421
-    with open("manifests/dpu/dpu_vsp_ds.yaml.j2") as f:
+    with open("manifests/dpu/dpu_p4_ds.yaml.j2") as f:
         j2_template = jinja2.Template(f.read())
         rendered = j2_template.render(ipu_vsp_p4=local_img)
-        tmp_file = "/tmp/dpu_vsp_ds.yaml"
+        tmp_file = "/tmp/dpu_p4_ds.yaml"
         with open(tmp_file, "w") as f:
             f.write(rendered)
-        client.oc(f"create -f {tmp_file}")
+
+    client.oc(f"delete -f {tmp_file}")
+    client.oc_run_or_die(f"create -f {tmp_file}")
 
     client.wait_ds_running(ds="vsp-p4", namespace="default")
     # WA: https://issues.redhat.com/browse/IIC-425 There is a race condition if the vsp initializes before the p4 has finished programming the default routes
