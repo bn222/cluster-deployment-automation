@@ -12,6 +12,7 @@ import imageRegistry
 from common import git_repo_setup
 from dpuVendor import init_vendor_plugin, IpuPlugin
 from imageRegistry import ImageRegistry
+from ipu import wait_for_acc_with_retry
 import jinja2
 
 DPU_OPERATOR_REPO = "https://github.com/openshift/dpu-operator.git"
@@ -237,9 +238,13 @@ def ExtraConfigDpu(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, 
     client.wait_ds_running(ds="vsp", namespace="openshift-dpu-operator")
     client.oc_run_or_die("wait --for=condition=Ready pod --all --all-namespaces --timeout=3m")
     logger.info("Finished setting up dpu operator on dpu")
+
     logger.info("Warkaround: cold booting the host since currently driver can't deal with host rebooting without coordination")
     ipu_host_bmc = BMC.from_bmc(cfg.host_side_bmc)
     ipu_host_bmc.cold_boot()
+    logger.info("waiting for ACC to come back up after cold boot")
+    wait_for_acc_with_retry(acc, dpu_node.bmc)
+    client.oc_run_or_die("wait --for=condition=Ready pod --all --all-namespaces --timeout=3m")
 
 
 def ExtraConfigDpuHost(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, Future[Optional[host.Result]]]) -> None:
