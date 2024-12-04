@@ -167,17 +167,15 @@ def ensure_p4_pod_running(lh: host.Host, acc: host.Host, imgReg: ImageRegistry, 
         client.oc(f"create -f {tmp_file}")
 
     client.wait_ds_running(ds="vsp-p4", namespace="default")
-    # client.oc_run_or_die("wait --for=condition=Ready pod --all -n openshift-dpu-operator --timeout=5m")
     # WA: https://issues.redhat.com/browse/IIC-425 There is a race condition if the vsp initializes before the p4 has finished programming the default routes
-    time.sleep(300)
-
-    # logger.info("Waiting for P4 container to finish initialization")
-    # container_id = acc.run_or_die(f"podman ps --filter ancestor={local_img} --format '{{{{.ID}}}}'").out.strip()
-    # while True:
-    #     logs = acc.run_or_die(f"podman logs {container_id} 2>&1").out
-    #     if "Attempting P4RT communication" in logs:
-    #         break
-    #     time.sleep(5)
+    logger.info("Waiting for P4 container to finish initialization")
+    pod = client.oc_run_or_die("get pods --selector=app=vsp-p4 -o name").out.strip()
+    while True:
+        logs = client.oc_run_or_die(f"logs {pod}").out
+        if "Attempting P4RT communication" in logs:
+            logger.info("p4 pod initalized, waiting for commention from vsp")
+            break
+        time.sleep(5)
 
 
 def ExtraConfigDpu(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, Future[Optional[host.Result]]]) -> None:
