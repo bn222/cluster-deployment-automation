@@ -134,20 +134,15 @@ def dpu_operator_start(client: K8sClient, repo: Optional[str]) -> None:
     client.oc_run_or_die("wait --for=condition=Ready pod --all -n openshift-dpu-operator --timeout=5m")
 
 
-def wait_vsp_ds_running(client: K8sClient) -> None:
-    retries = 10
-    for _ in range(retries):
-        time.sleep(20)
-        desired_result = client.oc_run_or_die("get ds vsp -n openshift-dpu-operator -o jsonpath='{.status.desiredNumberScheduled}'")
-        available_result = client.oc_run_or_die("get ds vsp -n openshift-dpu-operator -o jsonpath='{.status.numberAvailable}'")
-        logger.info(f"Waiting for VSP ds to scale up. Desired/Available: {desired_result.out}/{available_result.out}")
-        if desired_result.out.isdigit() and available_result.out.isdigit():
-            desired_pods = int(desired_result.out)
-            available_pods = int(available_result.out)
-            if available_pods == desired_pods:
-                break
-    else:
-        logger.error_and_exit("Vsp pods failed to reach ready state")
+def configure_p4_hugepages(rh: host.Host) -> None:
+    logger.info("Configuring hugepages for p4 pod")
+    # The p4 container typically sets this up. If we are running the container as a daemonset in microshift, we need to
+    # ensure this resource is available prior to the pod starting to ensure dpdk is successful
+    rh.run("mkdir -p /dev/hugepages")
+    rh.run("mount -t hugetlbfs -o pagesize=2M none /dev/hugepages || true")
+    rh.run("echo 512 > /sys/devices/system/node/node0/hugepages/hugepages-2048kB/nr_hugepages")
+    # Restart microshift to make sure the resource is available
+    rh.run_or_die("systemctl restart microshift")
 
 
 def ensure_p4_pod_running(lh: host.Host, acc: host.Host, imgReg: ImageRegistry, client: K8sClient) -> None:
@@ -158,6 +153,9 @@ def ensure_p4_pod_running(lh: host.Host, acc: host.Host, imgReg: ImageRegistry, 
 
     # If p4 pod already exists from previous run, kill this first.
     acc.run(f"podman ps --filter ancestor={local_img} --format '{{{{.ID}}}}' | xargs -r podman kill")
+
+    configure_p4_hugepages(acc)
+
     logger.info("Manually starting P4 pod")
     acc.run_or_die("mkdir -p /opt/p4/p4-cp-nws/var/run/openvswitch")  # WA https://issues.redhat.com/browse/IIC-421
     with open("manifests/dpu/dpu_vsp_ds.yaml.j2") as f:
@@ -167,6 +165,8 @@ def ensure_p4_pod_running(lh: host.Host, acc: host.Host, imgReg: ImageRegistry, 
         with open(tmp_file, "w") as f:
             f.write(rendered)
         client.oc(f"create -f {tmp_file}")
+
+    client.wait_ds_running(ds="vsp-p4", namespace="default")
     # client.oc_run_or_die("wait --for=condition=Ready pod --all -n openshift-dpu-operator --timeout=5m")
     # WA: https://issues.redhat.com/browse/IIC-425 There is a race condition if the vsp initializes before the p4 has finished programming the default routes
     time.sleep(300)
@@ -234,7 +234,7 @@ def ExtraConfigDpu(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, 
     logger.info("Waiting for all pods to become ready")
     client.oc_run_or_die("wait --for=condition=Ready pod --all --all-namespaces --timeout=2m")
     client.oc_run_or_die(f"create -f {repo}/examples/dpu.yaml")
-    wait_vsp_ds_running(client)
+    client.wait_ds_running(ds="vsp", namespace="openshift-dpu-operator")
     client.oc_run_or_die("wait --for=condition=Ready pod --all --all-namespaces --timeout=3m")
     logger.info("Finished setting up dpu operator on dpu")
     logger.info("Warkaround: cold booting the host since currently driver can't deal with host rebooting without coordination")
@@ -296,7 +296,7 @@ def ExtraConfigDpuHost(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[s
     logger.info("Creating dpu operator config")
     client.oc_run_or_die(f"create -f {repo}/examples/host.yaml")
     time.sleep(30)
-    wait_vsp_ds_running(client)
+    client.wait_ds_running(ds="vsp", namespace="openshift-dpu-operator")
     client.oc_run_or_die("wait --for=condition=Ready pod --all -n openshift-dpu-operator --timeout=5m")
     logger.info("Finished setting up dpu operator on host")
 
