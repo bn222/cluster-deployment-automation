@@ -63,7 +63,6 @@ class ExtraConfigArgs:
     rebuild_dpu_operators_images: bool = True
 
     dpu_net_interface: Optional[str] = "ens2f0"
-    host_side_bmc: str = ""
 
     def pre_check(self) -> None:
         if self.sriov_network_operator_local:
@@ -89,6 +88,7 @@ class NodeConfig:
     bmc: str = ""
     bmc_user: str = "root"
     bmc_password: str = "calvin"
+    host_side_bmc: Optional[str] = None
     ip: Optional[str] = None
     kind: Optional[str] = None  # optional to allow 'type'
     type: Optional[str] = None

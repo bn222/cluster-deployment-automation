@@ -5,7 +5,7 @@ import sys
 import time
 from concurrent.futures import Future, ThreadPoolExecutor
 from logger import logger
-from typing import Optional
+from typing import Optional, Any
 
 import common
 import host
@@ -56,7 +56,7 @@ class ClusterNode:
         pass
 
     @abc.abstractmethod
-    def post_boot(self, desired_ip_range: tuple[str, str]) -> bool:
+    def post_boot(self, *args: Any, **kwargs: Any) -> bool:
         pass
 
     def teardown(self) -> None:
@@ -179,7 +179,7 @@ class VmClusterNode(ClusterNode):
             return self.hostconn.vm_is_running(self.config.name)
         return self.get_future_done()
 
-    def post_boot(self, desired_ip_range: tuple[str, str]) -> bool:
+    def post_boot(self) -> bool:
         if not self.install_wait:
             self.future.result()
         return True
@@ -338,7 +338,7 @@ class BFClusterNode(ClusterNode):
     def has_booted(self) -> bool:
         return self.get_future_done()
 
-    def post_boot(self, desired_ip_range: tuple[str, str]) -> bool:
+    def post_boot(self) -> bool:
         result: Optional[host.Result] = self.future.result()
         if result is not None:
             self.dynamic_ip = result.out

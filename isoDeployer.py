@@ -8,6 +8,7 @@ from baseDeployer import BaseDeployer
 from clustersConfig import ClustersConfig
 from concurrent.futures import ThreadPoolExecutor
 import sys
+import time
 
 
 class IsoDeployer(BaseDeployer):
@@ -63,7 +64,10 @@ class IsoDeployer(BaseDeployer):
             node = ipu.IPUClusterNode(self._master, self._cc.external_port, self._cc.network_api_port)
             executor = ThreadPoolExecutor(max_workers=len(self._cc.masters))
             node.start(self._cc.install_iso, executor)
-            node.future.result()
+            while not node.has_booted():
+                logger.debug("Waiting on node to boot")
+                time.sleep(30)
+            node.post_boot()
         elif self._master.kind == "marvell-dpu":
             isoCluster.MarvellIsoBoot(self._cc, self._master, self._cc.install_iso)
         else:
