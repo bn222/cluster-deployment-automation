@@ -11,14 +11,23 @@ spec:
       labels:
         app: vsp-p4
     spec:
-      nodeSelector:
-        dpu: "true"
-      hostNetwork: true
       containers:
-      - name: my-container
+      - name: p4-container
         image: {{ipu_vsp_p4}}
         securityContext:
           privileged: true
+        ports:
+        - containerPort: 9559
+          hostPort: 9559
+        resources:
+          requests:
+            cpu: 500m
+            memory: 4Gi
+            hugepages-2Mi: 512Mi
+          limits:
+            cpu: 1
+            memory: 4Gi
+            hugepages-2Mi: 512Mi
         volumeMounts:
         - name: lib-modules
           mountPath: /lib/modules/
@@ -28,6 +37,8 @@ spec:
           mountPath: /sys
         - name: dev
           mountPath: /dev
+        - name: hugepages
+          mountPath: /dev/hugepages
       volumes:
       - name: lib-modules
         hostPath:
@@ -41,3 +52,6 @@ spec:
       - name: dev
         hostPath:
           path: /dev
+      - name: hugepages
+        hostPath:
+          path: /dev/hugepages

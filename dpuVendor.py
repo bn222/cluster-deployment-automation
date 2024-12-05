@@ -27,7 +27,7 @@ class VendorPlugin(ABC):
 class IpuPlugin(VendorPlugin):
     def __init__(self, name_suffix: str) -> None:
         self._repo = "https://github.com/intel/ipu-opi-plugins.git"
-        self._vsp_ds_manifest = "./manifests/dpu/dpu_vsp_ds.yaml.j2"
+        self._vsp_ds_manifest = "./manifests/dpu/dpu_p4_ds.yaml.j2"
         self.name_suffix = name_suffix
 
     @property

@@ -166,3 +166,19 @@ class K8sClient:
         minutes, seconds = calculate_elapsed_time(start, time.time())
         logger.info(f"Deployment {deployment_name} in {namespace} are '{condition}'")
         logger.info(f"It took {minutes} m {seconds}s for deployments/{deployment_name} in {namespace} to be '{condition}' (attempts: {it})")
+
+    def wait_ds_running(self, ds: str, namespace: str) -> None:
+        retries = 10
+        for _ in range(retries):
+            time.sleep(20)
+            desired_result = self.oc_run_or_die(f"get ds {ds} -n {namespace} -o jsonpath='{{.status.desiredNumberScheduled}}'")
+            available_result = self.oc_run_or_die(f"get ds {ds} -n {namespace} -o jsonpath='{{.status.numberAvailable}}'")
+            logger.info(f"Waiting for {ds} ds in namespace {namespace} to scale up. Desired/Available: {desired_result.out}/{available_result.out}")
+            if desired_result.out.isdigit() and available_result.out.isdigit():
+                desired_pods = int(desired_result.out)
+                available_pods = int(available_result.out)
+                if available_pods == desired_pods:
+                    logger.info(f"{ds} ds in namespace {namespace} is fully scaled up.")
+                    break
+        else:
+            logger.error_and_exit(f"{ds} ds in namespace {namespace} failed to reach ready state")
