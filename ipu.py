@@ -27,27 +27,6 @@ def is_http_url(url: str) -> bool:
         return False
 
 
-def wait_for_acc_with_retry(acc: host.Host, imc_addr: str, timeout: int = 1200) -> None:
-    # Typically if the acc booted properly it will take < 20 minutes to come up (including the 10 min sleep we do during boot)
-    logger.info("Waiting for ACC to come up")
-    while True:
-        if acc.ping():
-            logger.info("ACC responded to ping, connecting")
-            break
-        time.sleep(20)
-        timeout -= 20
-        if timeout <= 0:
-            logger.info("ACC has not responded in a reasonable amount of time, rebooting IMC")
-            imc = host.RemoteHost(imc_addr)
-            imc.ssh_connect("root", "redhat")
-            imc.run("reboot")
-            timeout = 240
-
-    acc.ssh_connect("root", "redhat")
-    logger.info(acc.run("uname -a"))
-    logger.info("Connected to ACC")
-
-
 """
 ExtraConfigIPU is used to provision and IPUs specified via Redfish through the IMC.
 This works by making some assumptions about the current state of the IPU:
@@ -80,8 +59,28 @@ class IPUClusterNode(ClusterNode):
         # wait on install + reboot to complete
         acc = host.RemoteHost(self.config.ip)
         # WA since we can't reliably expect the acc to get a dhcp lease due to https://issues.redhat.com/browse/IIC-427
-        wait_for_acc_with_retry(acc=acc, imc_addr=self.config.bmc)
+        self._wait_for_acc_with_retry(acc=acc)
         # configure_iso_network_port(self.network_api_port, self.config.ip)
+
+    def _wait_for_acc_with_retry(self, acc: host.Host, timeout: int = 1200) -> None:
+        # Typically if the acc booted properly it will take < 20 minutes to come up (including the 10 min sleep we do during boot)
+        logger.info("Waiting for ACC to come up")
+        while True:
+            if acc.ping():
+                logger.info("ACC responded to ping, connecting")
+                break
+            time.sleep(20)
+            timeout -= 20
+            if timeout <= 0:
+                logger.info("ACC has not responded in a reasonable amount of time, rebooting IMC")
+                imc = host.RemoteHost(self.config.bmc)
+                imc.ssh_connect(self.config.bmc_user, self.config.bmc_password)
+                imc.run("reboot")
+                timeout = 240
+
+        acc.ssh_connect("root", "redhat")
+        logger.info(acc.run("uname -a"))
+        logger.info("Connected to ACC")
 
     def start(self, iso_or_image_path: str, executor: ThreadPoolExecutor) -> None:
         ipu_bmc = IPUBMC(self.config.bmc)
@@ -115,7 +114,15 @@ class IPUClusterNode(ClusterNode):
                 iso_address = f"http://{lh_ip}:{str(http_server.port)}/{iso_name}"
                 logger.info(helper(node, iso_address))
 
-    def post_boot(self, desired_ip_range: tuple[str, str]) -> bool:
+    def post_boot(self) -> bool:
+        logger.info("Workaround: cold booting the host since currently driver can't deal with host rebooting without coordination")
+        assert self.config.host_side_bmc is not None
+        ipu_host_bmc = BMC.from_bmc(self.config.host_side_bmc)
+        ipu_host_bmc.cold_boot()
+        logger.info("waiting for ACC to come back up after cold boot")
+        assert self.config.ip is not None
+        acc = host.RemoteHost(self.config.ip)
+        self._wait_for_acc_with_retry(acc=acc, timeout=300)
         return True
 
     def _ipu_host(self) -> host.Host:

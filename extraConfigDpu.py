@@ -12,13 +12,12 @@ import imageRegistry
 from common import git_repo_setup
 from dpuVendor import init_vendor_plugin, IpuPlugin
 from imageRegistry import ImageRegistry
-from ipu import wait_for_acc_with_retry
 import jinja2
 
 DPU_OPERATOR_REPO = "https://github.com/openshift/dpu-operator.git"
 MICROSHIFT_KUBECONFIG = "/root/kubeconfig.microshift"
 OSE_DOCKERFILE = "https://pkgs.devel.redhat.com/cgit/containers/dpu-operator/tree/Dockerfile?h=rhaos-4.17-rhel-9"
-P4_IMG = "wsfd-advnetlab223.anl.eng.bos2.dc.redhat.com:5000/intel-ipu-sdk:kubecon-aarch64"
+P4_IMG = "wsfd-advnetlab217.anl.eng.bos2.dc.redhat.com:5000/intel-ipu-sdk:kubecon-aarch64"
 
 KERNEL_RPMS = [
     "https://download-01.beak-001.prod.iad2.dc.redhat.com/brewroot/vol/rhel-9/packages/kernel/5.14.0/427.2.1.el9_4/x86_64/kernel-5.14.0-427.2.1.el9_4.x86_64.rpm",
@@ -181,14 +180,6 @@ def ensure_p4_pod_running(lh: host.Host, acc: host.Host, imgReg: ImageRegistry, 
         time.sleep(5)
 
 
-def cold_boot_acc_host(acc: host.Host, imc: str, host_side_bmc: str) -> None:
-    logger.info("Workaround: cold booting the host since currently driver can't deal with host rebooting without coordination")
-    ipu_host_bmc = BMC.from_bmc(host_side_bmc)
-    ipu_host_bmc.cold_boot()
-    logger.info("waiting for ACC to come back up after cold boot")
-    wait_for_acc_with_retry(acc=acc, imc_addr=imc, timeout=300)
-
-
 def wait_for_microshift_restart(client: K8sClient) -> None:
     ret = client.oc("wait --for=condition=Ready pod --all --all-namespaces --timeout=3m")
     retries = 3
@@ -213,10 +204,6 @@ def ExtraConfigDpu(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, 
     lh = host.LocalHost()
     acc.ssh_connect("root", "redhat")
     client = K8sClient(MICROSHIFT_KUBECONFIG)
-
-    # Workaround. We need to ensure idpf is in a good state (it may have crashed due to IMC reboot during installation). Cold boot host system to ensure
-    cold_boot_acc_host(acc, dpu_node.bmc, cfg.host_side_bmc)
-    wait_for_microshift_restart(client)
 
     imgReg = _ensure_local_registry_running(lh, delete_all=False)
     imgReg.trust(acc)
