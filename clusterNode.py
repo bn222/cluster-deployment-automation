@@ -179,7 +179,7 @@ class VmClusterNode(ClusterNode):
             return self.hostconn.vm_is_running(self.config.name)
         return self.get_future_done()
 
-    def post_boot(self) -> bool:
+    def post_boot(self, desired_ip_range: tuple[str, str]) -> bool:
         if not self.install_wait:
             self.future.result()
         return True
