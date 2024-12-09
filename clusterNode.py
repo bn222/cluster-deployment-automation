@@ -51,9 +51,8 @@ class ClusterNode:
     def start(self, iso_or_image_path: str, executor: ThreadPoolExecutor) -> None:
         pass
 
-    @abc.abstractmethod
     def has_booted(self) -> bool:
-        pass
+        return self.get_future_done()
 
     def post_boot(self, *, desired_ip_range: Optional[tuple[str, str]] = None) -> bool:
         return True
@@ -226,9 +225,6 @@ class X86ClusterNode(ClusterNode):
     def start(self, iso_or_image_path: str, executor: ThreadPoolExecutor) -> None:
         self.future = executor.submit(self._boot_iso_x86, iso_or_image_path)
 
-    def has_booted(self) -> bool:
-        return self.get_future_done()
-
     def post_boot(self, *, desired_ip_range: Optional[tuple[str, str]] = None) -> bool:
         rh = host.RemoteHost(self.config.node)
         rh.ssh_connect("core")
@@ -336,9 +332,6 @@ class BFClusterNode(ClusterNode):
 
     def start(self, iso_or_image_path: str, executor: ThreadPoolExecutor) -> None:
         self.future = executor.submit(self._boot_iso_bf, iso_or_image_path)
-
-    def has_booted(self) -> bool:
-        return self.get_future_done()
 
     def post_boot(self, *, desired_ip_range: Optional[tuple[str, str]] = None) -> bool:
         result: Optional[host.Result] = self.future.result()
