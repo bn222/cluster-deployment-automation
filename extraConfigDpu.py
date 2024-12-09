@@ -168,6 +168,9 @@ def ensure_p4_pod_running(lh: host.Host, acc: host.Host, imgReg: ImageRegistry, 
     client.oc(f"delete -f {tmp_file}")
     client.oc_run_or_die(f"create -f {tmp_file}")
 
+    # The vsp looks for the service provided by the p4 pod on localhost, make sure to create a service in OCP to expose it
+    client.oc_run_or_die("create -f manifests/dpu/p4_service.yaml")
+
     client.wait_ds_running(ds="vsp-p4", namespace="default")
     # WA: https://issues.redhat.com/browse/IIC-425 There is a race condition if the vsp initializes before the p4 has finished programming the default routes
     logger.info("Waiting for P4 container to finish initialization")
