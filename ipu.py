@@ -114,7 +114,7 @@ class IPUClusterNode(ClusterNode):
                 iso_address = f"http://{lh_ip}:{str(http_server.port)}/{iso_name}"
                 logger.info(helper(node, iso_address))
 
-    def post_boot(self) -> bool:
+    def post_boot(self, *, desired_ip_range: Optional[tuple[str, str]] = None) -> bool:
         logger.info("Workaround: cold booting the host since currently driver can't deal with host rebooting without coordination")
         assert self.config.host_side_bmc is not None
         ipu_host_bmc = BMC.from_bmc(self.config.host_side_bmc)

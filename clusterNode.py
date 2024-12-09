@@ -5,7 +5,7 @@ import sys
 import time
 from concurrent.futures import Future, ThreadPoolExecutor
 from logger import logger
-from typing import Optional, Any
+from typing import Optional
 
 import common
 import host
@@ -55,9 +55,8 @@ class ClusterNode:
     def has_booted(self) -> bool:
         pass
 
-    @abc.abstractmethod
-    def post_boot(self, *args: Any, **kwargs: Any) -> bool:
-        pass
+    def post_boot(self, *, desired_ip_range: Optional[tuple[str, str]] = None) -> bool:
+        return True
 
     def teardown(self) -> None:
         pass
@@ -179,7 +178,7 @@ class VmClusterNode(ClusterNode):
             return self.hostconn.vm_is_running(self.config.name)
         return self.get_future_done()
 
-    def post_boot(self, desired_ip_range: tuple[str, str]) -> bool:
+    def post_boot(self, *, desired_ip_range: Optional[tuple[str, str]] = None) -> bool:
         if not self.install_wait:
             self.future.result()
         return True
@@ -230,10 +229,13 @@ class X86ClusterNode(ClusterNode):
     def has_booted(self) -> bool:
         return self.get_future_done()
 
-    def post_boot(self, desired_ip_range: tuple[str, str]) -> bool:
+    def post_boot(self, *, desired_ip_range: Optional[tuple[str, str]] = None) -> bool:
         rh = host.RemoteHost(self.config.node)
         rh.ssh_connect("core")
         ips = []
+        if desired_ip_range is None:
+            logger.debug("Require \"desired_ip_range\" argument to post_boot()")
+            return False
         for ipr in common.ip_addrs(rh):
             for addr_info in ipr.addr_info:
                 if addr_info.family != "inet":
@@ -338,7 +340,7 @@ class BFClusterNode(ClusterNode):
     def has_booted(self) -> bool:
         return self.get_future_done()
 
-    def post_boot(self) -> bool:
+    def post_boot(self, *, desired_ip_range: Optional[tuple[str, str]] = None) -> bool:
         result: Optional[host.Result] = self.future.result()
         if result is not None:
             self.dynamic_ip = result.out
