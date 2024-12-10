@@ -145,22 +145,14 @@ def configure_p4_hugepages(rh: host.Host) -> None:
     rh.run_or_die("systemctl restart microshift")
 
 
-def ensure_p4_pod_running(lh: host.Host, acc: host.Host, imgReg: ImageRegistry, client: K8sClient) -> None:
-    lh.run_or_die(f"podman pull --tls-verify=false {P4_IMG}")
-    local_img = f"{imgReg.url()}/intel-ipu-p4-sdk:kubecon-aarch64"
-    lh.run_or_die(f"podman tag {P4_IMG} {local_img}")
-    lh.run_or_die(f"podman push {local_img}")
-
-    # If p4 pod already exists from previous run, kill this first.
-    acc.run(f"podman ps --filter ancestor={local_img} --format '{{{{.ID}}}}' | xargs -r podman kill")
-
+def start_p4_pod(acc: host.Host, client: K8sClient, image: str) -> None:
     configure_p4_hugepages(acc)
 
     logger.info("Manually starting P4 pod")
     acc.run_or_die("mkdir -p /opt/p4/p4-cp-nws/var/run/openvswitch")  # WA https://issues.redhat.com/browse/IIC-421
     with open("manifests/dpu/dpu_p4_ds.yaml.j2") as f:
         j2_template = jinja2.Template(f.read())
-        rendered = j2_template.render(ipu_vsp_p4=local_img)
+        rendered = j2_template.render(ipu_vsp_p4=image)
         tmp_file = "/tmp/dpu_p4_ds.yaml"
         with open(tmp_file, "w") as f:
             f.write(rendered)
@@ -181,6 +173,34 @@ def ensure_p4_pod_running(lh: host.Host, acc: host.Host, imgReg: ImageRegistry, 
             logger.info("p4 pod initalized, waiting for connection from vsp")
             break
         time.sleep(5)
+
+
+def start_p4_container(acc: host.Host, client: K8sClient, image: str) -> None:
+    uname = acc.run("uname -r").out.strip()
+    cmd = f"podman run -d --privileged -v /lib/modules/{uname}:/lib/modules/{uname} -v /opt/p4/p4-cp-nws/var/run:/opt/p4/p4-cp-nws/var/run -v /sys:/sys -v /dev:/dev -p 9559:9559 {image}"
+    acc.run_or_die("mkdir -p /opt/p4/p4-cp-nws/var/run/openvswitch")
+    acc.run_or_die(cmd)
+    logger.info("Waiting for P4 container to finish initialization")
+    container_id = acc.run_or_die(f"podman ps --filter ancestor={image} --format '{{{{.ID}}}}'").out.strip()
+    while True:
+        logs = acc.run_or_die(f"podman logs {container_id} 2>&1").out
+        if "Attempting P4RT communication" in logs:
+            break
+        time.sleep(5)
+
+
+def ensure_p4_pod_running(lh: host.Host, acc: host.Host, imgReg: ImageRegistry, client: K8sClient) -> None:
+    lh.run_or_die(f"podman pull --tls-verify=false {P4_IMG}")
+    local_img = f"{imgReg.url()}/intel-ipu-p4-sdk:kubecon-aarch64"
+    lh.run_or_die(f"podman tag {P4_IMG} {local_img}")
+    lh.run_or_die(f"podman push {local_img}")
+
+    # If p4 pod already exists from previous run, kill this first.
+    acc.run(f"podman ps --filter ancestor={local_img} --format '{{{{.ID}}}}' | xargs -r podman kill")
+
+    # Temporarily use a container until issue with p4 running as a pod is resolved: https://issues.redhat.com/browse/IIC-465
+    # start_p4_pod(acc, client, local_img)
+    start_p4_container(acc, client, local_img)
 
 
 def wait_for_microshift_restart(client: K8sClient) -> None:
