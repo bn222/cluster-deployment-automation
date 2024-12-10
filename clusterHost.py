@@ -236,7 +236,7 @@ class ClusterHost:
         wait_state("boot", boot_state)
 
         def post_boot_state() -> Dict[str, bool]:
-            return {node.config.name: node.post_boot(desired_ip_range) for node in nodes}
+            return {node.config.name: node.post_boot(desired_ip_range=desired_ip_range) for node in nodes}
 
         wait_state("post_boot", post_boot_state)
 
