@@ -46,6 +46,7 @@ def _pxeboot_marvell_dpu(name: str, node: str, mac: str, ip: str, iso: str) -> N
         f"--nm-secondary-ip-address={shlex.quote(ip_addr)} "
         f"--nm-secondary-ip-gateway={shlex.quote(ip_gateway)} "
         "--yum-repos=rhel-nightly "
+        "--default-extra-packages "
         f"{' '.join(ssh_key_options)} "
         f"{shlex.quote(iso)} "
         "2>&1"
