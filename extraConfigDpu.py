@@ -278,32 +278,34 @@ def ExtraConfigDpu(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, 
     acc.run("systemctl stop firewalld")
     acc.run("systemctl disable firewalld")
 
-    # Build and start vsp on DPU
     vendor_plugin = init_vendor_plugin(acc, dpu_node.kind or "")
     if isinstance(vendor_plugin, IpuPlugin):
         # TODO: Remove when this container is properly started by the vsp
         # We need to manually start the p4 sdk container currently for the IPU plugin
         ensure_p4_pod_running(lh, acc, imgReg, client)
 
-        # Build on the ACC since an aarch based server is needed for the build
-        # (the Dockerfile needs to be fixed to allow layered multi-arch build
-        # by removing the calls to pip)
-        vsp_img = vendor_plugin.build_push(acc, imgReg, cfg.ipu_plugin_sha)
-
-        # As a workaround while waiting for properly multiarch build support, we can create a manifest to ensure both host and dpu can deploy the vsp with the same image.
-        # Note that this makes the assumption that the host deployment has already been run and the latest ipu plugin image is already locally available in the registry.
-        # Without these assumptions, this will not work as expected
-        manifest = f"{vsp_img}-manifest"
-        lh.run(f"buildah manifest rm {manifest}")
-        lh.run_or_die(f"buildah manifest create {manifest}")
-        lh.run_or_die(f"podman pull {vsp_img}-x86_64")
-        lh.run_or_die(f"podman pull {vsp_img}-aarch64")
-        lh.run_or_die(f"buildah manifest add {manifest} {vsp_img}-x86_64")
-        lh.run_or_die(f"buildah manifest add {manifest} {vsp_img}-aarch64")
-        lh.run_or_die(f"buildah manifest push --all {manifest} docker://{vsp_img}")
-
     git_repo_setup(repo, repo_wipe=False, url=DPU_OPERATOR_REPO)
     if cfg.rebuild_dpu_operators_images:
+        # Build vsp
+        vendor_plugin = init_vendor_plugin(acc, dpu_node.kind or "")
+        if isinstance(vendor_plugin, IpuPlugin):
+            # Build on the ACC since an aarch based server is needed for the build
+            # (the Dockerfile needs to be fixed to allow layered multi-arch build
+            # by removing the calls to pip)
+            vsp_img = vendor_plugin.build_push(acc, imgReg, cfg.ipu_plugin_sha)
+            # As a workaround while waiting for properly multiarch build support, we can create a manifest to ensure both host and dpu can deploy the vsp with the same image.
+            # Note that this makes the assumption the ACC deployment is done before the host side DPU deployment, since rebuilding the dpu operator images will overwrite the manfiest
+            # we create here.
+            vsp_img = vendor_plugin.build_push(lh, imgReg, cfg.ipu_plugin_sha)
+
+            manifest = f"{vsp_img}-manifest"
+            lh.run(f"buildah manifest rm {manifest}")
+            lh.run_or_die(f"buildah manifest create {manifest}")
+            lh.run_or_die(f"podman pull {vsp_img}-x86_64")
+            lh.run_or_die(f"podman pull {vsp_img}-aarch64")
+            lh.run_or_die(f"buildah manifest add {manifest} {vsp_img}-x86_64")
+            lh.run_or_die(f"buildah manifest add {manifest} {vsp_img}-aarch64")
+            lh.run_or_die(f"buildah manifest push --all {manifest} docker://{vsp_img}")
         dpu_operator_build_push(repo, cfg.builder_image, cfg.base_image)
     else:
         logger.info("Will not rebuild dpu-operator images")
@@ -333,12 +335,12 @@ def ExtraConfigDpuHost(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[s
     node = cc.workers[0]
     h = host.Host(node.node)
     h.ssh_connect("core")
-    vendor_plugin = init_vendor_plugin(h, node.kind or "")
-    if isinstance(vendor_plugin, IpuPlugin):
-        vendor_plugin.build_push(lh, imgReg, cfg.ipu_plugin_sha)
 
+    vendor_plugin = init_vendor_plugin(h, node.kind or "")
     git_repo_setup(repo, branch="main", repo_wipe=False, url=DPU_OPERATOR_REPO)
     if cfg.rebuild_dpu_operators_images:
+        if isinstance(vendor_plugin, IpuPlugin):
+            vendor_plugin.build_push(lh, imgReg, cfg.ipu_plugin_sha)
         dpu_operator_build_push(repo, cfg.builder_image, cfg.base_image)
     else:
         logger.info("Will not rebuild dpu-operator images")

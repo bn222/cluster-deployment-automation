@@ -25,10 +25,9 @@ class VendorPlugin(ABC):
 
 
 class IpuPlugin(VendorPlugin):
-    def __init__(self, name_suffix: str) -> None:
+    def __init__(self) -> None:
         self._repo = "https://github.com/intel/ipu-opi-plugins.git"
         self._vsp_ds_manifest = "./manifests/dpu/dpu_p4_ds.yaml.j2"
-        self.name_suffix = name_suffix
 
     @property
     def repo(self) -> str:
@@ -37,6 +36,9 @@ class IpuPlugin(VendorPlugin):
     @property
     def vsp_ds_manifest(self) -> str:
         return self._vsp_ds_manifest
+
+    def get_name_suffix(self, h: host.Host) -> str:
+        return h.run("uname -m").out
 
     def import_from_url(self, url: str) -> None:
         lh = host.LocalHost()
@@ -82,8 +84,8 @@ class IpuPlugin(VendorPlugin):
         # WA to ensure multiarch vsp image manifest is available
         # push images with both the name expected by the dpu operator (so we can proceed with deploying host side)
         # and the name expected by the manifest that we will build during the IPU deployment step
-        h.run_or_die(f"podman tag {vsp_image} {vsp_image}-{self.name_suffix}")
-        h.run_or_die(f"podman push {vsp_image}-{self.name_suffix}")
+        h.run_or_die(f"podman tag {vsp_image} {vsp_image}-{self.get_name_suffix(h)}")
+        h.run_or_die(f"podman push {vsp_image}-{self.get_name_suffix(h)}")
         return vsp_image
 
     def start(self, vsp_image: str, client: K8sClient) -> None:
@@ -116,7 +118,7 @@ def init_vendor_plugin(h: host.Host, node_kind: str) -> VendorPlugin:
         return MarvellDpuPlugin()
     else:
         logger.info(f"Detected Intel IPU hardware on {h.hostname()}")
-        return IpuPlugin(h.run("uname -m").out)
+        return IpuPlugin()
 
 
 def extractContainerImage(dockerfile: str) -> str:
