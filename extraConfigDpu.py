@@ -5,7 +5,7 @@ from k8sClient import K8sClient
 from concurrent.futures import Future, ThreadPoolExecutor
 import os
 import time
-from typing import Optional
+from typing import Optional, List
 from logger import logger
 from clustersConfig import ExtraConfigArgs
 import imageRegistry
@@ -13,6 +13,7 @@ from common import git_repo_setup
 from dpuVendor import init_vendor_plugin, IpuPlugin
 from imageRegistry import ImageRegistry
 import jinja2
+import re
 
 DPU_OPERATOR_REPO = "https://github.com/openshift/dpu-operator.git"
 MICROSHIFT_KUBECONFIG = "/root/kubeconfig.microshift"
@@ -109,14 +110,55 @@ def copy_local_registry_certs(host: host.Host, path: str) -> None:
         host.copy_to(f"{directory}/{file}", f"{path}/{file}")
 
 
-def dpu_operator_build_push(repo: Optional[str]) -> None:
+def find_dockerfiles(repo: str) -> List[str]:
+    if not os.path.exists(repo):
+        logger.error_and_exit(f"The specified path '{repo}' does not exist.")
+    if not os.path.isdir(repo):
+        logger.error_and_exit(f"The specified path '{repo}' is not a directory.")
+
+    dockerfiles: List[str] = []
+    for file_name in os.listdir(repo):
+        full_path = os.path.join(repo, file_name)
+        if file_name.startswith("Dockerfile") and os.path.isfile(full_path):
+            dockerfiles.append(full_path)
+
+    return dockerfiles
+
+
+# The images in registry.ci.openshift.org do not always support multiarch.
+# As a result we will pin working images, and use these locally instead.
+def update_dpu_operator_dockerfiles(repo: str, builder: str, base: str) -> None:
+    dockerfiles = find_dockerfiles(repo)
+    for dockerfile in dockerfiles:
+        try:
+            with open(dockerfile, 'r') as file:
+                content = file.read()
+
+            # Replace builder image
+            builder_pattern = r"^FROM\s+([^\s]+)\s+AS\s+builder"
+            content = re.sub(builder_pattern, f"FROM {builder} AS builder", content, flags=re.MULTILINE)
+
+            # Replace base image
+            base_pattern = r"^FROM\s+([^\s]+)$"
+            content = re.sub(base_pattern, f"FROM {base}", content, flags=re.MULTILINE)
+
+            with open(dockerfile, 'w') as file:
+                file.write(content)
+
+            logger.info(f"Updated Dockerfile '{dockerfile}' with builder image '{builder}' and base image '{base}'.")
+        except Exception as e:
+            logger.error_and_exit(f"Failed to update dockerfile {dockerfile} err: {e}")
+
+
+def dpu_operator_build_push(repo: str, builder_image: str, base_image: str) -> None:
     h = host.LocalHost()
+    update_dpu_operator_dockerfiles(repo, builder_image, base_image)
     logger.info(f"Building dpu operator images in {repo} on {h.hostname()}")
     h.run_or_die(f"make -C {repo} local-buildx")
     h.run_or_die(f"make -C {repo} local-pushx")
 
 
-def dpu_operator_start(client: K8sClient, repo: Optional[str]) -> None:
+def dpu_operator_start(client: K8sClient, repo: str) -> None:
     h = host.LocalHost()
     logger.info(f"Deploying dpu operator from {h.hostname()}")
 
@@ -261,7 +303,7 @@ def ExtraConfigDpu(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, 
 
     git_repo_setup(repo, repo_wipe=False, url=DPU_OPERATOR_REPO)
     if cfg.rebuild_dpu_operators_images:
-        dpu_operator_build_push(repo)
+        dpu_operator_build_push(repo, cfg.builder_image, cfg.base_image)
     else:
         logger.info("Will not rebuild dpu-operator images")
     dpu_operator_start(client, repo)
@@ -296,7 +338,7 @@ def ExtraConfigDpuHost(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[s
 
     git_repo_setup(repo, branch="main", repo_wipe=False, url=DPU_OPERATOR_REPO)
     if cfg.rebuild_dpu_operators_images:
-        dpu_operator_build_push(repo)
+        dpu_operator_build_push(repo, cfg.builder_image, cfg.base_image)
     else:
         logger.info("Will not rebuild dpu-operator images")
     dpu_operator_start(client, repo)

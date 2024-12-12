@@ -64,6 +64,10 @@ class ExtraConfigArgs:
 
     dpu_net_interface: Optional[str] = "ens2f0"
 
+    builder_image: str = "wsfd-advnetlab-amp04.anl.eng.bos2.dc.redhat.com:5000/ocp/builder:rhel-9-golang-1.22-openshift-4.18"
+
+    base_image: str = "wsfd-advnetlab-amp04.anl.eng.bos2.dc.redhat.com:5000/ocp/4.18:base-rhel9"
+
     def pre_check(self) -> None:
         if self.sriov_network_operator_local:
             if self.name != "sriov_network_operator":
