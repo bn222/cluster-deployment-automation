@@ -127,7 +127,7 @@ def find_dockerfiles(repo: str) -> List[str]:
 
 # The images in registry.ci.openshift.org do not always support multiarch.
 # As a result we will pin working images, and use these locally instead.
-def update_dpu_operator_dockerfiles(repo: str, builder: str, base: str) -> None:
+def update_dpu_operator_dockerfiles(repo: str, builder_image: str, base_image: str) -> None:
     dockerfiles = find_dockerfiles(repo)
     for dockerfile in dockerfiles:
         try:
@@ -135,17 +135,18 @@ def update_dpu_operator_dockerfiles(repo: str, builder: str, base: str) -> None:
                 content = file.read()
 
             # Replace builder image
-            builder_pattern = r"^FROM\s+([^\s]+)\s+AS\s+builder"
-            content = re.sub(builder_pattern, f"FROM {builder} AS builder", content, flags=re.MULTILINE)
+            if builder_image:
+                builder_pattern = r"^FROM\s+([^\s]+)\s+AS\s+builder"
+                content = re.sub(builder_pattern, f"FROM {builder_image} AS builder", content, flags=re.MULTILINE)
 
-            # Replace base image
-            base_pattern = r"^FROM\s+([^\s]+)$"
-            content = re.sub(base_pattern, f"FROM {base}", content, flags=re.MULTILINE)
+            if base_image:
+                base_pattern = r"^FROM\s+([^\s]+)$"
+                content = re.sub(base_pattern, f"FROM {base_image}", content, flags=re.MULTILINE)
 
             with open(dockerfile, 'w') as file:
                 file.write(content)
 
-            logger.info(f"Updated Dockerfile '{dockerfile}' with builder image '{builder}' and base image '{base}'.")
+            logger.info(f"Updated Dockerfile '{dockerfile}' with builder image '{repr(builder_image)}' and base image '{repr(base_image)}'.")
         except Exception as e:
             logger.error_and_exit(f"Failed to update dockerfile {dockerfile} err: {e}")
 
