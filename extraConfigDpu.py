@@ -205,17 +205,7 @@ def start_p4_pod(acc: host.Host, client: K8sClient, image: str) -> None:
 
     # The vsp looks for the service provided by the p4 pod on localhost, make sure to create a service in OCP to expose it
     client.oc_run_or_die("create -f manifests/dpu/p4_service.yaml")
-
     client.wait_ds_running(ds="vsp-p4", namespace="default")
-    # WA: https://issues.redhat.com/browse/IIC-425 There is a race condition if the vsp initializes before the p4 has finished programming the default routes
-    logger.info("Waiting for P4 container to finish initialization")
-    pod = client.oc_run_or_die("get pods --selector=app=vsp-p4 -o name").out.strip()
-    while True:
-        logs = client.oc_run_or_die(f"logs {pod}").out
-        if "Attempting P4RT communication" in logs:
-            logger.info("p4 pod initalized, waiting for connection from vsp")
-            break
-        time.sleep(5)
 
 
 def start_p4_container(acc: host.Host, client: K8sClient, image: str) -> None:
@@ -223,13 +213,6 @@ def start_p4_container(acc: host.Host, client: K8sClient, image: str) -> None:
     cmd = f"podman run -d --privileged -v /lib/modules/{uname}:/lib/modules/{uname} -v /opt/p4/p4-cp-nws/var/run:/opt/p4/p4-cp-nws/var/run -v /sys:/sys -v /dev:/dev -p 9559:9559 {image}"
     acc.run_or_die("mkdir -p /opt/p4/p4-cp-nws/var/run/openvswitch")
     acc.run_or_die(cmd)
-    logger.info("Waiting for P4 container to finish initialization")
-    container_id = acc.run_or_die(f"podman ps --filter ancestor={image} --format '{{{{.ID}}}}'").out.strip()
-    while True:
-        logs = acc.run_or_die(f"podman logs {container_id} 2>&1").out
-        if "Attempting P4RT communication" in logs:
-            break
-        time.sleep(5)
 
 
 def ensure_p4_pod_running(lh: host.Host, acc: host.Host, imgReg: ImageRegistry, client: K8sClient) -> None:
