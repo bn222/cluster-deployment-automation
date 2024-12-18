@@ -426,16 +426,15 @@ class Host:
 class HostWithCX(Host):
     def cx_firmware_upgrade(self) -> Result:
         logger.info("Upgrading CX firmware")
-        return self.run_in_container("/cx_fwup")
+        return self.run_in_container("utils cx-fwup")
 
-    def run_in_container(self, cmd: str, interactive: bool = False) -> Result:
-        name = "cx"
-        setup = f"sudo podman run --pull always --replace --pid host --network host --user 0 --name {name} -dit --privileged -v /dev:/dev quay.io/bnemeth/bf"
-        r = self.run(setup, logging.DEBUG)
-        if r.returncode != 0:
-            return r
+    def run_in_container(self, cmd: str, interactive: bool = False, verbose: bool = True, dry_run: bool = False) -> Result:
+        name = "dpu-tools"
         it = "-it" if interactive else ""
-        return self.run(f"sudo podman exec {it} {name} {cmd}")
+        v = "--verbose" if verbose else ""
+        d = "--dry-run" if dry_run else ""
+        full_command = f"sudo podman run {it} --rm --pull always --replace --pid host --network host --user 0 --name {name} --privileged -v /dev:/dev quay.io/bnemeth/bf {v} {d} {cmd}"
+        return self.run(full_command, logging.DEBUG)
 
 
 class HostWithBF2(Host):
@@ -478,44 +477,43 @@ class HostWithBF2(Host):
         exit_code = stdout.channel.recv_exit_status()
         return Result("".join(out), "".join(err), exit_code)
 
-    def run_in_container(self, cmd: str, interactive: bool = False) -> Result:
-        name = "bf"
-        setup = f"sudo podman run --pull always --replace --pid host --network host --user 0 --name {name} -dit --privileged -v /dev:/dev quay.io/bnemeth/bf"
-        r = self.run(setup, logging.DEBUG)
-        if r.returncode != 0:
-            return r
+    def run_in_container(self, cmd: str, interactive: bool = False, verbose: bool = True, dry_run: bool = False) -> Result:
+        name = "dpu-tools"
         it = "-it" if interactive else ""
-        return self.run(f"sudo podman exec {it} {name} {cmd}")
+        v = "--verbose" if verbose else ""
+        d = "--dry-run" if dry_run else ""
+        full_command = f"sudo podman run {it} --rm --pull always --replace --pid host --network host --user 0 --name {name} --privileged -v /dev:/dev quay.io/bnemeth/bf --dpu-type bf {v} {d} {cmd}"
+        return self.run(full_command, logging.DEBUG)
 
     def bf_pxeboot(self, nfs_iso: str, nfs_key: str) -> Result:
         cmd = "sudo killall python3"
         self.run(cmd)
         logger.info("starting pxe server and booting bf")
-        cmd = f"/pxeboot {nfs_iso} -w {nfs_key}"
+        cmd = f"pxeboot {nfs_iso} -w {nfs_key}"
         return self.run_in_container(cmd, True)
 
     def bf_firmware_upgrade(self) -> Result:
         logger.info("Upgrading BF firmware")
         # We need to temporarily pin the BF-2 firmware due to an issue with the latest release: https://issues.redhat.com/browse/OCPBUGS-29882
         # Without this, the sriov-network-operator will fail to put the card into NIC mode
-        return self.run_in_container("/fwup -v 24.39.2048")
+        return self.run_in_container("firmware up --version 24.39.2048")
 
     def bf_firmware_defaults(self) -> Result:
         logger.info("Setting firmware config to defaults")
-        return self.run_in_container("/fwdefaults")
+        return self.run_in_container("firmware reset")
 
     def bf_set_mode(self, mode: str) -> Result:
-        return self.run_in_container(f"/set_mode {mode}")
+        return self.run_in_container(f"mode --set-mode {mode}")
 
     def bf_get_mode(self) -> Result:
-        return self.run_in_container("/getmode")
+        return self.run_in_container("mode")
 
     def bf_firmware_version(self) -> Result:
-        return self.run_in_container("fwversion")
+        return self.run_in_container("firmware version")
 
     def bf_load_bfb(self) -> Result:
         logger.info("Loading BFB image")
-        return self.run_in_container("/bfb")
+        return self.run_in_container("bfb")
 
 
 host_instances: dict[tuple[str, Optional[str]], Host] = {}
