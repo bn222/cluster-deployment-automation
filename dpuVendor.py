@@ -10,7 +10,7 @@ import os
 
 class VendorPlugin(ABC):
     @abstractmethod
-    def build_push_start(self, h: host.Host, client: K8sClient, imgReg: ImageRegistry) -> None:
+    def build_push_start(self, h: host.Host, client: K8sClient, imgReg: ImageRegistry, sha: str, repo: str) -> None:
         raise NotImplementedError("Must implement build_and_start() for VSP")
 
     @staticmethod
@@ -26,12 +26,7 @@ class VendorPlugin(ABC):
 
 class IpuPlugin(VendorPlugin):
     def __init__(self) -> None:
-        self._repo = "https://github.com/intel/ipu-opi-plugins.git"
         self._vsp_ds_manifest = "./manifests/dpu/dpu_p4_ds.yaml.j2"
-
-    @property
-    def repo(self) -> str:
-        return self._repo
 
     @property
     def vsp_ds_manifest(self) -> str:
@@ -53,13 +48,13 @@ class IpuPlugin(VendorPlugin):
     def vsp_image_name(self, img_reg: ImageRegistry) -> str:
         return f"{img_reg.url()}/intel_vsp:dev"
 
-    def build_push_start(self, h: host.Host, client: K8sClient, imgReg: ImageRegistry) -> None:
-        return self.start(self.build_push(h, imgReg, "main"), client)
+    def build_push_start(self, h: host.Host, client: K8sClient, imgReg: ImageRegistry, sha: str, repo: str) -> None:
+        return self.start(self.build_push(h, imgReg, sha, repo), client)
 
-    def build_push(self, h: host.Host, imgReg: ImageRegistry, sha: str) -> str:
+    def build_push(self, h: host.Host, imgReg: ImageRegistry, sha: str, repo: str) -> str:
         logger.info("Building ipu-opi-plugin")
         h.run("rm -rf /root/ipu-opi-plugins")
-        h.run_or_die(f"git clone {self.repo} /root/ipu-opi-plugins")
+        h.run_or_die(f"git clone {repo} /root/ipu-opi-plugins")
 
         logger.info(f"Will build ipu-opi-plugin from commit {sha}")
         h.run_or_die(f"git -C /root/ipu-opi-plugins checkout {sha}")
@@ -106,7 +101,7 @@ class MarvellDpuPlugin(VendorPlugin):
     def __init__(self) -> None:
         pass
 
-    def build_push_start(self, h: host.Host, client: K8sClient, imgReg: ImageRegistry) -> None:
+    def build_push_start(self, h: host.Host, client: K8sClient, imgReg: ImageRegistry, sha: str, repo: str) -> None:
         # TODO: https://github.com/openshift/dpu-operator/pull/82
         logger.warning("Setting up Marvell DPU not yet implemented")
 
