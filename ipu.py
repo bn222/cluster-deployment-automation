@@ -56,6 +56,7 @@ class IPUClusterNode(ClusterNode):
         dhcpConfig.configure_iso_network_port(self.network_api_port, self.config.ip)
         dhcpConfig.configure_dhcpd(self.config)
         self._redfish_boot_ipu(self.external_port, self.config, iso)
+        logger.info(f"Redfish boot triggered, attempting to connect to ACC at ip {self.config.ip}")
         # wait on install + reboot to complete
         acc = host.RemoteHost(self.config.ip)
         # WA since we can't reliably expect the acc to get a dhcp lease due to https://issues.redhat.com/browse/IIC-427
