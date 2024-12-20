@@ -138,15 +138,16 @@ def update_dpu_operator_dockerfiles(repo: str, builder_image: str, base_image: s
             if builder_image:
                 builder_pattern = r"^FROM\s+([^\s]+)\s+AS\s+builder"
                 content = re.sub(builder_pattern, f"FROM {builder_image} AS builder", content, flags=re.MULTILINE)
+                logger.info(f"Updated Dockerfile '{dockerfile}' with builder image '{repr(builder_image)}'.")
 
             if base_image:
                 base_pattern = r"^FROM\s+([^\s]+)$"
                 content = re.sub(base_pattern, f"FROM {base_image}", content, flags=re.MULTILINE)
+                logger.info(f"Updated Dockerfile '{dockerfile}' with base image '{repr(base_image)}'.")
 
             with open(dockerfile, 'w') as file:
                 file.write(content)
 
-            logger.info(f"Updated Dockerfile '{dockerfile}' with builder image '{repr(builder_image)}' and base image '{repr(base_image)}'.")
         except Exception as e:
             logger.error_and_exit(f"Failed to update dockerfile {dockerfile} err: {e}")
 
