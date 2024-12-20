@@ -67,10 +67,12 @@ class IpuPlugin(VendorPlugin):
             env["IMGTOOL"] = "podman"
             env["P4_NAME"] = "fxp-net_linux-networking"
             env["P4_DIR"] = "fxp-net_linux-networking"
-
             ret = h.run("make -C /root/ipu-opi-plugins/ipu-plugin image", env=env)
         else:
+            lh = host.LocalHost()
+            h.write("/run/user/0/containers/auth.json", lh.read_file("/run/user/0/containers/auth.json"))
             ret = h.run("IMGTOOL=podman make -C /root/ipu-opi-plugins/ipu-plugin image")
+
         if not ret.success():
             logger.error_and_exit("Failed to build vsp images")
         vsp_image = self.vsp_image_name(imgReg)

@@ -378,10 +378,15 @@ class Host:
         return not ret.returncode and state_running(ret.out)
 
     def write(self, fn: str, contents: str) -> None:
+        dir_path = os.path.dirname(fn)
         if self.is_localhost():
+            if dir_path and not os.path.exists(dir_path):
+                os.makedirs(dir_path)
+
             with open(fn, "w") as f:
                 f.write(contents)
         else:
+            self.run_or_die(f"mkdir -p {dir_path}")
             with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
                 tmp_filename = tmp_file.name
                 tmp_file.write(contents.encode('utf-8'))
