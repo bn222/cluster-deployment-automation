@@ -90,7 +90,7 @@ class NodeConfig:
     cluster_name: str
     name: str
     node: str
-    kind: str 
+    kind: str
     image_path: str = field(init=False)
     mac: str = field(default_factory=random_mac)
     bmc: str = ""
