@@ -174,10 +174,6 @@ class ClustersConfig:
     install_iso: str
     secrets_path: str
 
-    # All configurations that used to be supported but are not anymore.
-    # Used to warn the user to change their config.
-    deprecated_configs: dict[str, Optional[str]] = {"api_ip": "api_vip", "ingress_ip": "ingress_vip"}
-
     def __init__(
         self,
         yaml_path: str,
@@ -362,10 +358,14 @@ class ClustersConfig:
             self.fullConfig = safe_load(io.StringIO(contents))["clusters"][0]
 
     def _check_deprecated_config(self) -> None:
-        deprecated = self.deprecated_configs.keys() & self.fullConfig.keys()
+        # All configurations that used to be supported but are not anymore.
+        # Used to warn the user to change their config.
+        deprecated_configs: dict[str, Optional[str]] = {"api_ip": "api_vip", "ingress_ip": "ingress_vip"}
+
+        deprecated = deprecated_configs.keys() & self.fullConfig.keys()
 
         for key in deprecated:
-            value = self.deprecated_configs[key]
+            value = deprecated_configs[key]
             err = f"Deprecated config \"{key}\" found"
             if value is not None:
                 err += f", please use \"{value}\" instead"
