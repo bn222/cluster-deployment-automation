@@ -341,9 +341,12 @@ class ClusterDeployer(BaseDeployer):
         iso_file = os.path.join(iso_path, f"{infra_env}.iso")
         self._ai.download_iso_with_retry(infra_env, iso_path)
 
+        for h in hosts_with_masters:
+            h.ensure_images(iso_file, infra_env, h.k8s_master_nodes)
+
         futures = []
         for h in hosts_with_masters:
-            futures.extend(h.start_masters(iso_file, infra_env, executor))
+            futures.extend(h.start_masters(infra_env, executor))
 
         # Wait for masters to have booted.
         for h in hosts_with_masters:
@@ -441,9 +444,12 @@ class ClusterDeployer(BaseDeployer):
         ssh_priv_key_path = self._get_discovery_ign_ssh_priv_key(infra_env)
         shutil.copyfile(ssh_priv_key_path, os.path.join(_BF_ISO_PATH, "ssh_priv_key"))
 
+        for h in hosts_with_workers:
+            h.ensure_images(iso_file, infra_env, h.k8s_worker_nodes)
+
         futures = []
         for h in hosts_with_workers:
-            futures.extend(h.start_workers(iso_file, infra_env, executor))
+            futures.extend(h.start_workers(infra_env, executor))
 
         # Wait for workers to have booted.
         for h in hosts_with_workers:
@@ -521,22 +527,15 @@ class ClusterDeployer(BaseDeployer):
                 time.sleep(5)
 
     def _try_rename_workers(self, infra_env: str) -> int:
-        infra_env_id = self._ai.get_infra_env_id(infra_env)
         renamed = 0
 
         for bm in self._all_hosts:
             for k8s_node in bm.k8s_worker_nodes:
-                for h in filter(lambda x: x["infra_env_id"] == infra_env_id, self._ai.list_hosts()):
-                    if "inventory" not in h:
-                        continue
-                    nics = json.loads(h["inventory"]).get("interfaces")
-                    addresses: list[str] = sum((nic["ipv4_addresses"] for nic in nics), [])
-                    stripped_addresses = [a.split("/")[0] for a in addresses]
-
-                    if k8s_node.ip() in stripped_addresses:
-                        self._ai.update_host(h["id"], {"name": k8s_node.config.name})
-                        logger.info(f"renamed {k8s_node.config.name}")
-                        renamed += 1
+                info = self._ai.get_ai_host_id_by_ip(infra_env, k8s_node.ip())
+                if info is not None:
+                    self._ai.update_host(info.id, {"name": k8s_node.config.name})
+                    logger.info(f"renamed {k8s_node.config.name}")
+                    renamed += 1
         return renamed
 
     def _get_discovery_ign_ssh_priv_key(self, infra_env: str) -> str:
@@ -573,7 +572,7 @@ class ClusterDeployer(BaseDeployer):
         # libvirt also runs dnsmasq, and dnsmasq reads /etc/hosts.
         # For that reason, restart libvirt to re-read the changes.
         libvirt = Libvirt(host.LocalHost())
-        libvirt.restart()
+        libvirt.restart("network")
 
     def update_dnsmasq(self, *, setup: bool = True) -> None:
         cluster_name = self._cc.name
