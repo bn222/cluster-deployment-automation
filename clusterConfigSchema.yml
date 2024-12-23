@@ -9,14 +9,14 @@ clusters:
     ip_mask: "IP mask (x.y.z.t) to use for connectivity between cluster nodes (optional)"
     masters:
     - name: "A"
-      type: "<vm / physical / bf>"
+      kind: "<vm / physical / bf>"
       node: ""
       ip: ""
       ram: "in MB - default = 32768 MB"
       cpu: "number of vcpus if this is a VM - default = 8"
     workers:
     - name: "A"
-      type: "<vm / physical / bf>"
+      kind: "<vm / physical / bf>"
       ip: ""
       node: ""
       bmc: "required if physical or bf. Can be an ip or hostname"
