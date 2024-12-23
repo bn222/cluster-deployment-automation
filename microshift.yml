@@ -6,7 +6,7 @@ clusters:
     ingress_vip: "192.168.122.101"
     masters:
     - name: "wsfd-advnetlab06.anl.lab.eng.bos.redhat.com"
-      type: "physical"
+      kind: "physical"
       node: "wsfd-advnetlab06.anl.lab.eng.bos.redhat.com"
       ip: "10.19.128.15"
       bmc: "10.19.128.16"
