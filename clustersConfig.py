@@ -482,12 +482,6 @@ class ClustersConfig:
             logger.error(f"Hostname {ch} not found in {all_cluster_info}")
             sys.exit(-1)
 
-    # def __getitem__(self, key):
-    #     return self.fullConfig[key]
-
-    # def __setitem__(self, key, value) -> None:
-    #     self.fullConfig[key] = value
-
     def all_nodes(self) -> list[NodeConfig]:
         return self.masters + self.workers
 
