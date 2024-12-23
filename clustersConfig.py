@@ -90,6 +90,7 @@ class NodeConfig:
     cluster_name: str
     name: str
     node: str
+    kind: str 
     image_path: str = field(init=False)
     mac: str = field(default_factory=random_mac)
     bmc: str = ""
@@ -97,8 +98,6 @@ class NodeConfig:
     bmc_password: str = "calvin"
     host_side_bmc: Optional[str] = None
     ip: Optional[str] = None
-    kind: Optional[str] = None  # optional to allow 'type'
-    type: Optional[str] = None
     preallocated: str = "true"
     os_variant: str = "rhel8.6"
     disk_size: str = "48"
@@ -107,15 +106,6 @@ class NodeConfig:
     disk_kind: str = "qcow2"
 
     def __post_init__(self) -> None:
-        if self.type:
-            logger.warning("Deprecated 'type' in node config. Use 'kind' instead")
-            self.kind = self.type
-
-        delattr(self, 'type')
-
-        if self.kind is None:
-            raise ValueError("NodeConfig: kind not provided")
-
         # bmc ip is mandatory for physical, not for vm
         if self.kind == "physical" or self.kind == "bf" or self.kind == "ipu":
             if self.bmc == "":
