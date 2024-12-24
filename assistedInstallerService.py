@@ -349,12 +349,18 @@ class AssistedInstallerService:
         lh = host.LocalHost()
         if not self.last_cm_is_same():
             logger.info(f"{name} running with a different configmap")
-            logger.info(f"Last running cm: {lh.read_file(self._last_run_cm())}")
+            if os.path.exists(self._last_run_cm()):
+                logger.info(f"Last running cm: {lh.read_file(self._last_run_cm())}")
+            else:
+                logger.info(f"No last running cm")
             logger.info(f"new cm: {lh.read_file(self._config_map_path())}")
             return True
         if not self.last_pod_is_same():
             logger.info(f"{name} running with a different pod config")
-            logger.info(f"Last running pod config: {lh.read_file(self._last_run_pod())}")
+            if os.path.exists(self._last_run_pod()):
+                logger.info(f"Last running pod config: {lh.read_file(self._last_run_pod())}")
+            else:
+                logger.info(f"No last running pod config")
             logger.info(f"new pod config: {lh.read_file(self._pod_persistent_path())}")
             return True
         logger.info(f"{name} already running with a different configmap")
