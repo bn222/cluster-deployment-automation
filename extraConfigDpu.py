@@ -273,22 +273,8 @@ def ExtraConfigDpu(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, 
         # Build vsp
         vendor_plugin = init_vendor_plugin(acc, dpu_node.kind or "")
         if isinstance(vendor_plugin, IpuPlugin):
-            # Build on the ACC since an aarch based server is needed for the build
-            # (the Dockerfile needs to be fixed to allow layered multi-arch build
-            # by removing the calls to pip)
-            vsp_img = vendor_plugin.build_push(acc, imgReg, cfg.ipu_plugin_sha, cfg.ipu_plugin_repo)
-            # As a workaround while waiting for properly multiarch build support, we can create a manifest to ensure both host and dpu can deploy the vsp with the same image.
-            # Note that this makes the assumption the ACC deployment is done before the host side DPU deployment, since rebuilding the dpu operator images will overwrite the manfiest
-            # we create here.
+            manifest = "intel-vsp-manifest"
             vsp_img = vendor_plugin.build_push(lh, imgReg, cfg.ipu_plugin_sha, cfg.ipu_plugin_repo)
-
-            manifest = f"{vsp_img}-manifest"
-            lh.run(f"buildah manifest rm {manifest}")
-            lh.run_or_die(f"buildah manifest create {manifest}")
-            lh.run_or_die(f"podman pull {vsp_img}-x86_64")
-            lh.run_or_die(f"podman pull {vsp_img}-aarch64")
-            lh.run_or_die(f"buildah manifest add {manifest} {vsp_img}-x86_64")
-            lh.run_or_die(f"buildah manifest add {manifest} {vsp_img}-aarch64")
             lh.run_or_die(f"buildah manifest push --all {manifest} docker://{vsp_img}")
         dpu_operator_build_push(repo, cfg.builder_image, cfg.base_image)
     else:

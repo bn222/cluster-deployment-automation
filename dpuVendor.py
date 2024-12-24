@@ -52,37 +52,14 @@ class IpuPlugin(VendorPlugin):
         return self.start(self.build_push(h, imgReg, sha, repo), client)
 
     def build_push(self, h: host.Host, imgReg: ImageRegistry, sha: str, repo: str) -> str:
+        h = host.LocalHost()
         logger.info("Building ipu-opi-plugin")
         h.run("rm -rf /root/ipu-opi-plugins")
         h.run_or_die(f"git clone {repo} /root/ipu-opi-plugins")
-
         logger.info(f"Will build ipu-opi-plugin from commit {sha}")
         h.run_or_die(f"git -C /root/ipu-opi-plugins checkout {sha}")
-
-        fn = "/root/ipu-opi-plugins/ipu-plugin/images/Dockerfile"
-        golang_img = extractContainerImage(h.read_file(fn))
-        h.run_or_die(f"podman pull docker.io/library/{golang_img}")
-        if h.is_localhost():
-            env = os.environ.copy()
-            env["IMGTOOL"] = "podman"
-            env["P4_NAME"] = "fxp-net_linux-networking"
-            env["P4_DIR"] = "fxp-net_linux-networking"
-            ret = h.run("make -C /root/ipu-opi-plugins/ipu-plugin image", env=env)
-        else:
-            lh = host.LocalHost()
-            h.write("/run/user/0/containers/auth.json", lh.read_file("/run/user/0/containers/auth.json"))
-            ret = h.run("IMGTOOL=podman make -C /root/ipu-opi-plugins/ipu-plugin image")
-
-        if not ret.success():
-            logger.error_and_exit("Failed to build vsp images")
+        h.run_or_die("sh /root/ipu-opi-plugins/ipu-plugin/build.sh")
         vsp_image = self.vsp_image_name(imgReg)
-        h.run_or_die(f"podman tag intel-ipuplugin:latest {vsp_image}")
-        h.run_or_die(f"podman push {vsp_image}")
-        # WA to ensure multiarch vsp image manifest is available
-        # push images with both the name expected by the dpu operator (so we can proceed with deploying host side)
-        # and the name expected by the manifest that we will build during the IPU deployment step
-        h.run_or_die(f"podman tag {vsp_image} {vsp_image}-{self.get_name_suffix(h)}")
-        h.run_or_die(f"podman push {vsp_image}-{self.get_name_suffix(h)}")
         return vsp_image
 
     def start(self, vsp_image: str, client: K8sClient) -> None:
