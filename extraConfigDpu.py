@@ -18,7 +18,6 @@ import re
 DPU_OPERATOR_REPO = "https://github.com/openshift/dpu-operator.git"
 MICROSHIFT_KUBECONFIG = "/root/kubeconfig.microshift"
 OSE_DOCKERFILE = "https://pkgs.devel.redhat.com/cgit/containers/dpu-operator/tree/Dockerfile?h=rhaos-4.17-rhel-9"
-P4_IMG = "wsfd-advnetlab217.anl.eng.bos2.dc.redhat.com:5000/intel-ipu-sdk:kubecon-aarch64"
 
 KERNEL_RPMS = [
     "https://download-01.beak-001.prod.iad2.dc.redhat.com/brewroot/vol/rhel-9/packages/kernel/5.14.0/427.2.1.el9_4/x86_64/kernel-5.14.0-427.2.1.el9_4.x86_64.rpm",
@@ -178,58 +177,6 @@ def dpu_operator_start(client: K8sClient, repo: str) -> None:
     client.oc_run_or_die("wait --for=condition=Ready pod --all -n openshift-dpu-operator --timeout=5m")
 
 
-def configure_p4_hugepages(rh: host.Host) -> None:
-    logger.info("Configuring hugepages for p4 pod")
-    # The p4 container typically sets this up. If we are running the container as a daemonset in microshift, we need to
-    # ensure this resource is available prior to the pod starting to ensure dpdk is successful
-    rh.run("mkdir -p /dev/hugepages")
-    rh.run("mount -t hugetlbfs -o pagesize=2M none /dev/hugepages || true")
-    rh.run("echo 512 > /sys/devices/system/node/node0/hugepages/hugepages-2048kB/nr_hugepages")
-    # Restart microshift to make sure the resource is available
-    rh.run_or_die("systemctl restart microshift")
-
-
-def start_p4_pod(acc: host.Host, client: K8sClient, image: str) -> None:
-    configure_p4_hugepages(acc)
-
-    logger.info("Manually starting P4 pod")
-    acc.run_or_die("mkdir -p /opt/p4/p4-cp-nws/var/run/openvswitch")  # WA https://issues.redhat.com/browse/IIC-421
-    with open("manifests/dpu/dpu_p4_ds.yaml.j2") as f:
-        j2_template = jinja2.Template(f.read())
-        rendered = j2_template.render(ipu_vsp_p4=image)
-        tmp_file = "/tmp/dpu_p4_ds.yaml"
-        with open(tmp_file, "w") as f:
-            f.write(rendered)
-
-    client.oc(f"delete -f {tmp_file}")
-    client.oc_run_or_die(f"create -f {tmp_file}")
-
-    # The vsp looks for the service provided by the p4 pod on localhost, make sure to create a service in OCP to expose it
-    client.oc_run_or_die("create -f manifests/dpu/p4_service.yaml")
-    client.wait_ds_running(ds="vsp-p4", namespace="default")
-
-
-def start_p4_container(acc: host.Host, client: K8sClient, image: str) -> None:
-    uname = acc.run("uname -r").out.strip()
-    cmd = f"podman run -d --privileged -v /lib/modules/{uname}:/lib/modules/{uname} -v /opt/p4/p4-cp-nws/var/run:/opt/p4/p4-cp-nws/var/run -v /sys:/sys -v /dev:/dev -p 9559:9559 {image}"
-    acc.run_or_die("mkdir -p /opt/p4/p4-cp-nws/var/run/openvswitch")
-    acc.run_or_die(cmd)
-
-
-def ensure_p4_pod_running(lh: host.Host, acc: host.Host, imgReg: ImageRegistry, client: K8sClient) -> None:
-    lh.run_or_die(f"podman pull --tls-verify=false {P4_IMG}")
-    local_img = f"{imgReg.url()}/intel-ipu-p4-sdk:kubecon-aarch64"
-    lh.run_or_die(f"podman tag {P4_IMG} {local_img}")
-    lh.run_or_die(f"podman push {local_img}")
-
-    # If p4 pod already exists from previous run, kill this first.
-    acc.run(f"podman ps --filter ancestor={local_img} --format '{{{{.ID}}}}' | xargs -r podman kill")
-
-    # Temporarily use a container until issue with p4 running as a pod is resolved: https://issues.redhat.com/browse/IIC-465
-    # start_p4_pod(acc, client, local_img)
-    start_p4_container(acc, client, local_img)
-
-
 def wait_for_microshift_restart(client: K8sClient) -> None:
     ret = client.oc("wait --for=condition=Ready pod --all --all-namespaces --timeout=3m")
     retries = 3
@@ -266,30 +213,12 @@ def ExtraConfigDpu(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, 
     if isinstance(vendor_plugin, IpuPlugin):
         # TODO: Remove when this container is properly started by the vsp
         # We need to manually start the p4 sdk container currently for the IPU plugin
-        ensure_p4_pod_running(lh, acc, imgReg, client)
+        vendor_plugin.ensure_p4_pod_running(lh, acc, imgReg)
 
     git_repo_setup(repo, repo_wipe=False, url=DPU_OPERATOR_REPO)
     if cfg.rebuild_dpu_operators_images:
         # Build vsp
         vendor_plugin = init_vendor_plugin(acc, dpu_node.kind or "")
-        if isinstance(vendor_plugin, IpuPlugin):
-            # Build on the ACC since an aarch based server is needed for the build
-            # (the Dockerfile needs to be fixed to allow layered multi-arch build
-            # by removing the calls to pip)
-            vsp_img = vendor_plugin.build_push(acc, imgReg, cfg.ipu_plugin_sha, cfg.ipu_plugin_repo)
-            # As a workaround while waiting for properly multiarch build support, we can create a manifest to ensure both host and dpu can deploy the vsp with the same image.
-            # Note that this makes the assumption the ACC deployment is done before the host side DPU deployment, since rebuilding the dpu operator images will overwrite the manfiest
-            # we create here.
-            vsp_img = vendor_plugin.build_push(lh, imgReg, cfg.ipu_plugin_sha, cfg.ipu_plugin_repo)
-
-            manifest = f"{vsp_img}-manifest"
-            lh.run(f"buildah manifest rm {manifest}")
-            lh.run_or_die(f"buildah manifest create {manifest}")
-            lh.run_or_die(f"podman pull {vsp_img}-x86_64")
-            lh.run_or_die(f"podman pull {vsp_img}-aarch64")
-            lh.run_or_die(f"buildah manifest add {manifest} {vsp_img}-x86_64")
-            lh.run_or_die(f"buildah manifest add {manifest} {vsp_img}-aarch64")
-            lh.run_or_die(f"buildah manifest push --all {manifest} docker://{vsp_img}")
         dpu_operator_build_push(repo, cfg.builder_image, cfg.base_image)
     else:
         logger.info("Will not rebuild dpu-operator images")
@@ -320,11 +249,8 @@ def ExtraConfigDpuHost(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[s
     h = host.Host(node.node)
     h.ssh_connect("core")
 
-    vendor_plugin = init_vendor_plugin(h, node.kind or "")
     git_repo_setup(repo, branch="main", repo_wipe=False, url=DPU_OPERATOR_REPO)
     if cfg.rebuild_dpu_operators_images:
-        if isinstance(vendor_plugin, IpuPlugin):
-            vendor_plugin.build_push(lh, imgReg, cfg.ipu_plugin_sha, cfg.ipu_plugin_repo)
         dpu_operator_build_push(repo, cfg.builder_image, cfg.base_image)
     else:
         logger.info("Will not rebuild dpu-operator images")

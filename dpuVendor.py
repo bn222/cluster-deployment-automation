@@ -24,78 +24,61 @@ class VendorPlugin(ABC):
 
 
 class IpuPlugin(VendorPlugin):
+    P4_IMG = "wsfd-advnetlab217.anl.eng.bos2.dc.redhat.com:5000/intel-ipu-sdk:kubecon-aarch64"
+
     def __init__(self) -> None:
-        self._vsp_ds_manifest = "./manifests/dpu/dpu_p4_ds.yaml.j2"
-
-    @property
-    def vsp_ds_manifest(self) -> str:
-        return self._vsp_ds_manifest
-
-    def get_name_suffix(self, h: host.Host) -> str:
-        return h.run("uname -m").out
-
-    def import_from_url(self, url: str) -> None:
-        lh = host.LocalHost()
-        result = lh.run(f"podman load -q -i {url}")
-        tag = result.out.strip().split("\n")[-1].split(":")[-1]
-        lh.run_or_die(f"podman tag {tag} intel-ipuplugin:latest")
-
-    def push(self, img_reg: ImageRegistry) -> None:
-        lh = host.LocalHost()
-        lh.run(f"podman push intel-ipuplugin:latest {self.vsp_image_name(img_reg)}")
-
-    def vsp_image_name(self, img_reg: ImageRegistry) -> str:
-        return f"{img_reg.url()}/intel_vsp:dev"
+        self._p4_manifest = "./manifests/dpu/dpu_p4_ds.yaml.j2"
 
     def build_push_start(self, h: host.Host, client: K8sClient, imgReg: ImageRegistry, sha: str, repo: str) -> None:
-        return self.start(self.build_push(h, imgReg, sha, repo), client)
+        pass
 
-    def build_push(self, h: host.Host, imgReg: ImageRegistry, sha: str, repo: str) -> str:
-        logger.info("Building ipu-opi-plugin")
-        h.run("rm -rf /root/ipu-opi-plugins")
-        h.run_or_die(f"git clone {repo} /root/ipu-opi-plugins")
+    def start_p4_pod(self, acc: host.Host, client: K8sClient, image: str) -> None:
+        self.configure_p4_hugepages(acc)
 
-        logger.info(f"Will build ipu-opi-plugin from commit {sha}")
-        h.run_or_die(f"git -C /root/ipu-opi-plugins checkout {sha}")
-
-        fn = "/root/ipu-opi-plugins/ipu-plugin/images/Dockerfile"
-        golang_img = extractContainerImage(h.read_file(fn))
-        h.run_or_die(f"podman pull docker.io/library/{golang_img}")
-        if h.is_localhost():
-            env = os.environ.copy()
-            env["IMGTOOL"] = "podman"
-            env["P4_NAME"] = "fxp-net_linux-networking"
-            env["P4_DIR"] = "fxp-net_linux-networking"
-            ret = h.run("make -C /root/ipu-opi-plugins/ipu-plugin image", env=env)
-        else:
-            lh = host.LocalHost()
-            h.write("/run/user/0/containers/auth.json", lh.read_file("/run/user/0/containers/auth.json"))
-            ret = h.run("IMGTOOL=podman make -C /root/ipu-opi-plugins/ipu-plugin image")
-
-        if not ret.success():
-            logger.error_and_exit("Failed to build vsp images")
-        vsp_image = self.vsp_image_name(imgReg)
-        h.run_or_die(f"podman tag intel-ipuplugin:latest {vsp_image}")
-        h.run_or_die(f"podman push {vsp_image}")
-        # WA to ensure multiarch vsp image manifest is available
-        # push images with both the name expected by the dpu operator (so we can proceed with deploying host side)
-        # and the name expected by the manifest that we will build during the IPU deployment step
-        h.run_or_die(f"podman tag {vsp_image} {vsp_image}-{self.get_name_suffix(h)}")
-        h.run_or_die(f"podman push {vsp_image}-{self.get_name_suffix(h)}")
-        return vsp_image
-
-    def start(self, vsp_image: str, client: K8sClient) -> None:
-        self.render_dpu_vsp_ds_helper(vsp_image, "/tmp/vsp-ds.yaml")
-        client.oc("delete -f /tmp/vsp-ds.yaml")
-        client.oc_run_or_die("create -f /tmp/vsp-ds.yaml")
-
-    def render_dpu_vsp_ds_helper(self, ipu_plugin_image: str, outfilename: str) -> None:
-        with open(self.vsp_ds_manifest) as f:
+        logger.info("Manually starting P4 pod")
+        acc.run_or_die("mkdir -p /opt/p4/p4-cp-nws/var/run/openvswitch")  # WA https://issues.redhat.com/browse/IIC-421
+        with open(self._p4_manifest) as f:
             j2_template = jinja2.Template(f.read())
-            rendered = j2_template.render(ipu_plugin_image=ipu_plugin_image)
-            logger.info(rendered)
-        lh = host.LocalHost()
-        lh.write(outfilename, rendered)
+            rendered = j2_template.render(ipu_vsp_p4=image)
+            tmp_file = "/tmp/dpu_p4_ds.yaml"
+            with open(tmp_file, "w") as f:
+                f.write(rendered)
+
+        client.oc(f"delete -f {tmp_file}")
+        client.oc_run_or_die(f"create -f {tmp_file}")
+
+        # The vsp looks for the service provided by the p4 pod on localhost, make sure to create a service in OCP to expose it
+        client.oc_run_or_die("create -f manifests/dpu/p4_service.yaml")
+        client.wait_ds_running(ds="vsp-p4", namespace="default")
+
+    def configure_p4_hugepages(self, rh: host.Host) -> None:
+        logger.info("Configuring hugepages for p4 pod")
+        # The p4 container typically sets this up. If we are running the container as a daemonset in microshift, we need to
+        # ensure this resource is available prior to the pod starting to ensure dpdk is successful
+        rh.run("mkdir -p /dev/hugepages")
+        rh.run("mount -t hugetlbfs -o pagesize=2M none /dev/hugepages || true")
+        rh.run("echo 512 > /sys/devices/system/node/node0/hugepages/hugepages-2048kB/nr_hugepages")
+        # Restart microshift to make sure the resource is available
+        rh.run_or_die("systemctl restart microshift")
+
+    def start_p4_container(self, acc: host.Host, image: str) -> None:
+        uname = acc.run("uname -r").out.strip()
+        cmd = f"podman run -d --privileged -v /lib/modules/{uname}:/lib/modules/{uname} -v /opt/p4/p4-cp-nws/var/run:/opt/p4/p4-cp-nws/var/run -v /sys:/sys -v /dev:/dev -p 9559:9559 {image}"
+        acc.run_or_die("mkdir -p /opt/p4/p4-cp-nws/var/run/openvswitch")
+        acc.run_or_die(cmd)
+
+    def ensure_p4_pod_running(self, lh: host.Host, acc: host.Host, imgReg: ImageRegistry) -> None:
+        lh.run_or_die(f"podman pull --tls-verify=false {self.P4_IMG}")
+        local_img = f"{imgReg.url()}/intel-ipu-p4-sdk:kubecon-aarch64"
+        lh.run_or_die(f"podman tag {self.P4_IMG} {local_img}")
+        lh.run_or_die(f"podman push {local_img}")
+
+        # If p4 pod already exists from previous run, kill this first.
+        acc.run(f"podman ps --filter ancestor={local_img} --format '{{{{.ID}}}}' | xargs -r podman kill")
+
+        # Temporarily use a container until issue with p4 running as a pod is resolved: https://issues.redhat.com/browse/IIC-465
+        # start_p4_pod(acc, client, local_img)
+        self.start_p4_container(acc, local_img)
 
 
 class MarvellDpuPlugin(VendorPlugin):
