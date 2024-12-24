@@ -345,9 +345,24 @@ class AssistedInstallerService:
             logger.info(f'{name} already exists but status is {ai_pod["Status"]}')
             return True
 
-        if self.last_cm_is_same() and self.last_pod_is_same():
-            logger.info(f"{name} already running with the same configmap and pod config")
-            return False
+        # TODO: When race condition of cfg is fixed, move to debug logging
+        lh = host.LocalHost()
+        if not self.last_cm_is_same():
+            logger.info(f"{name} running with a different configmap")
+            if os.path.exists(self._last_run_cm()):
+                logger.info(f"Last running cm: {lh.read_file(self._last_run_cm())}")
+            else:
+                logger.info(f"No last running cm at {self._last_run_cm()}")
+            logger.info(f"new cm: {lh.read_file(self._config_map_path())}")
+            return True
+        if not self.last_pod_is_same():
+            logger.info(f"{name} running with a different pod config")
+            if os.path.exists(self._last_run_pod()):
+                logger.info(f"Last running pod config: {lh.read_file(self._last_run_pod())}")
+            else:
+                logger.info(f"No last running pod config at {self._last_run_pod()}")
+            logger.info(f"new pod config: {lh.read_file(self._pod_persistent_path())}")
+            return True
         logger.info(f"{name} already running with a different configmap")
         return True
 
