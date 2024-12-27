@@ -161,7 +161,7 @@ class VmClusterNode(ClusterNode):
         if ret.returncode != 0:
             logger.info(f"Finished starting VM {self.config.name}, cmd = {cmd}, ret = {ret}")
         else:
-            logger.info(f"Finished starting VM {self.config.name} without any errors")
+            logger.info(f"Finished starting VM {self.config.name} successfully")
         return ret
 
     def start(self, iso_or_image_path: str, executor: ThreadPoolExecutor) -> None:
