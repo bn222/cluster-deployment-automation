@@ -55,7 +55,7 @@ class AssistedInstallerService:
     CONTROLLER_IMAGE = "registry.redhat.io/rhai-tech-preview/assisted-installer-reporter-rhel8:v1.0.0-425"
     AGENT_DOCKER_IMAGE = "registry.redhat.io/rhai-tech-preview/assisted-installer-agent-rhel8:v1.0.0-328"
 
-    def __init__(self, version: str, ip: str, proxy: Optional[str] = None, noproxy: Optional[str] = None, branch: str = "master"):
+    def __init__(self, working_dir: str, version: str, ip: str, proxy: Optional[str] = None, noproxy: Optional[str] = None, branch: str = "master"):
         self._version = version
         self._ip = ip
         self._proxy = proxy
@@ -65,8 +65,8 @@ class AssistedInstallerService:
         pod_file = f"{base_url}/deploy/podman/pod-persistent.yml"
         self.podConfig = load_url_or_file(pod_config_url)
         self.podFile = load_url_or_file(pod_file)
-        self.workdir = os.path.join(os.getcwd(), "build")
-
+        self.workdir = working_dir
+ 
     def _configure(self) -> None:
         os.makedirs(self.workdir, exist_ok=True)
         with open(self._config_map_path(), 'w') as out_configmap:
@@ -363,8 +363,8 @@ class AssistedInstallerService:
                 logger.info(f"No last running pod config at {self._last_run_pod()}")
             logger.info(f"new pod config: {lh.read_file(self._pod_persistent_path())}")
             return True
-        logger.info(f"{name} already running with a different configmap")
-        return True
+        logger.info(f"{name} already runnign with the same configmap and pod config")
+        return False
 
     def _ensure_pod_started(self, force: bool) -> None:
         if self.stop_needed(force):
