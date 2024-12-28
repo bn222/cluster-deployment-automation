@@ -531,7 +531,7 @@ class ClusterDeployer(BaseDeployer):
 
         for bm in self._all_hosts:
             for k8s_node in bm.k8s_worker_nodes:
-                info = self._ai.get_ai_host_id_by_ip(infra_env, k8s_node.ip())
+                info = self._ai.get_ai_host_by_ip(k8s_node.ip())
                 if info is not None:
                     self._ai.update_host(info.id, {"name": k8s_node.config.name})
                     logger.info(f"renamed {k8s_node.config.name}")
