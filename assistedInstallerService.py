@@ -31,6 +31,10 @@ def hash_string(input_string: str) -> str:
     return md5_hash.hexdigest()
 
 
+def tmp_file() -> IO[str]:
+    return tempfile.NamedTemporaryFile(delete=True, mode='w+')
+
+
 """
 Assisted service is an utility to deploy clusters. The Git repository is
 available here: https://github.com/openshift/assisted-service
@@ -367,11 +371,7 @@ class AssistedInstallerService:
             logger.info("Starting assisted-installer.")
             self._play_kube(pod_labeled, cm)
 
-
     def _play_kube(self, pod: dict[str, Any], cm: dict[str, Any]) -> host.Result:
-        def tmp_file() -> IO[str]:
-            return tempfile.NamedTemporaryFile(delete=True, mode='w+')
-
         with tmp_file() as pod_file, tmp_file() as cm_file:
             pod_file.write(json.dumps(pod))
             pod_file.flush()
@@ -423,7 +423,7 @@ class AssistedInstallerService:
 
         lh = host.LocalHost()
 
-        with tempfile.NamedTemporaryFile(delete=True, mode='w+') as pod_file:
+        with tmp_file() as pod_file:
             file_contents = self._customized_pod_persistent()
             yaml.dump(file_contents, pod_file, default_flow_style=False)
             pod_file.flush()
