@@ -6,6 +6,7 @@ from typing import Optional
 from typing import Union
 from typing import Sequence
 from typing import Any
+from typing import IO
 import yaml
 import requests
 from requests import get as get_url
@@ -368,7 +369,7 @@ class AssistedInstallerService:
 
 
     def _play_kube(self, pod: dict[str, Any], cm: dict[str, Any]) -> host.Result:
-        def tmp_file() -> tempfile._TemporaryFileWrapper:
+        def tmp_file() -> IO[str]:
             return tempfile.NamedTemporaryFile(delete=True, mode='w+')
 
         with tmp_file() as pod_file, tmp_file() as cm_file:
