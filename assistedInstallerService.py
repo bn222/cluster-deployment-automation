@@ -1,13 +1,12 @@
-import os
-import shutil
 import json
 import time
 import sys
 import re
-import filecmp
 from typing import Optional
 from typing import Union
 from typing import Sequence
+from typing import Any
+from typing import IO
 import yaml
 import requests
 from requests import get as get_url
@@ -15,12 +14,25 @@ from logger import logger
 import host
 import common
 from libvirt import Libvirt
+import tempfile
+import hashlib
+import copy
 
 
 def load_url_or_file(url_or_file: str) -> str:
     if url_or_file.startswith("http"):
         return get_url(url_or_file).text
     return open(url_or_file).read()
+
+
+def hash_string(input_string: str) -> str:
+    md5_hash = hashlib.md5()
+    md5_hash.update(input_string.encode('utf-8'))
+    return md5_hash.hexdigest()
+
+
+def tmp_file() -> IO[str]:
+    return tempfile.NamedTemporaryFile(delete=True, mode='w+')
 
 
 """
@@ -66,26 +78,14 @@ class AssistedInstallerService:
         self.podConfig = load_url_or_file(pod_config_url)
         self.podFile = load_url_or_file(pod_file)
         self.workdir = working_dir
- 
-    def _configure(self) -> None:
-        os.makedirs(self.workdir, exist_ok=True)
-        with open(self._config_map_path(), 'w') as out_configmap:
-            yaml.dump(self._customized_configmap(), out_configmap, sort_keys=False)
 
-        with open(self._pod_persistent_path(), 'w') as out_pod:
-            yaml.dump(self._customized_pod_persistent(), out_pod, default_flow_style=False)
-
-    def _config_map_path(self) -> str:
-        return f'{self.workdir}/configmap.yml'
-
-    def _pod_persistent_path(self) -> str:
-        return f'{self.workdir}/pod-persistent.yml'
-
-    def _last_run_cm(self) -> str:
-        return f'{self.workdir}/configmap-last.yml'
-
-    def _last_run_pod(self) -> str:
-        return f'{self.workdir}/pod-persistent-last.yml'
+    def _add_hash_labels(self, pod: dict[str, Any], cm: dict[str, Any]) -> dict[str, Any]:
+        ret = copy.deepcopy(pod)
+        ret['metadata']['labels'] = {
+            'cda-pod/hash': hash_string(yaml.dump(pod)),
+            'cda-cm/hash': hash_string(yaml.dump(cm)),
+        }
+        return ret
 
     def _strip_unused_versions(self, versions: str) -> str:
         def major_minor(v: str) -> str:
@@ -130,7 +130,7 @@ class AssistedInstallerService:
             y["data"]["no_proxy"] = self._noproxy
         return y
 
-    def _customized_pod_persistent(self) -> dict[str, str]:
+    def _customized_pod_persistent(self) -> dict[str, Any]:
         y = yaml.safe_load(self.podFile)
         if not isinstance(y, dict):
             logger.error(f"Failed to load yaml: {self.podFile}")
@@ -142,7 +142,6 @@ class AssistedInstallerService:
             if image.startswith('quay.io/edge-infrastructure/assisted'):
                 container['image'] = image.replace(':latest', f':{AssistedInstallerService.SAAS_VERSION}')
                 container['securityContext'] = {"runAsUser": 0}
-
         return y
 
     def prep_version(self, version: str) -> dict[str, Union[str, Sequence[str]]]:
@@ -325,13 +324,7 @@ class AssistedInstallerService:
     def pod_running(self) -> bool:
         return bool(self.find_pod("assisted-installer"))
 
-    def last_cm_is_same(self) -> bool:
-        return os.path.exists(self._last_run_cm()) and filecmp.cmp(self._config_map_path(), self._last_run_cm())
-
-    def last_pod_is_same(self) -> bool:
-        return os.path.exists(self._last_run_pod()) and filecmp.cmp(self._pod_persistent_path(), self._last_run_pod())
-
-    def stop_needed(self, force: bool) -> bool:
+    def stop_needed(self, pod: dict[str, Any], cm: dict[str, Any], force: bool) -> bool:
         name = "assisted-installer"
         ai_pod = self.find_pod(name)
         if not ai_pod:
@@ -345,40 +338,47 @@ class AssistedInstallerService:
             logger.info(f'{name} already exists but status is {ai_pod["Status"]}')
             return True
 
-        # TODO: When race condition of cfg is fixed, move to debug logging
         lh = host.LocalHost()
-        if not self.last_cm_is_same():
-            logger.info(f"{name} running with a different configmap")
-            if os.path.exists(self._last_run_cm()):
-                logger.info(f"Last running cm: {lh.read_file(self._last_run_cm())}")
-            else:
-                logger.info(f"No last running cm at {self._last_run_cm()}")
-            logger.info(f"new cm: {lh.read_file(self._config_map_path())}")
+        j = json.loads(lh.run("podman inspect assisted-installer").out)
+        if "Labels" not in j[0]:
+            logger.warn(f"{name} running without label, stop needed")
             return True
-        if not self.last_pod_is_same():
-            logger.info(f"{name} running with a different pod config")
-            if os.path.exists(self._last_run_pod()):
-                logger.info(f"Last running pod config: {lh.read_file(self._last_run_pod())}")
-            else:
-                logger.info(f"No last running pod config at {self._last_run_pod()}")
-            logger.info(f"new pod config: {lh.read_file(self._pod_persistent_path())}")
+        labels = j[0]["Labels"]
+
+        pod_hash = hash_string(yaml.dump(pod))
+        cm_hash = hash_string(yaml.dump(cm))
+
+        if labels["cda-pod/hash"] != pod_hash:
+            logger.info(f"{name} pod running with different pod hash")
+            logger.info(pod_hash)
+            logger.info(labels["cda-pod/hash"])
             return True
-        logger.info(f"{name} already runnign with the same configmap and pod config")
+        if labels["cda-cm/hash"] != cm_hash:
+            logger.info(f"{name} pod running with different configmap hash")
+            return True
+        logger.info(f"{name} already running with a the same pod and configmap")
         return False
 
     def _ensure_pod_started(self, force: bool) -> None:
-        if self.stop_needed(force):
+        cm = self._customized_configmap()
+        pod = self._customized_pod_persistent()
+        pod_labeled = self._add_hash_labels(pod, cm)
+
+        if self.stop_needed(pod, cm, force):
             self.stop()
 
         if not self.pod_running():
             logger.info("Starting assisted-installer.")
-            shutil.copy(self._config_map_path(), self._last_run_cm())
-            shutil.copy(self._pod_persistent_path(), self._last_run_pod())
-            self._play_kube(self._last_run_cm(), self._last_run_pod())
+            self._play_kube(pod_labeled, cm)
 
-    def _play_kube(self, cm: str, pod: str) -> host.Result:
-        lh = host.LocalHost()
-        r = lh.run_or_die(f"podman play kube --configmap {cm} {pod}")
+    def _play_kube(self, pod: dict[str, Any], cm: dict[str, Any]) -> host.Result:
+        with tmp_file() as pod_file, tmp_file() as cm_file:
+            pod_file.write(json.dumps(pod))
+            pod_file.flush()
+            cm_file.write(json.dumps(cm))
+            cm_file.flush()
+            lh = host.LocalHost()
+            r = lh.run_or_die(f"podman play kube --configmap {cm_file.name} {pod_file.name}")
         return r
 
     def _ensure_libvirt_running(self) -> None:
@@ -421,13 +421,14 @@ class AssistedInstallerService:
         name = 'assisted-installer'
         logger.info(f"Tearing down {name}.")
 
-        pod_yml = self._pod_persistent_path()
-        if os.path.exists(self._last_run_pod()):
-            pod_yml = self._last_run_pod()
-
         lh = host.LocalHost()
 
-        ret = lh.run(f"podman kube down --force {pod_yml}")
+        with tmp_file() as pod_file:
+            file_contents = self._customized_pod_persistent()
+            yaml.dump(file_contents, pod_file, default_flow_style=False)
+            pod_file.flush()
+            ret = lh.run(f"podman kube down --force {pod_file.name}")
+
         if ret.returncode:
             # Older podman may not support 'down' or '--force'.
             if any(x in ret.err for x in ['unrecognized', 'unknown']):
@@ -440,7 +441,6 @@ class AssistedInstallerService:
         lh.run("podman volume rm ai-service-data")
 
     def start(self, force: bool = False) -> None:
-        self._configure()
         self._ensure_pod_started(force)
         self.wait_for_api()
 
