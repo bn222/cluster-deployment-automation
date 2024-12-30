@@ -355,8 +355,10 @@ class AssistedInstallerService:
             return True
         if labels["cda-cm/hash"] != cm_hash:
             logger.info(f"{name} pod running with different configmap hash")
+            logger.info(f"New configmap hashmap is {cm_hash}")
+            logger.info(f"Old configmap hashmap is {labels['cda-cm/hash']}")
             return True
-        logger.info(f"{name} already running with a the same pod and configmap")
+        logger.info(f"{name} already running with the same pod and configmap")
         return False
 
     def _ensure_pod_started(self, force: bool) -> None:
