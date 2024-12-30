@@ -294,7 +294,7 @@ nohup sh -c '
         try:
             response = requests.post(url, json=data, auth=(self.user, self.password), verify=False)
             response.raise_for_status()
-            logger.info(f"HTTP Code: {response.status_code}")
+            logger.debug(f"HTTP Code: {response.status_code}")
         except requests.exceptions.RequestException as e:
             logger.error(f"Request failed: {e}")
 
@@ -302,7 +302,7 @@ nohup sh -c '
         try:
             response = requests.patch(url, json=data, auth=(self.user, self.password), verify=False)
             response.raise_for_status()
-            logger.info(f"HTTP Code: {response.status_code}")
+            logger.debug(f"HTTP Code: {response.status_code}")
         except requests.exceptions.RequestException as e:
             logger.error(f"Request failed: {e}")
 
