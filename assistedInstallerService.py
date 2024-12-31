@@ -67,7 +67,7 @@ class AssistedInstallerService:
     CONTROLLER_IMAGE = "registry.redhat.io/rhai-tech-preview/assisted-installer-reporter-rhel8:v1.0.0-425"
     AGENT_DOCKER_IMAGE = "registry.redhat.io/rhai-tech-preview/assisted-installer-agent-rhel8:v1.0.0-328"
 
-    def __init__(self, working_dir: str, version: str, ip: str, proxy: Optional[str] = None, noproxy: Optional[str] = None, branch: str = "master"):
+    def __init__(self, version: str, ip: str, proxy: Optional[str] = None, noproxy: Optional[str] = None, branch: str = "master"):
         self._version = version
         self._ip = ip
         self._proxy = proxy
@@ -77,7 +77,6 @@ class AssistedInstallerService:
         pod_file = f"{base_url}/deploy/podman/pod-persistent.yml"
         self.podConfig = load_url_or_file(pod_config_url)
         self.podFile = load_url_or_file(pod_file)
-        self.workdir = working_dir
 
     def _add_hash_labels(self, pod: dict[str, Any], cm: dict[str, Any]) -> dict[str, Any]:
         ret = copy.deepcopy(pod)
