@@ -338,7 +338,7 @@ class AssistedInstallerService:
             return True
 
         lh = host.LocalHost()
-        j = json.loads(lh.run(f"podman inspect assisted-installer").out)
+        j = json.loads(lh.run("podman inspect assisted-installer").out)
         if "Labels" not in j[0]:
             logger.warn(f"{name} running without label, stop needed")
             return True
