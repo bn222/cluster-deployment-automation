@@ -5,7 +5,6 @@ from k8sClient import K8sClient
 from logger import logger
 from abc import ABC, abstractmethod
 from imageRegistry import ImageRegistry
-import os
 
 
 class VendorPlugin(ABC):
