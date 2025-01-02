@@ -12,7 +12,6 @@ import imageRegistry
 from common import git_repo_setup
 from dpuVendor import init_vendor_plugin, IpuPlugin
 from imageRegistry import ImageRegistry
-import jinja2
 import re
 
 DPU_OPERATOR_REPO = "https://github.com/openshift/dpu-operator.git"
