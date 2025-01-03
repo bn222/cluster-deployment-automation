@@ -252,23 +252,10 @@ def ExtraConfigDpuHost(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[s
         logger.info("Will not rebuild dpu-operator images")
     dpu_operator_start(client, repo)
 
-    def helper(h: host.Host, node: NodeConfig) -> Optional[host.Result]:
-        # Label the node
-        logger.info(f"labeling node {h.hostname()} dpu=true")
-        client.oc_run_or_die(f"label no {e.name} dpu=true")
-        return None
-
-    executor = ThreadPoolExecutor(max_workers=len(cc.workers))
-    f = []
     # Assuming that all workers have a DPU
     for e in cc.workers:
-        logger.info(f"Calling helper function for node {e.node}")
-        bmc = BMC.from_bmc(e.bmc, e.bmc_user, e.bmc_password)
-        h = host.Host(e.node, bmc)
-        f.append(executor.submit(helper, h, e))
-
-    for thread in f:
-        logger.info(thread.result())
+        logger.info(f"labeling node {e.name} dpu=true")
+        client.oc_run_or_die(f"label no {e.name} dpu=true")
 
     logger.info("Verified idpf is providing net-devs on DPU worker nodes")
 
