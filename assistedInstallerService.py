@@ -344,20 +344,20 @@ class AssistedInstallerService:
             return True
         labels = j[0]["Labels"]
 
-        pod_hash = hash_string(yaml.dump(pod))
         if "cda-pod/hash" not in labels:
             logger.warn(f"{name} running without label cda-pod/hash, stop needed")
             return True
+        pod_hash = hash_string(yaml.dump(pod))
         if labels["cda-pod/hash"] != pod_hash:
             logger.info(f"{name} pod running with different pod hash")
-            logger.info(pod_hash)
-            logger.info(labels["cda-pod/hash"])
+            logger.info(f"New configmap hashmap is {pod_hash}")
+            logger.info(f"Old configmap hashmap is {labels['cda-pod/hash']}")
             return True
 
-        cm_hash = hash_string(yaml.dump(cm))
         if "cda-cm/hash" not in labels:
             logger.warn(f"{name} running without label cda-cm/hash, stop needed")
             return True
+        cm_hash = hash_string(yaml.dump(cm))
         if labels["cda-cm/hash"] != cm_hash:
             logger.info(f"{name} pod running with different configmap hash")
             logger.info(f"New configmap hashmap is {cm_hash}")
