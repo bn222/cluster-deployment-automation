@@ -57,8 +57,6 @@ class ExtraConfigArgs:
 
     dpu_operator_path: str = "/root/dpu-operator"
 
-    rebuild_dpu_operators_images: bool = True
-
     dpu_net_interface: Optional[str] = "ens2f0"
 
     builder_image: str = ""

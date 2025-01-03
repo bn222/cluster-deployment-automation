@@ -163,15 +163,12 @@ def ExtraConfigDpu(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, 
     acc.run("systemctl disable firewalld")
 
     git_repo_setup(repo, repo_wipe=False, url=DPU_OPERATOR_REPO)
-    if cfg.rebuild_dpu_operators_images:
-        vendor_plugin = init_vendor_plugin(acc, dpu_node.kind or "")
-        # TODO: Remove when this container is properly started by the vsp
-        # We need to manually start the p4 sdk container currently for the IPU plugin
-        vendor_plugin.build_push_start(acc, imgReg)
+    vendor_plugin = init_vendor_plugin(acc, dpu_node.kind or "")
+    # TODO: Remove when this container is properly started by the vsp
+    # We need to manually start the p4 sdk container currently for the IPU plugin
+    vendor_plugin.build_push_start(acc, imgReg)
 
-        dpu_operator_build_push(repo, cfg.builder_image, cfg.base_image)
-    else:
-        logger.info("Will not rebuild dpu-operator images")
+    dpu_operator_build_push(repo, cfg.builder_image, cfg.base_image)
     dpu_operator_start(client, repo)
 
     # Deploy dpu daemon
@@ -200,10 +197,7 @@ def ExtraConfigDpuHost(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[s
     h.ssh_connect("core")
 
     git_repo_setup(repo, branch="main", repo_wipe=False, url=DPU_OPERATOR_REPO)
-    if cfg.rebuild_dpu_operators_images:
-        dpu_operator_build_push(repo, cfg.builder_image, cfg.base_image)
-    else:
-        logger.info("Will not rebuild dpu-operator images")
+    dpu_operator_build_push(repo, cfg.builder_image, cfg.base_image)
     dpu_operator_start(client, repo)
 
     # Assuming that all workers have a DPU
