@@ -10,7 +10,7 @@ from logger import logger
 from clustersConfig import ExtraConfigArgs
 import imageRegistry
 from common import git_repo_setup
-from dpuVendor import init_vendor_plugin, IpuPlugin
+from dpuVendor import init_vendor_plugin
 from imageRegistry import ImageRegistry
 import re
 
@@ -208,16 +208,13 @@ def ExtraConfigDpu(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, 
     acc.run("systemctl stop firewalld")
     acc.run("systemctl disable firewalld")
 
-    vendor_plugin = init_vendor_plugin(acc, dpu_node.kind or "")
-    if isinstance(vendor_plugin, IpuPlugin):
-        # TODO: Remove when this container is properly started by the vsp
-        # We need to manually start the p4 sdk container currently for the IPU plugin
-        vendor_plugin.ensure_p4_pod_running(lh, acc, imgReg)
-
     git_repo_setup(repo, repo_wipe=False, url=DPU_OPERATOR_REPO)
     if cfg.rebuild_dpu_operators_images:
-        # Build vsp
         vendor_plugin = init_vendor_plugin(acc, dpu_node.kind or "")
+        # TODO: Remove when this container is properly started by the vsp
+        # We need to manually start the p4 sdk container currently for the IPU plugin
+        vendor_plugin.build_push_start(acc, imgReg)
+
         dpu_operator_build_push(repo, cfg.builder_image, cfg.base_image)
     else:
         logger.info("Will not rebuild dpu-operator images")

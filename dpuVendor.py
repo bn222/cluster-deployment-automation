@@ -9,7 +9,7 @@ from imageRegistry import ImageRegistry
 
 class VendorPlugin(ABC):
     @abstractmethod
-    def build_push_start(self, h: host.Host, client: K8sClient, imgReg: ImageRegistry, sha: str, repo: str) -> None:
+    def build_push_start(self, acc: host.Host, imgReg: ImageRegistry) -> None:
         raise NotImplementedError("Must implement build_and_start() for VSP")
 
     @staticmethod
@@ -29,8 +29,19 @@ class IpuPlugin(VendorPlugin):
     def __init__(self) -> None:
         self._p4_manifest = "./manifests/dpu/dpu_p4_ds.yaml.j2"
 
-    def build_push_start(self, h: host.Host, client: K8sClient, imgReg: ImageRegistry, sha: str, repo: str) -> None:
-        pass
+    def build_push_start(self, acc: host.Host, imgReg: ImageRegistry) -> None:
+        lh = host.LocalHost()
+        lh.run_or_die(f"podman pull --tls-verify=false {self.P4_IMG}")
+        local_img = f"{imgReg.url()}/intel-ipu-p4-sdk:kubecon-aarch64"
+        lh.run_or_die(f"podman tag {self.P4_IMG} {local_img}")
+        lh.run_or_die(f"podman push {local_img}")
+
+        # If p4 pod already exists from previous run, kill this first.
+        acc.run(f"podman ps --filter ancestor={local_img} --format '{{{{.ID}}}}' | xargs -r podman kill")
+
+        # Temporarily use a container until issue with p4 running as a pod is resolved: https://issues.redhat.com/browse/IIC-465
+        # start_p4_pod(acc, client, local_img)
+        self.start_p4_container(acc, local_img)
 
     def start_p4_pod(self, acc: host.Host, client: K8sClient, image: str) -> None:
         self.configure_p4_hugepages(acc)
@@ -67,25 +78,12 @@ class IpuPlugin(VendorPlugin):
         acc.run_or_die("mkdir -p /opt/p4/p4-cp-nws/var/run/openvswitch")
         acc.run_or_die(cmd)
 
-    def ensure_p4_pod_running(self, lh: host.Host, acc: host.Host, imgReg: ImageRegistry) -> None:
-        lh.run_or_die(f"podman pull --tls-verify=false {self.P4_IMG}")
-        local_img = f"{imgReg.url()}/intel-ipu-p4-sdk:kubecon-aarch64"
-        lh.run_or_die(f"podman tag {self.P4_IMG} {local_img}")
-        lh.run_or_die(f"podman push {local_img}")
-
-        # If p4 pod already exists from previous run, kill this first.
-        acc.run(f"podman ps --filter ancestor={local_img} --format '{{{{.ID}}}}' | xargs -r podman kill")
-
-        # Temporarily use a container until issue with p4 running as a pod is resolved: https://issues.redhat.com/browse/IIC-465
-        # start_p4_pod(acc, client, local_img)
-        self.start_p4_container(acc, local_img)
-
 
 class MarvellDpuPlugin(VendorPlugin):
     def __init__(self) -> None:
         pass
 
-    def build_push_start(self, h: host.Host, client: K8sClient, imgReg: ImageRegistry, sha: str, repo: str) -> None:
+    def build_push_start(self, acc: host.Host, imgReg: ImageRegistry) -> None:
         # TODO: https://github.com/openshift/dpu-operator/pull/82
         logger.warning("Setting up Marvell DPU not yet implemented")
 
