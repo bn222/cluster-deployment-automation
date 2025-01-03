@@ -232,7 +232,7 @@ class VirBridge:
 
     def eth_address(self) -> str:
         max_tries = 3
-        logger.info(f"Will try {max_tries} to get the virbr0 ethernet address on {self.hostconn.hostname()}")
+        logger.info(f"Will try {max_tries} times to get the virbr0 ethernet address on {self.hostconn.hostname()}")
 
         for i in range(max_tries):
             logger.debug(f"Trying to get the virbr0 ethernet address on {self.hostconn.hostname()} (try #{i})")
