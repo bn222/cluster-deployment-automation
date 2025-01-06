@@ -1,6 +1,7 @@
 import sys
 import os
 import gspread
+import tenacity
 from oauth2client.service_account import ServiceAccountCredentials
 from logger import logger
 
@@ -19,6 +20,7 @@ class ClusterInfo:
         self.bmcs = []  # type: list[str]
 
 
+@tenacity.retry(wait=tenacity.wait_fixed(10), stop=tenacity.stop_after_attempt(5))
 def read_sheet() -> list[dict[str, str]]:
     logger.info("Downloading sheet from Google")
     scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
