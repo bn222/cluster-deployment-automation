@@ -19,4 +19,3 @@ clusters:
       activation_key: "${ACTIVATION_KEY}"
     - name: "microshift"
     - name: "dpu_operator_dpu"
-      rebuild_dpu_operators_images: false
