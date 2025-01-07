@@ -149,3 +149,11 @@ class ImageRegistry:
         data = {"spec": {"additionalTrustedCA": {"name": cm_name}}}
 
         client.oc(f"patch image.config.openshift.io/cluster --patch {shlex.quote(json.dumps(data))} --type=merge")
+
+
+def ensure_local_registry_running(rsh: host.Host, delete_all: bool = False) -> ImageRegistry:
+    logger.info(f"Ensuring local registry running on {rsh.hostname()}")
+    imgReg = ImageRegistry(rsh)
+    imgReg.ensure_running(delete_all=delete_all)
+    imgReg.trust(host.LocalHost())
+    return imgReg
