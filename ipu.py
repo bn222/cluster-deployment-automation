@@ -66,6 +66,7 @@ class IPUClusterNode(ClusterNode):
     def _wait_for_acc_with_retry(self, acc: host.Host, timeout: int = 1200) -> None:
         # Typically if the acc booted properly it will take < 20 minutes to come up (including the 10 min sleep we do during boot)
         logger.info("Waiting for ACC to come up")
+        failures = 0
         while True:
             if acc.ping():
                 logger.info("ACC responded to ping, connecting")
@@ -73,6 +74,9 @@ class IPUClusterNode(ClusterNode):
             time.sleep(20)
             timeout -= 20
             if timeout <= 0:
+                failures += 1
+                if failures == 5:
+                    logger.error_and_exit("Too many failures trying to get ACC up")
                 logger.info("ACC has not responded in a reasonable amount of time, rebooting IMC")
                 imc = host.RemoteHost(self.config.bmc)
                 imc.ssh_connect(self.config.bmc_user, self.config.bmc_password)
