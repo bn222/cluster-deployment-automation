@@ -55,13 +55,6 @@ def ensure_go_installed(host: host.Host) -> None:
     host.run_or_die("sh -c 'go version'")
 
 
-def copy_local_registry_certs(host: host.Host, path: str) -> None:
-    directory = "/root/.local-container-registry/certs"
-    files = os.listdir(directory)
-    for file in files:
-        host.copy_to(f"{directory}/{file}", f"{path}/{file}")
-
-
 def find_dockerfiles(repo: str) -> List[str]:
     if not os.path.exists(repo):
         logger.error_and_exit(f"The specified path '{repo}' does not exist.")
