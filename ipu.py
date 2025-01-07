@@ -168,6 +168,7 @@ if [ -d "$WORKDIR" ]; then
 fi
 cd $CURDIR
 date -s "Thu Sep 19 08:18:22 AM EDT 2024"
+cp /work/redfish/redfish-1.8-iso-filesize-hotfix /usr/bin/ipu-redfish-server
 cp /work/redfish/certs/server.key /etc/pki/ca-trust/source/anchors/
 cp /work/redfish/certs/server.crt /etc/pki/ca-trust/source/anchors/
 rm -rf /home/root/MtRemoteRunner # workaround to free up some space: https://issues.redhat.com/browse/IIC-372
@@ -199,6 +200,10 @@ nohup sh -c '
         imc.run("mkdir -pm 0700 /work/redfish/certs")
         imc.run("chmod 0700 /work/redfish")
         imc.run("chmod 0700 /work/redfish/certs")
+
+        # WA: default MeV 1.8 Redfish silently fails when booting isos above 9.5GB, install MeV 1.20 Redfish binary in the meantime
+        server.copy_from("/root/webserver/redfish-1.8-iso-filesize-hotfix", "/tmp/redfish-1.8-iso-filesize-hotfix")
+        imc.copy_to("/tmp/redfish-1.8-iso-filesize-hotfix", "/work/redfish/redfish-1.8-iso-filesize-hotfix")
         imc.write("/work/redfish/certs/server.crt", server.read_file("/root/.local-container-registry/domain.crt"))
         imc.write("/work/redfish/certs/server.key", server.read_file("/root/.local-container-registry/domain.key"))
 
