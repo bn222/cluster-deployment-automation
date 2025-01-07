@@ -130,24 +130,10 @@ def dpu_operator_start(client: K8sClient, repo: str) -> None:
     client.oc_run_or_die("wait --for=condition=Ready pod --all -n openshift-dpu-operator --timeout=5m")
 
 
-def wait_for_microshift_restart(client: K8sClient) -> None:
-    ret = client.oc("wait --for=condition=Ready pod --all --all-namespaces --timeout=3m")
-    retries = 3
-    while not ret.success():
-        if retries == 0:
-            logger.error_and_exit(f"Microshift failed to restart: \n err: {ret.err} {ret.returncode}")
-        logger.info(f"Waiting for pods to come up failed with err {ret.err} retrying")
-        time.sleep(20)
-        ret = client.oc("wait --for=condition=Ready pod --all --all-namespaces --timeout=3m")
-        retries -= 1
-    logger.info("Microshift restarted")
-
-
 def ExtraConfigDpu(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, Future[Optional[host.Result]]]) -> None:
     [f.result() for (_, f) in futures.items()]
     logger.info("Running post config step to start DPU operator on IPU")
 
-    repo = cfg.resolve_dpu_operator_path()
     dpu_node = cc.masters[0]
     assert dpu_node.ip is not None
     acc = host.Host(dpu_node.ip)
@@ -162,12 +148,13 @@ def ExtraConfigDpu(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, 
     acc.run("systemctl stop firewalld")
     acc.run("systemctl disable firewalld")
 
-    git_repo_setup(repo, repo_wipe=False, url=DPU_OPERATOR_REPO)
     vendor_plugin = init_vendor_plugin(acc, dpu_node.kind or "")
     # TODO: Remove when this container is properly started by the vsp
     # We need to manually start the p4 sdk container currently for the IPU plugin
     vendor_plugin.build_push_start(acc, imgReg)
 
+    repo = cfg.resolve_dpu_operator_path()
+    git_repo_setup(repo, repo_wipe=False, url=DPU_OPERATOR_REPO)
     dpu_operator_build_push(repo, cfg.builder_image, cfg.base_image)
     dpu_operator_start(client, repo)
 
@@ -185,7 +172,6 @@ def ExtraConfigDpuHost(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[s
     logger.info("Running post config step to start DPU operator on Host")
     lh = host.LocalHost()
     client = K8sClient(cc.kubeconfig)
-    repo = cfg.resolve_dpu_operator_path()
 
     imgReg = _ensure_local_registry_running(lh, delete_all=False)
     imgReg.ocp_trust(client)
@@ -196,6 +182,7 @@ def ExtraConfigDpuHost(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[s
     h = host.Host(node.node)
     h.ssh_connect("core")
 
+    repo = cfg.resolve_dpu_operator_path()
     git_repo_setup(repo, branch="main", repo_wipe=False, url=DPU_OPERATOR_REPO)
     dpu_operator_build_push(repo, cfg.builder_image, cfg.base_image)
     dpu_operator_start(client, repo)

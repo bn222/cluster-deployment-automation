@@ -11,6 +11,20 @@ from jinja2 import Template
 from clustersConfig import NodeConfig
 import common
 from bmc import BMC
+from k8sClient import K8sClient
+
+
+def wait_for_microshift_restart(client: K8sClient) -> None:
+    ret = client.oc("wait --for=condition=Ready pod --all --all-namespaces --timeout=3m")
+    retries = 3
+    while not ret.success():
+        if retries == 0:
+            logger.error_and_exit(f"Microshift failed to restart: \n err: {ret.err} {ret.returncode}")
+        logger.info(f"Waiting for pods to come up failed with err {ret.err} retrying")
+        time.sleep(20)
+        ret = client.oc("wait --for=condition=Ready pod --all --all-namespaces --timeout=3m")
+        retries -= 1
+    logger.info("Microshift restarted")
 
 
 # cleans microshift artifacts from previous installation
