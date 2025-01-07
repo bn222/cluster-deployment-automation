@@ -51,8 +51,15 @@ class Libvirt:
     def _enable_modular(self, service: str) -> None:
         if not self._service_is_enabled(f"virt{service}d.service"):
             self.hostconn.run_or_die(f"systemctl enable virt{service}d.service")
-            self._run_per_suffix("systemctl enable", f"virt{service}d", MODULAR_SOCKET_SUFFIXES)
-            self._run_per_suffix("systemctl start", f"virt{service}d", MODULAR_SOCKET_SUFFIXES)
+
+        for suffix in MODULAR_SOCKET_SUFFIXES:
+            socket_service = f"virt{service}d{suffix}"
+
+            if not self._service_is_enabled(socket_service):
+                self.hostconn.run_or_die(f"systemctl enable {socket_service}")
+
+            if not self._service_is_active(socket_service):
+                self.hostconn.run_or_die(f"systemctl start {socket_service}")
 
     def _run_per_suffix(self, cmd: str, service: str, suffixes: list[str]) -> None:
         for suffix in suffixes:
