@@ -15,10 +15,6 @@ class StopWatch:
         self.end_time = time.time()
 
     def duration(self) -> str:
-        if self.start_time is None:
-            raise ValueError("Timer not started")
-        if self.end_time is None:
-            raise ValueError("Timer not stopped")
         duration = self.end_time - self.start_time
         days = int(duration // 86400)
         hours = int((duration % 86400) // 3600)
