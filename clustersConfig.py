@@ -374,20 +374,19 @@ class ClustersConfig:
         if len(deprecated):
             sys.exit(-1)
 
-    def autodetect_external_port(self) -> None:
-        candidate = common.route_to_port(host.LocalHost(), "default")
-        if candidate is None:
-            logger.error("Failed to found port from default route")
-            sys.exit(-1)
-
-        self.external_port = candidate
-
-    def prepare_external_port(self) -> None:
-        if self.external_port == "auto":
-            self.autodetect_external_port()
-
     def get_external_port(self) -> str:
-        return self.external_port
+        def autodetect_external_port() -> str:
+            candidate = common.route_to_port(host.LocalHost(), "default")
+            if candidate is None:
+                logger.error("Failed to found port from default route")
+                sys.exit(-1)
+
+            return candidate
+
+        if self.external_port is None:
+            return autodetect_external_port()
+        else:
+            return self.external_port
 
     def validate_node_ips(self) -> None:
         def validate_node_ip(n: NodeConfig) -> bool:

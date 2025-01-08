@@ -70,10 +70,6 @@ def ExtraConfigMicroshift(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dic
     [f.result() for (_, f) in futures.items()]
     logger.info("Running post config step to start Microshift on the IPU")
 
-    # Validate args
-
-    cc.prepare_external_port()
-
     # Enable NAT / IP forwarding on host to provide internet connectivity to ACC
     lh = host.LocalHost()
     masquarade(lh, cc)

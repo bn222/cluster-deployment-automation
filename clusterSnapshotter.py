@@ -31,7 +31,6 @@ class ClusterSnapshotter:
         self._name = name
 
     def export_cluster(self) -> None:
-        self._cc.prepare_external_port()
         lh = host.LocalHost()
         lh.run(f"mkdir -p {self._snapshot_dir()}")
         self._ais.export_snapshot(self._snapshot_dir())
@@ -75,7 +74,6 @@ class ClusterSnapshotter:
             x.result()
 
     def import_cluster(self) -> None:
-        self._cc.prepare_external_port()
         self._ais.import_snapshot(self._snapshot_dir())
         ai_nodes = [h["requested_hostname"] for h in self._ai.list_hosts()]
         active_vms = [x for x in self._cc.all_vms() if x.name in ai_nodes]

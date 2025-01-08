@@ -46,9 +46,6 @@ class ClusterDeployer(BaseDeployer):
         self._ai = ai
         self._secrets_path = secrets_path
 
-        if self.need_external_network():
-            self._cc.prepare_external_port()
-
         lh = host.LocalHost()
         lh_config = list(filter(lambda hc: hc.name == lh.hostname(), self._cc.hosts))[0]
         self._local_host = ClusterHost(lh, lh_config, cc, cc.local_bridge_config)
