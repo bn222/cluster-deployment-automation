@@ -25,7 +25,7 @@ def ExtraConfigCX(cc: ClustersConfig, _: ExtraConfigArgs, futures: dict[str, Fut
     coreosBuilder.ensure_fcos_exists()
     logger.info("Updating CX firmware on all workers")
     lh = host.LocalHost()
-    nfs = NFS(lh, cc.external_port)
+    nfs = NFS(lh, cc.get_external_port())
     iso_url = nfs.host_file("/root/iso/fedora-coreos.iso")
 
     def helper(h: host.HostWithCX) -> Optional[host.Result]:

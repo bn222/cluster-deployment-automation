@@ -31,7 +31,7 @@ def ExtraConfigBFB(cc: ClustersConfig, _: ExtraConfigArgs, futures: dict[str, Fu
     coreosBuilder.ensure_fcos_exists()
     logger.info("Loading BF-2 with BFB image on all workers")
     lh = host.LocalHost()
-    nfs = NFS(lh, cc.external_port)
+    nfs = NFS(lh, cc.get_external_port())
     iso_url = nfs.host_file("/root/iso/fedora-coreos.iso")
 
     def helper(h: host.HostWithBF2) -> Optional[host.Result]:

@@ -216,12 +216,7 @@ class ClusterDeployer(BaseDeployer):
 
             if len(self._cc.masters) == 1:
                 duration[MASTERS_STEP].start()
-                microshift.deploy(
-                    secrets_path=self._secrets_path,
-                    node=self._cc.masters[0],
-                    external_port=self._cc.external_port,
-                    version=version,
-                )
+                microshift.deploy(self._secrets_path, self._cc.masters[0], self._cc.get_external_port(), version)
                 duration[MASTERS_STEP].stop()
             else:
                 logger.error_and_exit("Masters must be of length one for deploying microshift")
@@ -246,7 +241,7 @@ class ClusterDeployer(BaseDeployer):
             logger.error_and_exit(f"Detected {cc} cores on localhost, but need at least {min_cores} cores")
         if self.need_external_network():
             if not self._cc.validate_external_port():
-                logger.error_and_exit(f"Invalid external port, config is {self._cc.external_port}")
+                logger.error_and_exit(f"Invalid external port, config is {self._cc.get_external_port()}")
         else:
             logger.info("Don't need external network so will not set it up")
         self._cc.validate_node_ips()
@@ -427,7 +422,7 @@ class ClusterDeployer(BaseDeployer):
         executor = ThreadPoolExecutor(max_workers=len(self._cc.workers))
 
         # Install all hosts that need to run (or be) workers.
-        preinstall_futures = {h: h.preinstall(self._cc.external_port, executor) for h in hosts_with_workers}
+        preinstall_futures = {h: h.preinstall(self._cc.get_external_port(), executor) for h in hosts_with_workers}
         for h, pf in preinstall_futures.items():
             logger.info(f"Preinstall {h}: {pf.result()}")
 

@@ -53,7 +53,7 @@ def write_microshift_kubeconfig(contents: str, rh: host.Host) -> str:
 
 
 def masquarade(rsh: host.Host, cc: ClustersConfig) -> None:
-    wan_interface = cc.external_port
+    wan_interface = cc.get_external_port()
     lan_interface = cc.network_api_port
     ip_tables = "/sbin/iptables"
     logger.info(f"Setting up ip forwarding on {rsh.hostname()} from {lan_interface} to {wan_interface}")

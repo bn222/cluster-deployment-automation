@@ -39,7 +39,7 @@ class ClusterSnapshotter:
         def save_phys(node: str) -> None:
             coreosBuilder.ensure_fcos_exists()
             rh = host.RemoteHost(node)
-            nfs = NFS(host.LocalHost(), self._cc.external_port)
+            nfs = NFS(host.LocalHost(), self._cc.get_external_port())
             file = nfs.host_file("/root/iso/fedora-coreos.iso")
             rh.boot_iso_redfish(file)
             logger.info(f"Backing up node {node}")
@@ -93,7 +93,7 @@ class ClusterSnapshotter:
         def load_phys(node: str) -> None:
             coreosBuilder.ensure_fcos_exists()
             rh = host.RemoteHost(node)
-            nfs = NFS(host.LocalHost(), self._cc.external_port)
+            nfs = NFS(host.LocalHost(), self._cc.get_external_port())
             file = nfs.host_file("/root/iso/fedora-coreos.iso")
             rh.boot_iso_redfish(file)
             logger.info(f"Restoring node {node}")

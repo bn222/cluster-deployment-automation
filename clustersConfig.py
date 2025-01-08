@@ -386,6 +386,9 @@ class ClustersConfig:
         if self.external_port == "auto":
             self.autodetect_external_port()
 
+    def get_external_port(self) -> str:
+        return self.external_port
+
     def validate_node_ips(self) -> None:
         def validate_node_ip(n: NodeConfig) -> bool:
             if n.ip is not None and not common.ip_range_contains(self.ip_range, n.ip):
@@ -397,7 +400,7 @@ class ClustersConfig:
             logger.error(f"Not all master/worker IPs are in the reserved cluster IP range ({self.ip_range}).  Other hosts in the network might be offered those IPs via DHCP.")
 
     def validate_external_port(self) -> bool:
-        return bool(common.ip_links(host.LocalHost(), ifname=self.external_port))
+        return bool(common.ip_links(host.LocalHost(), ifname=self.get_external_port()))
 
     def _apply_jinja(self, contents: str, cluster_name: str) -> str:
         def worker_number(a: int) -> str:

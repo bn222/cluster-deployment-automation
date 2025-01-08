@@ -56,9 +56,9 @@ class ClusterHost:
                 if node_config.kind == "vm":
                     nodes.append(VmClusterNode(self.hostconn, node_config))
                 elif node_config.kind == "physical":
-                    nodes.append(X86ClusterNode(node_config, cc.external_port))
+                    nodes.append(X86ClusterNode(node_config, cc.get_external_port()))
                 elif node_config.kind == "bf":
-                    nodes.append(BFClusterNode(node_config, cc.external_port))
+                    nodes.append(BFClusterNode(node_config, cc.get_external_port()))
                 else:
                     raise ValueError()
             return nodes
