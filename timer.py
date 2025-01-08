@@ -35,15 +35,8 @@ class StopWatch:
         match = re.fullmatch(pattern, time_format)
         if not match:
             raise ValueError("Invalid time format. Expected format like '1d2h30m15.5s'.")
-
-        days, hours, minutes, seconds = match.groups()
-        total_seconds = (
-            (int(days) * 86400 if days else 0) +
-            (int(hours) * 3600 if hours else 0) +
-            (int(minutes) * 60 if minutes else 0) +
-            (float(seconds) if seconds else 0)
-        )
-        self.end_time = self.start_time + total_seconds
+        days, hours, minutes, seconds = (float(x or 0) for x in match.groups())
+        self.end_time = self.start_time + int(days * 86400 + hours * 3600 + minutes * 60 + seconds)
 
 
 class Timer:
