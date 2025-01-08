@@ -42,6 +42,7 @@ _BF_ISO_PATH = "/root/iso"
 class ClusterDeployer(BaseDeployer):
     def __init__(self, cc: ClustersConfig, ai: AssistedClientAutomation, steps: list[str], secrets_path: str):
         super().__init__(cc, steps)
+        self.bf_connections: dict[str, host.Host] = {}
         self._client: Optional[K8sClient] = None
         self._ai = ai
         self._secrets_path = secrets_path
@@ -581,9 +582,6 @@ class ClusterDeployer(BaseDeployer):
 
     def wait_for_workers(self) -> None:
         logger.info(f'waiting for {len(self._cc.workers)} workers to be ready')
-        lh = host.LocalHost()
-        bf_workers = [x for x in self._cc.workers if x.kind == "bf"]
-        connections: dict[str, host.Host] = {}
         prev_ready = 0
         for try_count in itertools.count(0):
             workers = [w.name for w in self._cc.workers]
@@ -598,39 +596,44 @@ class ClusterDeployer(BaseDeployer):
                 break
 
             self.client().approve_csr()
-            if len(connections) != len(bf_workers):
-                for e in filter(lambda x: x.name not in connections, bf_workers):
-                    ai_ip = self._ai.get_ai_ip(e.name, self._cc.full_ip_range)
-                    if ai_ip is None:
-                        continue
-                    h = host.Host(ai_ip)
-                    h.ssh_connect("core")
-                    logger.info(f'connected to {e.name}, setting user:pw')
-                    h.run("echo root:redhat | sudo chpasswd")
-                    connections[e.name] = h
-
-            # Workaround: Time is not set and consequently HTTPS doesn't work
-            for w in filter(lambda x: x.kind == "bf", self._cc.workers):
-                if w.name not in connections:
-                    continue
-                h = connections[w.name]
-                host.sync_time(lh, h)
-
-                # Workaround: images might become corrupt for an unknown reason. In that case, remove it to allow retries
-                out = h.run("sudo podman images", logging.DEBUG).out
-                reg = re.search(r".*Top layer (\w+) of image (\w+) not found in layer tree. The storage may be corrupted, consider running", out)
-                if reg:
-                    logger.warning(f'Removing corrupt image from worker {w.name}')
-                    logger.warning(h.run(f"sudo podman rmi {reg.group(2)}"))
-                try:
-                    out = h.run("sudo podman images --format json", logging.DEBUG).out
-                    podman_images = json.loads(out)
-                    for image in podman_images:
-                        inspect_output = h.run(f"sudo podman image inspect {image['Id']}", logging.DEBUG).out
-                        if "A storage corruption might have occurred" in inspect_output:
-                            logger.warning("Corrupt image found")
-                            h.run(f"sudo podman rmi {image['id']}")
-                except Exception as e:
-                    logger.info(e)
-
+            self.bluefield_workarounds()
             time.sleep(30)
+
+    def bluefield_workarounds(self) -> None:
+        bf_workers = [x for x in self._cc.workers if x.kind == "bf"]
+        lh = host.LocalHost()
+
+        if len(self.bf_connections) != len(bf_workers):
+            for e in filter(lambda x: x.name not in self.bf_connections, bf_workers):
+                ai_ip = self._ai.get_ai_ip(e.name, self._cc.full_ip_range)
+                if ai_ip is None:
+                    continue
+                h = host.Host(ai_ip)
+                h.ssh_connect("core")
+                logger.info(f'connected to {e.name}, setting user:pw')
+                h.run("echo root:redhat | sudo chpasswd")
+                self.bf_connections[e.name] = h
+
+        # Workaround: Time is not set and consequently HTTPS doesn't work
+        for w in bf_workers:
+            if w.name not in self.bf_connections:
+                continue
+            h = self.bf_connections[w.name]
+            host.sync_time(lh, h)
+
+            # Workaround: images might become corrupt for an unknown reason. In that case, remove it to allow retries
+            out = h.run("sudo podman images", logging.DEBUG).out
+            reg = re.search(r".*Top layer (\w+) of image (\w+) not found in layer tree. The storage may be corrupted, consider running", out)
+            if reg:
+                logger.warning(f'Removing corrupt image from worker {w.name}')
+                logger.warning(h.run(f"sudo podman rmi {reg.group(2)}"))
+            try:
+                out = h.run("sudo podman images --format json", logging.DEBUG).out
+                podman_images = json.loads(out)
+                for image in podman_images:
+                    inspect_output = h.run(f"sudo podman image inspect {image['Id']}", logging.DEBUG).out
+                    if "A storage corruption might have occurred" in inspect_output:
+                        logger.warning("Corrupt image found")
+                        h.run(f"sudo podman rmi {image['id']}")
+            except Exception as e:
+                logger.info(e)
