@@ -153,7 +153,7 @@ class ClustersConfig:
     kubeconfig: str
     api_vip: dict[str, str]
     ingress_vip: dict[str, str]
-    external_port: str
+    external_port: Optional[str]
     kind: str
     version: str
     network_api_port: str
@@ -182,7 +182,7 @@ class ClustersConfig:
         worker_range: common.RangeList = common.RangeList.UNLIMITED,
         test_only: bool = False,
     ):
-        self.external_port = "auto"
+        self.external_port = None
         self.kind = "openshift"
         self.version = "4.14.0-nightly"
         self.network_api_port = "auto"

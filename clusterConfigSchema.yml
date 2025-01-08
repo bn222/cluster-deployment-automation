@@ -3,7 +3,7 @@ clusters:
   - name: "cluster name"
     api_vip: "..."
     ingress_vip: "..."
-    external_port: "<auto / device name>"
+    external_port: "<device name> optional, detected automatically"
     network_api_port: "<auto / device name>"
     ip_range: "IP range (<start>-<end>) to use for connectivity between cluster nodes (optional)"
     ip_mask: "IP mask (x.y.z.t) to use for connectivity between cluster nodes (optional)"
