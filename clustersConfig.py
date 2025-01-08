@@ -10,15 +10,10 @@ import jinja2
 from yaml import safe_load
 import host
 from logger import logger
-import secrets
 import common
 from clusterInfo import ClusterInfo
 from clusterInfo import load_all_cluster_info
 from dataclasses import dataclass, field
-
-
-def random_mac() -> str:
-    return "52:54:" + ":".join(re.findall("..", secrets.token_hex()[:8]))
 
 
 @dataclass
@@ -77,6 +72,19 @@ class ExtraConfigArgs:
             return os.path.normpath(os.path.join(self.base_path, self.dpu_operator_path))
 
 
+class MacGenerator:
+    def __init__(self) -> None:
+        self.counter = 0
+
+    def next_mac(self) -> str:
+        self.counter += 1
+        hex_counter = f"{self.counter:06X}"
+        return f"52:54:00:{hex_counter[:2]}:{hex_counter[2:4]}:{hex_counter[4:]}"
+
+
+mac_generator = MacGenerator()
+
+
 @dataclass
 class NodeConfig:
     cluster_name: str
@@ -84,7 +92,7 @@ class NodeConfig:
     node: str
     kind: str
     image_path: str = field(init=False)
-    mac: str = field(default_factory=random_mac)
+    mac: str = field(default_factory=lambda: mac_generator.next_mac())
     bmc: str = ""
     bmc_user: str = "root"
     bmc_password: str = "calvin"
