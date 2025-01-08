@@ -1,10 +1,12 @@
 import time
+import re
 
 
 class StopWatch:
-    def __init__(self) -> None:
+    def __init__(self, init_time: str = "0s") -> None:
         self.start_time = time.time()
         self.end_time = self.start_time
+        self.set_duration_from_string(init_time)
 
     def start(self) -> None:
         self.start_time = time.time()
@@ -31,3 +33,33 @@ class StopWatch:
             duration_str += f"{minutes}m"
         duration_str += f"{seconds:.2f}s"
         return duration_str
+
+    def set_duration_from_string(self, time_format: str) -> None:
+        pattern = r'(?:(\d+)d)?(?:(\d+)h)?(?:(\d+)m)?(?:(\d+(?:\.\d+)?)s)?'
+        match = re.fullmatch(pattern, time_format)
+        if not match:
+            raise ValueError("Invalid time format. Expected format like '1d2h30m15.5s'.")
+
+        days, hours, minutes, seconds = match.groups()
+        total_seconds = (
+            (int(days) * 86400 if days else 0) +
+            (int(hours) * 3600 if hours else 0) +
+            (int(minutes) * 60 if minutes else 0) +
+            (float(seconds) if seconds else 0)
+        )
+        self.end_time = self.start_time + total_seconds
+
+
+class Timer:
+    def __init__(self, duration: str) -> None:
+        self.stopwatch = StopWatch(duration)
+
+    def start(self, duration: str) -> None:
+        self.stopwatch = StopWatch(duration)
+
+    def triggered(self) -> bool:
+        if not self.stopwatch:
+            raise ValueError("Timer has not been started.")
+        current_time = time.time()
+        elapsed_time = current_time - self.stopwatch.start_time
+        return elapsed_time >= (self.stopwatch.end_time - self.stopwatch.start_time)

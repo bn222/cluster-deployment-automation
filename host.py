@@ -17,6 +17,7 @@ import paramiko
 from paramiko import ssh_exception, RSAKey, Ed25519Key
 from logger import logger
 from abc import ABC, abstractmethod
+import timer
 
 
 def default_id_rsa_path() -> str:
@@ -346,7 +347,10 @@ class Host:
         self._bmc.cold_boot()
 
     def wait_ping(self) -> None:
+        t = timer.Timer("1h")
         while not self.ping():
+            if t.triggered():
+                logger.error_and_exit("Waited for 1h for ping")
             pass
 
     def ping(self) -> bool:
