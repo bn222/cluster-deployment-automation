@@ -124,7 +124,6 @@ class IPUClusterNode(ClusterNode):
         assert self.config.host_side_bmc is not None
         ipu_host_bmc = BMC.from_bmc(self.config.host_side_bmc)
         ipu_host_bmc.cold_boot()
-        logger.info("waiting for ACC to come back up after cold boot")
         assert self.config.ip is not None
         acc = host.RemoteHost(self.config.ip)
         self._wait_for_acc_with_retry(acc=acc, timeout=300)
