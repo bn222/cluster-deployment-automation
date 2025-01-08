@@ -26,5 +26,5 @@ class BaseDeployer(abc.ABC):
         for e in self._cc.postconfig:
             self._prepost_config(e)
 
-    def _empty_timers(self) -> dict[str, timer.Timer]:
-        return collections.defaultdict(lambda: timer.Timer.EmptyTimer())
+    def _empty_timers(self) -> dict[str, timer.StopWatch]:
+        return collections.defaultdict(lambda: timer.StopWatch())

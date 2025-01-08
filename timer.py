@@ -1,27 +1,16 @@
 import time
-from typing import Optional
 
 
-class Timer:
+class StopWatch:
     def __init__(self) -> None:
-        self.start_time: Optional[float] = None
-        self.end_time: Optional[float] = None
-
-    @staticmethod
-    def EmptyTimer() -> 'Timer':
-        ret = Timer()
-        ret.start_stop()
-        return ret
+        self.start_time = time.time()
+        self.end_time = self.start_time
 
     def start(self) -> None:
         self.start_time = time.time()
 
     def stop(self) -> None:
         self.end_time = time.time()
-
-    def start_stop(self) -> None:
-        self.start_time = time.time()
-        self.end_time = self.start_time
 
     def duration(self) -> str:
         if self.start_time is None:
