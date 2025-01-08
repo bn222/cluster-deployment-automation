@@ -89,7 +89,9 @@ class MarvellDpuPlugin(VendorPlugin):
 
 
 def init_vendor_plugin(h: host.Host, node_kind: str) -> VendorPlugin:
-    # TODO: Autodetect the vendor hardware and return the proper implementation.
+    # TODO: Vendor hardware will be handled inside the operator. The user will not explicitely configure the system
+    # based on what hardware he is running on. From the perspective of the user, he's dealing with abstract DPUs.
+    # This function will therefore be removed completely
     if node_kind == "marvell-dpu":
         logger.info(f"Detected Marvell DPU on {h.hostname()}")
         return MarvellDpuPlugin()
