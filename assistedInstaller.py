@@ -109,17 +109,19 @@ class AssistedClientAutomation(AssistedClient):  # type: ignore
         else:
             logger.error_and_exit(f"Failed to download the ISO after {retries} attempts")
 
-    def wait_cluster_ready(self, cluster_name: str) -> None:
+    def wait_cluster_status(self, cluster_name: str, status: str) -> None:
         logger.info("Waiting for cluster state to be ready")
         cur_state = None
         while True:
             new_state = self.cluster_state(cluster_name)
             if new_state != cur_state:
                 logger.info(f"Cluster state changed to {new_state}")
-            cur_state = new_state
-            if cur_state == "ready":
-                break
             time.sleep(10)
+            cur_state = new_state
+            if cur_state == status:
+                break
+
+        self.check_any_host_error()
 
     @tenacity.retry(wait=tenacity.wait_fixed(2), stop=tenacity.stop_after_attempt(5))
     def get_cluster_info_all(self) -> list[ClusterInfo]:
@@ -150,7 +152,7 @@ class AssistedClientAutomation(AssistedClient):  # type: ignore
             return matching_clusters[0].status
 
     def ensure_cluster_installing(self, cluster_name: str) -> None:
-        self.wait_cluster_ready(cluster_name)
+        self.wait_cluster_status(cluster_name, "ready")
         self._start_until_success(cluster_name)
 
     def _start_until_success(self, cluster_name: str) -> None:
@@ -233,3 +235,8 @@ class AssistedClientAutomation(AssistedClient):  # type: ignore
 
     def exists(self, host_name: str) -> bool:
         return host_name in [x.name for x in self.list_ai_hosts()]
+
+    def check_any_host_error(self) -> None:
+        for h in self.list_ai_hosts():
+            if h.status == "error":
+                logger.error_and_exit(f"Host {h.name} in error state")

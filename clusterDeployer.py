@@ -358,7 +358,7 @@ class ClusterDeployer(BaseDeployer):
 
         self._ai.download_kubeconfig_and_secrets(self._cc.name, self._cc.kubeconfig)
 
-        self._ai.wait_cluster(cluster_name)
+        self._ai.wait_cluster_status(cluster_name, "installed")
 
         logger.info('updating /etc/hosts')
         self.update_etc_hosts()
@@ -575,18 +575,13 @@ class ClusterDeployer(BaseDeployer):
             api_vip = None
         dnsutil.dnsmasq_update(cluster_name, api_vip)
 
-    def check_any_host_error(self) -> None:
-        for h in self._ai.list_ai_hosts():
-            if h.status == "error":
-                logger.error_and_exit(f"Host {h.name} in error state")
-
     def wait_for_workers(self) -> None:
         logger.info(f'waiting for {len(self._cc.workers)} workers to be ready')
         prev_ready = 0
         for try_count in itertools.count(0):
             workers = [w.name for w in self._cc.workers]
             ready_count = sum(self.client().is_ready(w) for w in workers)
-            self.check_any_host_error()
+            self._ai.check_any_host_error()
 
             if prev_ready != ready_count:
                 logger.info(f"{ready_count}/{len(workers)} is ready (try #{try_count})")
