@@ -98,6 +98,18 @@ def ExtraConfigMicroshift(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dic
     # Check on the status of the cluster
     acc.write("/etc/yum.repos.d/microshift-canidate.repo", early_access_microshift())
     time.sleep(1)
+    logger.info("Checking if time is set properly to avoid OCSR errors")
+    logger.info(acc.run("systemctl status chronyd --no-pager -l"))
+    lh_date = host.LocalHost().run("date").out
+    acc_date = host.LocalHost().run("date").out
+    logger.info(f"LocalHost date: {lh_date}")
+    logger.info(f"ACC date: {acc_date}")
+    logger.info("Manually synchronizing time")
+    host.sync_time(lh, acc)
+    lh_date = host.LocalHost().run("date").out
+    acc_date = host.LocalHost().run("date").out
+    logger.info(f"LocalHost date: {lh_date}")
+    logger.info(f"ACC date: {acc_date}")
 
     logger.info("Installing microshift 4.16")
     acc.run_or_die("dnf install -y microshift microshift-multus")
