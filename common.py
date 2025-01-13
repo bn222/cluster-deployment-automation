@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 import dataclasses
 import ipaddress
-from typing import Optional, TypeVar, Iterator, Type
+from typing import Any, Callable, Optional, TypeVar, Iterator, Type
 from concurrent.futures import Future
 import contextlib
 from types import TracebackType
@@ -20,6 +20,8 @@ import tempfile
 import typing
 from collections.abc import Iterable
 from typing import Union
+import time
+import itertools
 
 
 T = TypeVar("T")
@@ -615,3 +617,51 @@ def empty_future(result_type: type[T]) -> Future[Optional[T]]:
     f: Future[Optional[T]] = Future()
     f.set_result(None)
     return f
+
+
+def wait_true(name: str, n_tries: int, func: Callable[..., bool], **func_kwargs: Any) -> bool:
+    # Wait until the "func" is successful, or we will reach "n_tries".
+    # When "n_tries" is zero it will run until "func" succeeds.
+    logger.info(f"Waiting for {name}")
+    for try_count in itertools.count(0):
+        if func(**func_kwargs):
+            logger.info(f"Took {try_count} tries for {name}")
+            return True
+
+        if n_tries and try_count >= n_tries:
+            logger.info(f"The limit of {n_tries} tries was reached for {name}")
+            return False
+
+        time.sleep(30)
+
+    return True
+
+
+def wait_futures(msg: str, futures: list[tuple[str, Future[bool]]]) -> None:
+    def get_future_state(future: Future[bool]) -> str:
+        if not future.done():
+            return "Running"
+        elif future.result():
+            return "Ok"
+        else:
+            return "Fail"
+
+    state = {name: get_future_state(future) for (name, future) in futures}
+    logger.info(f"Waiting for {msg}: {state}")
+
+    for _ in itertools.count(0):
+        new_state = {name: get_future_state(future) for (name, future) in futures}
+
+        if set(state.items()) - set(new_state.items()):
+            logger.info(f"State change of {msg}: {new_state}")
+
+        state = new_state
+
+        if all(future.done() for (_, future) in futures):
+            break
+
+        time.sleep(30)
+
+    failed = next((name for name, result in state.items() if not result), None)
+    if failed:
+        logger.error_and_exit(f"Failed to {msg} for {failed}....")

@@ -240,3 +240,10 @@ class AssistedClientAutomation(AssistedClient):  # type: ignore
         for h in self.list_ai_hosts():
             if h.status == "error":
                 logger.error_and_exit(f"Host {h.name} in error state")
+
+    def install_ai_host(self, infra_env: str, name: str) -> None:
+        infra_env_id = self.get_infra_env_id(infra_env)
+        host_info = self.get_ai_host(name)
+        if host_info is not None and host_info.status not in ["installed", "added-to-existing-cluster"]:
+            logger.info(f"Installing host {name}")
+            self.client.v2_install_host(infra_env_id=infra_env_id, host_id=host_info.id)
