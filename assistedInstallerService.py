@@ -67,11 +67,12 @@ class AssistedInstallerService:
     CONTROLLER_IMAGE = "registry.redhat.io/rhai-tech-preview/assisted-installer-reporter-rhel8:v1.0.0-425"
     AGENT_DOCKER_IMAGE = "registry.redhat.io/rhai-tech-preview/assisted-installer-agent-rhel8:v1.0.0-328"
 
-    def __init__(self, version: str, ip: str, proxy: Optional[str] = None, noproxy: Optional[str] = None, branch: str = "master"):
+    def __init__(self, version: str, ip: str, resume_deployment: bool = False, proxy: Optional[str] = None, noproxy: Optional[str] = None, branch: str = "master"):
         self._version = version
         self._ip = ip
         self._proxy = proxy
         self._noproxy = noproxy
+        self._resume_deployment = resume_deployment
         base_url = f"https://raw.githubusercontent.com/openshift/assisted-service/{branch}"
         pod_config_url = f"{base_url}/deploy/podman/configmap.yml"
         pod_file = f"{base_url}/deploy/podman/pod-persistent.yml"
@@ -343,6 +344,11 @@ class AssistedInstallerService:
             logger.warn(f"{name} running without label, stop needed")
             return True
         labels = j[0]["Labels"]
+
+        # ignore differences in config in case deployment is resumed since a
+        # restart of ai would cause the existing partial deployment to be wiped
+        if self._resume_deployment:
+            return False
 
         if "cda-pod/hash" not in labels:
             logger.warn(f"{name} running without label cda-pod/hash, stop needed")
