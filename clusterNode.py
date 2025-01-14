@@ -180,7 +180,7 @@ class VmClusterNode(ClusterNode):
             return running == h.vm_is_running(node_name)
 
         name = self.config.name
-        common.wait_true(f"reboot of {name} to start", 0, vm_state, h=self.hostconn, node_name=name, running=False)
+        common.wait_true(f"reboot of {name} to occur", 0, vm_state, h=self.hostconn, node_name=name, running=False)
 
         r = self.hostconn.run(f"virsh start {name}")
         if not r.success():
