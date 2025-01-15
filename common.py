@@ -662,6 +662,5 @@ def wait_futures(msg: str, futures: list[tuple[str, Future[bool]]]) -> None:
 
         time.sleep(30)
 
-    failed = next((name for name, result in state.items() if not result), None)
-    if failed:
-        logger.error_and_exit(f"Failed to {msg} for {failed}....")
+    if any(not future.result() for (_, future) in futures):
+        logger.error_and_exit(f"Failed to {msg}: {state}")
