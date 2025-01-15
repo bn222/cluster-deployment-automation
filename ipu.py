@@ -211,6 +211,8 @@ nohup sh -c '
         imc.write("/work/redfish/certs/server.key", server.read_file("/root/.local-container-registry/domain.key"))
 
         imc.write("/work/scripts/pre_init_app.sh", script)
+        # WA: use idpf for ACC to IMC. Remove when we've moved to icc-net:
+        # https://issues.redhat.com/browse/IIC-485
         contents = "{\"init_app_acc_nboot_net_name\": \"enp0s1f0\"}"  # Soon, this will not be required anymore
         imc.write("/work/cfg/config.json", contents)
         imc.run("mkdir -m 0700 /work/redfish")
