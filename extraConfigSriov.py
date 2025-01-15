@@ -19,7 +19,7 @@ from common import git_repo_setup
 def default_images(version: str) -> dict[str, str]:
     ocp_version = common.extract_version_or_panic(version)
 
-    quay_tags = ("4.14", "4.15", "4.16", "4.17")
+    quay_tags = ("4.14", "4.15", "4.16", "4.17", "4.18", "4.19")
 
     if ocp_version not in quay_tags:
         # Only for these versions we currently have a default_base_images.
