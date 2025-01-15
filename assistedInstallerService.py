@@ -145,6 +145,8 @@ class AssistedInstallerService:
         return y
 
     def prep_version(self, version: str) -> dict[str, Union[str, Sequence[str]]]:
+        # Latest available Openshift Release versions can be found here: https://quay.io/repository/openshift-release-dev/ocp-release
+
         # Note how 4.12.0 has the -multi suffix because AI requires that
         # for 4.12. CDA hides this and simply expect 4.12.0 from the user
         # since that follows the same versioning scheme
@@ -270,6 +272,27 @@ class AssistedInstallerService:
         elif re.search(r'4\.17\.[0-9]+', version):
             ret = {
                 'openshift_version': '4.17-multi',
+                'cpu_architectures': ['x86_64', 'arm64', 'ppc64le', 's390x'],
+                'url': self.get_normal_pullspec(version),
+                'version': version,
+            }
+        elif re.search(r'4\.18\.0-ec.[0-9]+', version):
+            ret = {
+                'openshift_version': '4.18-multi',
+                'cpu_architectures': ['x86_64', 'arm64', 'ppc64le', 's390x'],
+                'url': self.get_normal_pullspec(version),
+                'version': version,
+            }
+        elif re.search(r'4\.18\.0-nightly', version):
+            ret = {
+                'openshift_version': '4.18-multi',
+                'cpu_architectures': ['x86_64', 'arm64', 'ppc64le', 's390x'],
+                'url': self.get_nightly_pullspec(version),
+                'version': version,
+            }
+        elif re.search(r'4\.18\.[0-9]+', version):
+            ret = {
+                'openshift_version': '4.18-multi',
                 'cpu_architectures': ['x86_64', 'arm64', 'ppc64le', 's390x'],
                 'url': self.get_normal_pullspec(version),
                 'version': version,
