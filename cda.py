@@ -14,6 +14,13 @@ from clusterSnapshotter import ClusterSnapshotter
 from virtualBridge import VirBridge
 
 
+def check_and_cleanup_disk(threshold_gb: int = 10) -> None:
+    h = host.LocalHost()
+    _, _, free = h.disk_usage("/")
+    if free < threshold_gb * 1024 * 1024 * 1024:
+        h.run("podman image prune -a -f")
+
+
 def main_deploy_openshift(cc: ClustersConfig, args: argparse.Namespace) -> None:
     # Make sure the local virtual bridge base configuration is correct.
     local_bridge = VirBridge(host.LocalHost(), cc.local_bridge_config)
@@ -58,6 +65,8 @@ def main_deploy(args: argparse.Namespace) -> None:
         secrets_path=args.secrets_path,
         worker_range=args.worker_range,
     )
+
+    check_and_cleanup_disk(10)
 
     if cc.kind == "openshift":
         main_deploy_openshift(cc, args)

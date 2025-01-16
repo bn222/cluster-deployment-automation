@@ -431,6 +431,12 @@ class Host:
     def exists(self, path: str) -> bool:
         return self.run(f"stat {path}", logging.DEBUG).returncode == 0
 
+    def disk_usage(self, disk: str) -> tuple[int, int, int]:
+        if self.is_localhost():
+            return shutil.disk_usage(disk)
+        else:
+            logger.error_and_exit("Not implemented")
+
 
 class HostWithCX(Host):
     def cx_firmware_upgrade(self) -> Result:
