@@ -11,22 +11,22 @@ import sys
 
 
 def early_access_microshift() -> str:
-    return """[microshift-latest-4.16]
-name=MicroShift latest-4.16 EarlyAccess EC or RC RPMs
-baseurl=https://mirror.openshift.com/pub/openshift-v4/aarch64/microshift/ocp-dev-preview/latest-4.16/el9/os/
+    return """[microshift-latest-4.19]
+name=MicroShift latest-4.19 EarlyAccess EC or RC RPMs
+baseurl=https://mirror.openshift.com/pub/openshift-v4/aarch64/microshift/ocp-dev-preview/latest-4.19/el9/os/
 enabled=1
 gpgcheck=0
 skip_if_unavailable=0
 
 
-[microshift-latest-4.16-dependencies]
+[microshift-latest-4.19-dependencies]
 name=OpenShift Dependencies
-baseurl=https://mirror.openshift.com/pub/openshift-v4/aarch64/dependencies/rpms/4.16-el9-beta/
+baseurl=https://mirror.openshift.com/pub/openshift-v4/aarch64/dependencies/rpms/4.19-el9-beta/
 enabled=1
 gpgcheck=0
 skip_if_unavailable=0
 
-[microshift-4.13-dependencies]
+[openshift-4.13-dependencies]
 name=Openshift 4.13 Dependencies
 baseurl=https://mirror.openshift.com/pub/openshift-v4/aarch64/dependencies/rpms/4.13-el9-beta/
 enabled=1
@@ -111,7 +111,7 @@ def ExtraConfigMicroshift(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dic
     logger.info(f"LocalHost date: {lh_date}")
     logger.info(f"ACC date: {acc_date}")
 
-    logger.info("Installing microshift 4.16")
+    logger.info("Installing microshift")
     acc.run_or_die("dnf install -y microshift microshift-multus")
     ret = acc.run(r"grep '\[crio.runtime.runtimes.crun\]' /etc/crio/crio.conf")
     if not ret.success():
