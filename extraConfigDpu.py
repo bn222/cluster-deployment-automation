@@ -112,7 +112,7 @@ class DpuOperator:
         h.run(f"make -C {self.repo_path} undeploy", env=env)
         ret = h.run(f"make -C {self.repo_path} local-deploy", env=env)
         if not ret.success():
-            logger.error_and_exit("Failed to deploy dpu operator")
+            logger.error_and_exit(f"Failed to deploy dpu operator: {ret}")
         logger.info("Waiting for all dpu operator pods to become ready")
         time.sleep(30)
         client.oc_run_or_die("wait --for=condition=Ready pod --all -n openshift-dpu-operator --timeout=5m")
