@@ -214,6 +214,12 @@ nohup sh -c '
         # WA: use idpf for ACC to IMC. Remove when we've moved to icc-net:
         # https://issues.redhat.com/browse/IIC-485
         contents = "{\"init_app_acc_nboot_net_name\": \"enp0s1f0\"}"  # Soon, this will not be required anymore
+
+        # When developing / frequently re-deploying the ACC, we can update the watchdog timeout to avoid ending up in recovery mode
+        # https://issues.redhat.com/browse/IIC-369
+        acc_config = imc.read_file("/mnt/imc/acc_variable/acc-config.json")
+        imc.write("/mnt/imc/acc_variable/acc-config.json", acc_config.replace("\"acc_watchdog_timer\": 60", "\"acc_watchdog_timer\": 9999"))
+
         imc.write("/work/cfg/config.json", contents)
         imc.run("mkdir -m 0700 /work/redfish")
         imc.run("cp /etc/imc-redfish-configuration.json /work/redfish/")
