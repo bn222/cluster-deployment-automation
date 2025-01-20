@@ -233,7 +233,7 @@ class ClustersConfig:
             self.masters.append(NodeConfig(self.name, **n))
 
         self.configured_workers = [NodeConfig(self.name, **w) for w in cc["workers"]]
-        self.workers = [NodeConfig(self.name, **w) for w in worker_range.filter(cc["workers"])]
+        self.workers = list(worker_range.filter(self.configured_workers))
 
         self.set_cc_hosts_defaults(cc)
 
