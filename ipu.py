@@ -58,9 +58,10 @@ class IPUClusterNode(ClusterNode):
         logger.info(f"Redfish boot triggered, attempting to connect to ACC at ip {self.config.ip}")
         # wait on install + reboot to complete
         acc = host.RemoteHost(self.config.ip)
-        # WA since we can't reliably expect the acc to get a dhcp lease due to https://issues.redhat.com/browse/IIC-427
-        self._wait_for_acc_with_retry(acc=acc)
-        # configure_iso_network_port(self.network_api_port, self.config.ip)
+
+        acc.ssh_connect("root", "redhat")
+        logger.info(acc.run("uname -a"))
+        logger.info("Connected to ACC")
 
     def _wait_for_acc_with_retry(self, acc: host.Host, timeout: int = 1200) -> None:
         # Typically if the acc booted properly it will take < 20 minutes to come up (including the 10 min sleep we do during boot)
@@ -178,24 +179,6 @@ rm -rf /home/root/MtRemoteRunner # workaround to free up some space: https://iss
 update-ca-trust
 sleep 10 # wait for ip address so that redfish starts with that in place
 systemctl restart redfish
-#  workaround to ensure acc has connectivity https://issues.redhat.com/browse/IIC-266
-nohup sh -c '
-    while true; do
-        if [ -f /work/scripts/ipu_port1_setup.sh ]; then
-            count=0
-            while [ $count -lt 20 ]; do
-                /work/scripts/ipu_port1_setup.sh
-                count=$((count + 1))
-                sleep $count
-            done
-            break
-        else
-            break
-        fi
-    done
-' &
-
-
         """
         server = host.RemoteHost(server_with_key)
         server.ssh_connect("root", "redhat")
@@ -224,10 +207,6 @@ nohup sh -c '
         imc.run("mkdir -m 0700 /work/redfish")
         imc.run("cp /etc/imc-redfish-configuration.json /work/redfish/")
         imc.run(f"echo {self.password} | bash /usr/bin/ipu-redfish-generate-password-hash.sh")
-
-        # WA: We need to manually install this file to enable networking with the fxp-net_linux-networking.pkg
-        imc.copy_to("./manifests/dpu/ipu_port1_setup.sh", "/work/scripts/ipu_port1_setup.sh")
-        imc.run("chmod +x /work/scripts/ipu_port1_setup.sh")
 
         imc.run("reboot")
         time.sleep(10)
