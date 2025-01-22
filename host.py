@@ -322,6 +322,14 @@ class Host:
             logger.debug(ret.out.strip())
         return ret
 
+    def run_in_container(self, cmd: str, interactive: bool = False, verbose: bool = True, dry_run: bool = False) -> Result:
+        name = "dpu-tools"
+        it = "-it" if interactive else ""
+        v = "--verbose" if verbose else ""
+        d = "--dry-run" if dry_run else ""
+        full_command = f"sudo podman run {it} --rm --pull always --replace --pid host --network host --user 0 --name {name} --privileged -v /dev:/dev quay.io/bnemeth/bf {v} {d} {cmd}"
+        return self.run(full_command, logging.INFO)
+
     def close(self) -> None:
         assert self._host is not None
         self._host.close()
@@ -442,14 +450,6 @@ class HostWithCX(Host):
     def cx_firmware_upgrade(self) -> Result:
         logger.info("Upgrading CX firmware")
         return self.run_in_container("utils cx-fwup")
-
-    def run_in_container(self, cmd: str, interactive: bool = False, verbose: bool = True, dry_run: bool = False) -> Result:
-        name = "dpu-tools"
-        it = "-it" if interactive else ""
-        v = "--verbose" if verbose else ""
-        d = "--dry-run" if dry_run else ""
-        full_command = f"sudo podman run {it} --rm --pull always --replace --pid host --network host --user 0 --name {name} --privileged -v /dev:/dev quay.io/bnemeth/bf {v} {d} {cmd}"
-        return self.run(full_command, logging.DEBUG)
 
 
 class HostWithBF2(Host):

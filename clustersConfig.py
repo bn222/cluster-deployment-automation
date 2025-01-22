@@ -58,6 +58,10 @@ class ExtraConfigArgs:
 
     base_image: str = ""
 
+    mev_version: str = ""
+
+    force_mev_fw_up: bool = False
+
     def pre_check(self) -> None:
         if self.sriov_network_operator_local:
             if self.name != "sriov_network_operator":
