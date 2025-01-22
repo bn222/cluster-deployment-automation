@@ -349,8 +349,7 @@ class ClusterDeployer(BaseDeployer):
         nodes_with_futures = [(n.config.name, executor.submit(n.ensure_reboot)) for n in master_nodes]
 
         def cb() -> None:
-            if self._ai.check_any_host_error():
-                logger.error_and_exit("Hit error state on one of the nodes while waiting")
+            self._ai.check_any_host_error()
 
         wait_futures("reboot node", nodes_with_futures, cb)
 
