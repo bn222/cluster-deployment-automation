@@ -637,7 +637,7 @@ def wait_true(name: str, n_tries: int, func: Callable[..., bool], **func_kwargs:
     return True
 
 
-def wait_futures(msg: str, futures: list[tuple[str, Future[bool]]]) -> None:
+def wait_futures(msg: str, futures: list[tuple[str, Future[bool]]], cb: Callable[[], None] = lambda: None) -> None:
     def get_future_state(future: Future[bool]) -> str:
         if not future.done():
             return "Running"
@@ -661,6 +661,7 @@ def wait_futures(msg: str, futures: list[tuple[str, Future[bool]]]) -> None:
             break
 
         time.sleep(30)
+        cb()
 
     if any(not future.result() for (_, future) in futures):
         logger.error_and_exit(f"Failed to {msg}: {state}")
