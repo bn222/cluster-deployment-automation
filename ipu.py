@@ -178,24 +178,6 @@ rm -rf /home/root/MtRemoteRunner # workaround to free up some space: https://iss
 update-ca-trust
 sleep 10 # wait for ip address so that redfish starts with that in place
 systemctl restart redfish
-#  workaround to ensure acc has connectivity https://issues.redhat.com/browse/IIC-266
-nohup sh -c '
-    while true; do
-        if [ -f /work/scripts/ipu_port1_setup.sh ]; then
-            count=0
-            while [ $count -lt 20 ]; do
-                /work/scripts/ipu_port1_setup.sh
-                count=$((count + 1))
-                sleep $count
-            done
-            break
-        else
-            break
-        fi
-    done
-' &
-
-
         """
         server = host.RemoteHost(server_with_key)
         server.ssh_connect("root", "redhat")
@@ -224,10 +206,6 @@ nohup sh -c '
         imc.run("mkdir -m 0700 /work/redfish")
         imc.run("cp /etc/imc-redfish-configuration.json /work/redfish/")
         imc.run(f"echo {self.password} | bash /usr/bin/ipu-redfish-generate-password-hash.sh")
-
-        # WA: We need to manually install this file to enable networking with the fxp-net_linux-networking.pkg
-        imc.copy_to("./manifests/dpu/ipu_port1_setup.sh", "/work/scripts/ipu_port1_setup.sh")
-        imc.run("chmod +x /work/scripts/ipu_port1_setup.sh")
 
         imc.run("reboot")
         time.sleep(10)
