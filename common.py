@@ -26,7 +26,7 @@ import signal
 
 
 def with_timeout(timeout: int, func, *args, **kwargs) -> None:
-    def handler(signum, frame):
+    def handler(signum, frame) -> None:
         raise Exception(f"Timed out after {timeout}")
 
     signal.signal(signal.SIGALRM, handler)

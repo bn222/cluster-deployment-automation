@@ -59,7 +59,7 @@ class DpuOperator:
         self._update_all_dockerfiles(builder_image, base_image)
         logger.info(f"Building dpu operator images in {self.repo_path} on {h.hostname()}")
 
-        def build_and_push():
+        def build_and_push() -> None:
             h.run_or_die(f"make -C {self.repo_path} local-buildx")
             h.run_or_die(f"make -C {self.repo_path} local-pushx")
 
