@@ -24,7 +24,6 @@ import time
 import itertools
 import signal
 import types
-from typing import Optional
 
 
 def with_timeout(timeout: int, func: Callable[[], None]) -> None:
