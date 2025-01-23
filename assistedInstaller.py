@@ -149,7 +149,11 @@ class AssistedClientAutomation(AssistedClient):  # type: ignore
             logger.error(f"Unexpected number of matching clusters: {matching_clusters}")
             sys.exit(-1)
         else:
-            return matching_clusters[0].status
+            status = matching_clusters[0].status
+            if isinstance(status, str):
+                return status
+            else:
+                logger.error_and_exit(f"Invalid status: ${status}")
 
     def ensure_cluster_installing(self, cluster_name: str) -> None:
         self.wait_cluster_status(cluster_name, "ready")

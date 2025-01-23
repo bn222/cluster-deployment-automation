@@ -23,10 +23,14 @@ from typing import Union
 import time
 import itertools
 import signal
+import types
+from typing import Optional
 
 
 def with_timeout(timeout: int, func: Callable[[], None]) -> None:
-    def handler(signum: int, frame: int) -> None:
+    def handler(signum: int, frame: Optional[types.FrameType]) -> None:
+        signum = signum
+        frame = frame
         raise Exception(f"Timed out after {timeout}")
 
     signal.signal(signal.SIGALRM, handler)
