@@ -22,6 +22,21 @@ from collections.abc import Iterable
 from typing import Union
 import time
 import itertools
+import signal
+
+
+def with_timeout(timeout: int, func, *args, **kwargs) -> None:
+    def handler(signum, frame):
+        raise Exception(f"Timed out after {timeout}")
+
+    signal.signal(signal.SIGALRM, handler)
+    signal.alarm(timeout)
+    try:
+        return func(*args, **kwargs)
+    except Exception as exc:
+        print(exc)
+    finally:
+        signal.alarm(0)
 
 
 T = TypeVar("T")

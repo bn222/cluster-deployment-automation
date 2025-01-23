@@ -10,6 +10,7 @@ from clustersConfig import ExtraConfigArgs
 import imageRegistry
 from common import git_repo_setup
 from dpuVendor import init_vendor_plugin
+import common
 import re
 
 MICROSHIFT_KUBECONFIG = "/root/kubeconfig.microshift"
@@ -57,8 +58,12 @@ class DpuOperator:
         h = host.LocalHost()
         self._update_all_dockerfiles(builder_image, base_image)
         logger.info(f"Building dpu operator images in {self.repo_path} on {h.hostname()}")
-        h.run_or_die(f"make -C {self.repo_path} local-buildx")
-        h.run_or_die(f"make -C {self.repo_path} local-pushx")
+
+        def build_and_push():
+            h.run_or_die(f"make -C {self.repo_path} local-buildx")
+            h.run_or_die(f"make -C {self.repo_path} local-pushx")
+
+        common.with_timeout(3600, build_and_push)
 
     # The images in registry.ci.openshift.org do not always support multiarch.
     # As a result we will pin working images, and use these locally instead.
