@@ -25,14 +25,14 @@ import itertools
 import signal
 
 
-def with_timeout(timeout: int, func, *args, **kwargs) -> None:
-    def handler(signum, frame) -> None:
+def with_timeout(timeout: int, func: Callable[[], None]) -> None:
+    def handler(signum: int, frame: int) -> None:
         raise Exception(f"Timed out after {timeout}")
 
     signal.signal(signal.SIGALRM, handler)
     signal.alarm(timeout)
     try:
-        return func(*args, **kwargs)
+        return func()
     except Exception as exc:
         print(exc)
     finally:
