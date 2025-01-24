@@ -2,6 +2,8 @@ import dataclasses
 import os
 import gspread
 import tenacity
+from typing import Optional
+from collections.abc import Iterable
 from oauth2client.service_account import ServiceAccountCredentials
 from logger import logger
 
@@ -52,9 +54,17 @@ def _read_gspread_sheet_with_retry(cred_path: str) -> gspread.spreadsheet.Spread
     return _read_gspread_sheet(cred_path)
 
 
-def read_sheet() -> list[dict[str, str]]:
+def read_sheet(
+    *,
+    credentials: Optional[str | Iterable[str]] = None,
+) -> list[dict[str, str]]:
     logger.info(f"Reading cluster information from sheet {repr(SHEET)} ( {URL} )")
-    cred_paths = _default_cred_paths()
+    if credentials is None:
+        cred_paths = _default_cred_paths()
+    elif isinstance(credentials, str):
+        cred_paths = [credentials]
+    else:
+        cred_paths = list(credentials)
     cred_path = None
     for e in cred_paths:
         if os.path.exists(e):
