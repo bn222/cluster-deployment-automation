@@ -1,3 +1,4 @@
+import dataclasses
 import os
 import gspread
 import tenacity
@@ -9,18 +10,18 @@ SHEET = "ANL lab HW enablement clusters and connections"
 URL = "https://docs.google.com/spreadsheets/d/1lXvcodJ8dmc_hcp0hzbPDU8t6-hCnAlEWFRdM2r_n0Q"
 
 
+@dataclasses.dataclass(kw_only=True)
 class ClusterInfo:
-    def __init__(self, name: str):
-        self.name = name
-        self.provision_host = ""
-        self.network_api_port = ""
-        self.iso_server = ""
-        self.organization_id = ""
-        self.activation_key = ""
-        self.bmc_hostname = []  # type: list[str]
-        self.dpu_mac_addresses = []  # type: list[str]
-        self.workers = []  # type: list[str]
-        self.bmcs = []  # type: list[str]
+    name: str
+    provision_host: str = ""
+    network_api_port: str = ""
+    iso_server: str = ""
+    organization_id: str = ""
+    activation_key: str = ""
+    bmc_hostname: list[str] = dataclasses.field(default_factory=list)
+    dpu_mac_addresses: list[str] = dataclasses.field(default_factory=list)
+    workers: list[str] = dataclasses.field(default_factory=list)
+    bmcs: list[str] = dataclasses.field(default_factory=list)
 
 
 def _default_cred_paths() -> list[str]:
@@ -64,7 +65,7 @@ def load_all_cluster_info() -> dict[str, ClusterInfo]:
         if row["Name"].startswith("Cluster"):
             if cluster is not None:
                 ret.append(cluster)
-            cluster = ClusterInfo(row["Name"])
+            cluster = ClusterInfo(name=row["Name"])
         if cluster is None:
             continue
         if row["Name"] == "Other servers":
