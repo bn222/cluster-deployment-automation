@@ -1,3 +1,4 @@
+import argparse
 import dataclasses
 import re
 import os
@@ -10,6 +11,7 @@ from collections.abc import Mapping
 from oauth2client.service_account import ServiceAccountCredentials
 from logger import logger
 import common
+import json
 
 
 SHEET = "ANL lab HW enablement clusters and connections"
@@ -29,6 +31,9 @@ class ClusterInfo:
     dpu_mac_addresses: list[str] = dataclasses.field(default_factory=list)
     workers: list[str] = dataclasses.field(default_factory=list)
     bmcs: list[str] = dataclasses.field(default_factory=list)
+
+    def to_dict(self) -> dict[str, typing.Any]:
+        return dataclasses.asdict(self)
 
 
 def _default_cred_paths() -> list[str]:
@@ -238,3 +243,120 @@ def load_cluster_info(
         validate_cluster_info(cluster_info)
 
     return cluster_info
+
+
+def _print_json(data: typing.Any) -> None:
+    print(json.dumps(data, indent=2))
+
+
+def _main_parse_args() -> argparse.Namespace:
+    def regex_type(value: str) -> re.Pattern[str]:
+        try:
+            return re.compile(value)
+        except re.error as e:
+            raise argparse.ArgumentTypeError(f"Invalid regex pattern: {e}")
+
+    parser = argparse.ArgumentParser(description=f"Load Cluster Info {repr(SHEET)} from {repr(URL)}")
+    parser.add_argument(
+        "mode",
+        choices=["sheet", "all", "hosts", "host"],
+        nargs="?",
+        default="all",
+        help="What information to request. Defaults to \"all\".",
+    )
+    parser.add_argument(
+        "-H",
+        "--host",
+        default=None,
+        help=f"The host for which to fetch the cluster info (needed by some modes). Defaults to {repr(common.current_host())} unless \"--cluster\" is specified. Overwrite local host detection via \"$CDA_CURRENT_HOST\" (currently {'set' if os.environ.get('CDA_CURRENT_HOST') else 'unset'}).",
+    )
+    parser.add_argument(
+        "-c",
+        "--cluster",
+        default=None,
+        type=regex_type,
+        help="Similar to \"--host\" to select a cluster. This is a regular expression.",
+    )
+    parser.add_argument(
+        "--credential",
+        default=None,
+        help=f"The credential file to access the google doc. Defaults to {repr(_default_cred_paths())}. See https://docs.gspread.org/en/latest/oauth2.html#for-bots-using-service-account and share the sheet.",
+    )
+    parser.add_argument(
+        "--no-validate",
+        action="store_true",
+        help="Skip validation of cluster infos.",
+    )
+
+    args = parser.parse_args()
+
+    return args
+
+
+def _main_process(
+    *,
+    mode: str,
+    credential: Optional[str],
+    host: Optional[str],
+    cluster: Optional[re.Pattern[str]],
+    validate: bool,
+) -> None:
+
+    if host is None and cluster is None:
+        host = common.current_host()
+
+    sheet = read_sheet(credentials=credential)
+
+    if mode == "sheet":
+        _print_json(sheet)
+        return
+
+    cluster_infos = load_all_cluster_info(sheet=sheet)
+    cluster_info: Optional[ClusterInfo] = None
+
+    if mode not in ("all", "hosts"):
+        cluster_info = load_cluster_info(
+            match_hostname=host,
+            try_plain_hostname=True,
+            match_name=cluster,
+            cluster_infos=cluster_infos,
+            validate=False,
+            required=False,
+        )
+        if cluster_info is None:
+            msg_selector = _get_cluster_info_desc(
+                match_hostname=host,
+                match_name=cluster,
+            )
+            raise RuntimeError(f"No {msg_selector} found. Select a host with \"--host\" or \"--cluster\" option?")
+
+    if validate:
+        data = cluster_infos.values() if cluster_info is None else (cluster_info,)
+        for ci in data:
+            validate_cluster_info(ci)
+
+    if mode == "all":
+        _print_json({k: v.to_dict() for k, v in cluster_infos.items()})
+    elif mode == "hosts":
+        _print_json(sorted(cluster_infos))
+    elif mode == "host":
+        assert cluster_info is not None
+        _print_json(cluster_info.to_dict())
+    else:
+        assert False
+
+
+def main() -> None:
+    logger.setLevel(0)
+    args = _main_parse_args()
+    _main_process(
+        mode=args.mode,
+        credential=args.credential,
+        host=args.host,
+        cluster=args.cluster,
+        validate=not args.no_validate,
+    )
+
+
+if __name__ == "__main__":
+    main()
