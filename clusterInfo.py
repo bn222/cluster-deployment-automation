@@ -8,6 +8,7 @@ from logger import logger
 
 SHEET = "ANL lab HW enablement clusters and connections"
 URL = "https://docs.google.com/spreadsheets/d/1lXvcodJ8dmc_hcp0hzbPDU8t6-hCnAlEWFRdM2r_n0Q"
+SCOPES = ("https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive")
 
 
 @dataclasses.dataclass(kw_only=True)
@@ -36,24 +37,32 @@ def _default_cred_paths() -> list[str]:
     return paths
 
 
+def _read_gspread_sheet(cred_path: str) -> gspread.spreadsheet.Spreadsheet:
+    try:
+        credentials = ServiceAccountCredentials.from_json_keyfile_name(cred_path, SCOPES)
+        file = gspread.auth.authorize(credentials)
+        sheet = file.open(SHEET)
+    except Exception as e:
+        raise ValueError(f"Failure accessing google sheet: {e}. See https://docs.gspread.org/en/latest/oauth2.html#for-bots-using-service-account and share {repr(SHEET)} sheet ( {URL} )")
+    return sheet
+
+
 @tenacity.retry(wait=tenacity.wait_fixed(10), stop=tenacity.stop_after_attempt(5))
+def _read_gspread_sheet_with_retry(cred_path: str) -> gspread.spreadsheet.Spreadsheet:
+    return _read_gspread_sheet(cred_path)
+
+
 def read_sheet() -> list[dict[str, str]]:
     logger.info(f"Reading cluster information from sheet {repr(SHEET)} ( {URL} )")
-    scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
     cred_paths = _default_cred_paths()
     cred_path = None
     for e in cred_paths:
         if os.path.exists(e):
             cred_path = e
             break
-    try:
-        if cred_path is None:
-            raise ValueError(f"Credentials not found in {cred_paths}")
-        credentials = ServiceAccountCredentials.from_json_keyfile_name(cred_path, scopes)
-        file = gspread.auth.authorize(credentials)
-        sheet = file.open(SHEET)
-    except Exception as e:
-        raise ValueError(f"Failure accessing google sheet: {e}. See https://docs.gspread.org/en/latest/oauth2.html#for-bots-using-service-account and share {repr(SHEET)} sheet ( {URL} )")
+    if cred_path is None:
+        raise ValueError(f"Credentials not found in {cred_paths}")
+    sheet = _read_gspread_sheet_with_retry(cred_path)
     sheet1 = sheet.sheet1
     return [{k: str(v) for k, v in record.items()} for record in sheet1.get_all_records()]
 
