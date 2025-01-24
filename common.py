@@ -12,6 +12,7 @@ import shutil
 import host
 from logger import logger
 import json
+import functools
 import os
 import re
 import glob
@@ -629,6 +630,18 @@ def extract_version_or_panic(version: str) -> str:
 def calculate_elapsed_time(start: float, end: float) -> tuple[int, int]:
     minutes, seconds = divmod(int(end - start), 60)
     return minutes, seconds
+
+
+@functools.cache
+def current_host() -> str:
+    chost = os.environ.get("CDA_CURRENT_HOST")
+    if chost:
+        return chost
+    lh = host.LocalHost()
+    res = lh.run("hostname -f")
+    if res.returncode == 0 and (c := res.out.strip()):
+        return c
+    raise RuntimeError(f"Failure detecting current hostname: {res}")
 
 
 def empty_future(result_type: type[T]) -> Future[Optional[T]]:
