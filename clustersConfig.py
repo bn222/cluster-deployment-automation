@@ -11,8 +11,8 @@ from yaml import safe_load
 import host
 from logger import logger
 import common
+import clusterInfo
 from clusterInfo import ClusterInfo
-from clusterInfo import load_all_cluster_info
 from dataclasses import dataclass, field
 from bmc import BmcConfig
 
@@ -144,12 +144,6 @@ class BridgeConfig:
     ip: str
     mask: str
     dynamic_ip_range: Optional[tuple[str, str]] = None
-
-
-# Run the full hostname command
-def current_host() -> str:
-    lh = host.LocalHost()
-    return lh.run("hostname -f").out.strip()
 
 
 class ClustersConfig:
@@ -476,17 +470,8 @@ class ClustersConfig:
         return t
 
     def _ensure_clusters_loaded(self) -> None:
-        if self._cluster_info is not None:
-            return
-        all_cluster_info = load_all_cluster_info()
-        ch = current_host()
-        if ch in all_cluster_info:
-            self._cluster_info = all_cluster_info[ch]
-        elif ch.split(".")[0] in all_cluster_info:
-            self._cluster_info = all_cluster_info[ch.split(".")[0]]
-        else:
-            logger.error(f"Hostname {ch} not found in {all_cluster_info}")
-            sys.exit(-1)
+        if self._cluster_info is None:
+            self._cluster_info = clusterInfo.load_cluster_info()
 
     def all_nodes(self) -> list[NodeConfig]:
         return self.masters + self.workers
