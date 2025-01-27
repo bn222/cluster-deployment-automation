@@ -50,6 +50,8 @@ def load_all_cluster_info() -> dict[str, ClusterInfo]:
             cluster = ClusterInfo(row["Name"])
         if cluster is None:
             continue
+        if row["Name"] == "Other servers":
+            break
         if "BF2" in row["Name"]:
             continue
         if row["Card type"] == "IPU-Cluster":
