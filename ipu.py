@@ -5,7 +5,7 @@ import typing
 from logger import logger
 import dhcpConfig
 from clustersConfig import NodeConfig
-from clustersConfig import BmcConfig
+from bmc import BmcConfig
 from clusterNode import ClusterNode
 import host
 from bmc import BMC
@@ -289,8 +289,9 @@ systemctl restart redfish
             logger.error(f"Request failed: {e}")
 
     def _redfish_available(self, url: str) -> bool:
+        full_url = f"https://{url}:8443/redfish/v1/Systems/1"
         try:
-            response = requests.get(url, auth=(self.user, self.password), verify=False)
+            response = requests.get(full_url, auth=(self.user, self.password), verify=False)
             response.raise_for_status()
             return True
         except requests.exceptions.RequestException:
@@ -374,6 +375,7 @@ systemctl restart redfish
         return match.group(1)
 
     def _redfish_name(self) -> str:
+        print("Getting redfish name")
         url = f"https://{self.url}:8443/redfish/v1/"
         data = self._requests_get(url)
         name = data.get("Name")
@@ -400,6 +402,7 @@ systemctl restart redfish
             return fwversion
 
     def is_ipu(self) -> bool:
+        logger.info(f"Checking if DPU is IPU via {self.url}")
         if self._redfish_available(self.url):
             return "Intel IPU" in self._redfish_name()
         else:

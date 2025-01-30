@@ -69,6 +69,7 @@ class IsoDeployer(BaseDeployer):
         assert self._master.kind == "dpu"
         assert self._master.bmc is not None
         ipu_bmc = ipu.IPUBMC(self._master.bmc)
+        logger.info("Detecting DPU")
         if ipu_bmc.is_ipu():
             node = ipu.IPUClusterNode(self._master, self._cc.get_external_port(), self._cc.network_api_port)
             executor = ThreadPoolExecutor(max_workers=len(self._cc.masters))

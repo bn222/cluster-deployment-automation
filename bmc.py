@@ -1,7 +1,15 @@
 from logger import logger
 import time
 from ailib import Redfish
-from clustersConfig import BmcConfig
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class BmcConfig:
+    url: str
+    user: str = "root"
+    password: str = "calvin"
+
 
 
 class BMC:

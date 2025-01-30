@@ -14,6 +14,7 @@ import common
 from clusterInfo import ClusterInfo
 from clusterInfo import load_all_cluster_info
 from dataclasses import dataclass, field
+from bmc import BmcConfig
 
 
 @dataclass
@@ -90,13 +91,6 @@ mac_generator = MacGenerator()
 
 
 @dataclass
-class BmcConfig:
-    url: str
-    user: str = "root"
-    password: str = "calvin"
-
-
-@dataclass
 class NodeConfig:
     cluster_name: str
     name: str
@@ -124,6 +118,10 @@ class NodeConfig:
         base_path = f'/home/{self.cluster_name}_guests_images'
         qemu_img_name = f'{self.name}.qcow2'
         self.image_path = os.path.join(base_path, qemu_img_name)
+
+        # TODO: fix this properly
+        if self.bmc is not None:
+            self.bmc = BmcConfig(**self.bmc)  # type: ignore
 
     def is_preallocated(self) -> bool:
         return self.preallocated == "true"
@@ -448,15 +446,15 @@ class ClustersConfig:
             assert self._cluster_info is not None
             return self._cluster_info.organization_id
 
-        def imc_hostname(a: int) -> str:
+        def bmc_hostname(a: int) -> str:
             self._ensure_clusters_loaded()
             assert self._cluster_info is not None
-            return self._cluster_info.bmc_imc_hostnames[a]
+            return self._cluster_info.bmc_hostname[a]
 
-        def ipu_mac_address(a: int) -> str:
+        def dpu_mac_address(a: int) -> str:
             self._ensure_clusters_loaded()
             assert self._cluster_info is not None
-            return self._cluster_info.ipu_mac_addresses[a]
+            return self._cluster_info.dpu_mac_addresses[a]
 
         format_string = contents
 
@@ -468,8 +466,8 @@ class ClustersConfig:
         template.globals['bmc'] = bmc
         template.globals['activation_key'] = activation_key
         template.globals['organization_id'] = organization_id
-        template.globals['IMC_hostname'] = imc_hostname
-        template.globals['IPU_mac_address'] = ipu_mac_address
+        template.globals['bmc_hostname'] = bmc_hostname
+        template.globals['DPU_mac_address'] = dpu_mac_address
 
         kwargs = {}
         kwargs["cluster_name"] = cluster_name

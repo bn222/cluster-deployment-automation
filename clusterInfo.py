@@ -14,8 +14,8 @@ class ClusterInfo:
         self.iso_server = ""
         self.organization_id = ""
         self.activation_key = ""
-        self.bmc_imc_hostnames = []  # type: list[str]
-        self.ipu_mac_addresses = []  # type: list[str]
+        self.bmc_hostname = []  # type: list[str]
+        self.dpu_mac_addresses = []  # type: list[str]
         self.workers = []  # type: list[str]
         self.bmcs = []  # type: list[str]
 
@@ -68,8 +68,8 @@ def load_all_cluster_info() -> dict[str, ClusterInfo]:
         if "BF2" in row["Name"]:
             continue
         if row["Card type"] == "IPU-Cluster":
-            cluster.bmc_imc_hostnames.append(row["BMC/IMC hostname"])
-            cluster.ipu_mac_addresses.append(row["MAC"])
+            cluster.bmc_hostname.append(row["BMC/IMC hostname"])
+            cluster.dpu_mac_addresses.append(row["MAC"])
             cluster.iso_server = row["ISO server"]
             cluster.activation_key = row["Activation Key"]
             cluster.organization_id = row["Organization ID"]
