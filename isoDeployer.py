@@ -58,14 +58,25 @@ class IsoDeployer(BaseDeployer):
             logger.info(f"{k}: {v.duration()}")
 
     def _deploy_master(self) -> None:
-        if self._master.kind == "ipu":
+        def is_marvell() -> bool:
+            bmc = self._master.bmc
+            assert bmc is not None
+            h = host.RemoteHost(bmc.url)
+            h.ssh_connect(bmc.user, bmc.password)
+            # TODO, check if pci dev is marvell
+            return False
+
+        assert self._master.kind == "dpu"
+        assert self._master.bmc is not None
+        ipu_bmc = ipu.IPUBMC(self._master.bmc)
+        if ipu_bmc.is_ipu():
             node = ipu.IPUClusterNode(self._master, self._cc.get_external_port(), self._cc.network_api_port)
             executor = ThreadPoolExecutor(max_workers=len(self._cc.masters))
             future = executor.submit(node.start, self._cc.install_iso)
             future.result()
             node.post_boot()
-        elif self._master.kind == "marvell-dpu":
+        elif is_marvell():
             isoCluster.MarvellIsoBoot(self._cc, self._master, self._cc.install_iso)
         else:
-            logger.error("Not tested")
+            logger.error("Unknown DPU")
             sys.exit(-1)

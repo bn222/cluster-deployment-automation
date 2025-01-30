@@ -362,7 +362,7 @@ systemctl restart redfish
     def cold_boot(self) -> None:
         pass
 
-    def _version_via_redfish(self) -> str:
+    def _redfish_version(self) -> str:
         url = f"https://{self.url}:8443/redfish/v1/Managers/1"
         data = self._requests_get(url)
         fwversion = data.get("FirmwareVersion")
@@ -372,6 +372,14 @@ systemctl restart redfish
         if not match:
             logger.error_and_exit("Failed to extract version")
         return match.group(1)
+
+    def _redfish_name(self) -> str:
+        url = f"https://{self.url}:8443/redfish/v1/"
+        data = self._requests_get(url)
+        name = data.get("Name")
+        if not isinstance(name, str):
+            logger.error_and_exit("Failed to get Name")
+        return name
 
     def _version_via_ssh(self) -> Optional[str]:
         rh = host.RemoteHost(self.url)
@@ -384,12 +392,18 @@ systemctl restart redfish
 
     def version(self) -> str:
         if self._redfish_available(self.url):
-            return self._version_via_redfish()
+            return self._redfish_version()
         else:
             fwversion = self._version_via_ssh()
             if not fwversion:
                 raise RuntimeError("Failed to detect imc version thourgh ssh")
             return fwversion
+
+    def is_ipu(self) -> bool:
+        if self._redfish_available(self.url):
+            return "Intel IPU" in self._redfish_name()
+        else:
+            return False
 
 
 def extract_server(url: str) -> str:

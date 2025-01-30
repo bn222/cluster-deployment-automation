@@ -6,6 +6,7 @@ from bmc import BMC
 from concurrent.futures import Future
 from typing import Optional
 import time
+import ipu
 
 LATEST_MEV_FW = "1.8.0.10052"
 
@@ -16,7 +17,11 @@ def ExtraConfigMevFwUp(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[s
     # This preconfig step is expected to run on an IMC only
     assert cc.kind == "iso"
     master = cc.masters[0]
-    assert master.kind == "ipu"
+    assert master.kind == "dpu"
+    assert master.bmc is not None
+    ipu_bmc = ipu.IPUBMC(master.bmc)
+    assert ipu_bmc.is_ipu()
+
     assert master.host_side_bmc is not None
     assert master.bmc is not None
     imc = host.Host(master.bmc.url)
