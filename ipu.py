@@ -58,9 +58,9 @@ class IPUClusterNode(ClusterNode):
         logger.info(f"Redfish boot triggered, attempting to connect to ACC at ip {self.config.ip}")
         # wait on install + reboot to complete
         acc = host.RemoteHost(self.config.ip)
-        # WA since we can't reliably expect the acc to get a dhcp lease due to https://issues.redhat.com/browse/IIC-427
-        self._wait_for_acc_with_retry(acc=acc)
-        # configure_iso_network_port(self.network_api_port, self.config.ip)
+        acc.ssh_connect("root", "redhat")
+        logger.info(acc.run("uname -a"))
+        logger.info("Connected to ACC")
 
     def _wait_for_acc_with_retry(self, acc: host.Host, timeout: int = 1200) -> None:
         # Typically if the acc booted properly it will take < 20 minutes to come up (including the 10 min sleep we do during boot)
