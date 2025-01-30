@@ -11,7 +11,6 @@ class BmcConfig:
     password: str = "calvin"
 
 
-
 class BMC:
     def __init__(self, full_url: str, user: str = "root", password: str = "calvin"):
         self.url = full_url
