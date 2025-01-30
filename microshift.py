@@ -232,7 +232,8 @@ rhsm = true'''.strip()
 
 def deploy(secrets_path: str, node: NodeConfig, external_port: str, version: str) -> None:
     lh = host.LocalHost()
-    bmc = BMC.from_bmc(node.bmc, node.bmc_user, node.bmc_password)
+    assert node.bmc is not None
+    bmc = BMC.from_bmc_config(node.bmc)
     h = Host(node.node, bmc)
     name_of_final_iso = os.path.join(os.getcwd(), 'final.iso')
     login_uname = "redhat"

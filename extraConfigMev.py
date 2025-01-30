@@ -18,7 +18,8 @@ def ExtraConfigMevFwUp(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[s
     master = cc.masters[0]
     assert master.kind == "ipu"
     assert master.host_side_bmc is not None
-    imc = host.Host(master.bmc)
+    assert master.bmc is not None
+    imc = host.Host(master.bmc.url)
 
     # Check if a particular firmware version is being requested or if we will use default
     if cfg.mev_version == "":
@@ -30,7 +31,7 @@ def ExtraConfigMevFwUp(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[s
     if not cfg.force_mev_fw_up:
         logger.info("Checking if firmware update is required")
         if imc.ping():
-            imc.ssh_connect(master.bmc_user, master.bmc_password)
+            imc.ssh_connect(master.bmc.user, master.bmc.password)
             ret = imc.run("cat /etc/issue.net")
             if cfg.mev_version in ret.out:
                 logger.info(f"Current MeV fw version is {ret.out.strip()}, no need to update")
@@ -53,7 +54,7 @@ def ExtraConfigMevFwUp(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[s
     time.sleep(20)
 
     # Access the IMC to validate the flash was successful
-    imc.ssh_connect(master.bmc_user, master.bmc_password)
+    imc.ssh_connect(master.bmc.user, master.bmc.password)
     ret = imc.run("cat /etc/issue.net")
     if cfg.mev_version not in ret.out or ret.returncode != 0:
         logger.error_and_exit(f"Mev firmware release is not the expected version: {ret.out}")

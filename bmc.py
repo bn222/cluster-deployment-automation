@@ -1,6 +1,7 @@
 from logger import logger
 import time
 from ailib import Redfish
+from clustersConfig import BmcConfig
 
 
 class BMC:
@@ -9,6 +10,10 @@ class BMC:
         self.user = user
         self.password = password
         logger.info(f"{full_url} {user} {password}")
+
+    @staticmethod
+    def from_bmc_config(bmc_config: BmcConfig) -> 'BMC':
+        return BMC.from_bmc(bmc_config.url, bmc_config.user, bmc_config.password)
 
     @staticmethod
     def from_url(url: str, user: str = "root", password: str = "calvin") -> 'BMC':

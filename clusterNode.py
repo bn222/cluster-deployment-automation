@@ -208,7 +208,8 @@ class X86ClusterNode(ClusterNode):
         lh = host.LocalHost()
         nfs = NFS(lh, self.external_port)
 
-        bmc = BMC.from_bmc(self.config.bmc, self.config.bmc_user, self.config.bmc_password)
+        assert self.config.bmc is not None
+        bmc = BMC.from_bmc_config(self.config.bmc)
         h = host.HostWithBF2(self.config.node, bmc)
 
         iso = nfs.host_file(os.path.join(os.getcwd(), iso))
@@ -257,7 +258,8 @@ class BFClusterNode(ClusterNode):
         nfs = NFS(lh, self.external_port)
 
         logger.info(f"Preparing BF on host {self.config.node}")
-        bmc = BMC.from_bmc(self.config.bmc, self.config.bmc_user, self.config.bmc_password)
+        assert self.config.bmc is not None
+        bmc = BMC.from_bmc_config(self.config.bmc)
         h = host.HostWithBF2(self.config.node, bmc)
         skip_boot = False
         if h.ping():

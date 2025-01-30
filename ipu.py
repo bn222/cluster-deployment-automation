@@ -5,6 +5,7 @@ import typing
 from logger import logger
 import dhcpConfig
 from clustersConfig import NodeConfig
+from clustersConfig import BmcConfig
 from clusterNode import ClusterNode
 import host
 from bmc import BMC
@@ -77,8 +78,9 @@ class IPUClusterNode(ClusterNode):
                 if failures == 5:
                     logger.error_and_exit("Too many failures trying to get ACC up")
                 logger.info("ACC has not responded in a reasonable amount of time, rebooting IMC")
-                imc = host.RemoteHost(self.config.bmc)
-                imc.ssh_connect(self.config.bmc_user, self.config.bmc_password)
+                assert self.config.bmc is not None
+                imc = host.RemoteHost(self.config.bmc.url)
+                imc.ssh_connect(self.config.bmc.user, self.config.bmc.password)
                 imc.run("reboot")
                 timeout = 240
 
@@ -87,6 +89,7 @@ class IPUClusterNode(ClusterNode):
         logger.info("Connected to ACC")
 
     def start(self, iso_or_image_path: str) -> bool:
+        assert self.config.bmc is not None
         ipu_bmc = IPUBMC(self.config.bmc)
         if ipu_bmc.version() != "1.8.0":
             logger.error_and_exit(f"Unexpected version {ipu_bmc.version()}, should be 1.8.0")
@@ -98,7 +101,8 @@ class IPUClusterNode(ClusterNode):
 
     def _redfish_boot_ipu(self, external_port: str, node: NodeConfig, iso: str) -> None:
         def helper(node: NodeConfig, iso_address: str) -> str:
-            logger.info(f"Booting {node.bmc} with {iso_address}")
+            assert node.bmc is not None
+            logger.info(f"Booting {node.bmc.url} with {iso_address}")
             bmc = IPUBMC(node.bmc)
             bmc.boot_iso_with_redfish(iso_path=iso_address)
             return "Boot command sent"
@@ -122,23 +126,14 @@ class IPUClusterNode(ClusterNode):
     def post_boot(self, *, desired_ip_range: Optional[tuple[str, str]] = None) -> bool:
         return True
 
-    def _ipu_host(self) -> host.Host:
-        def host_from_imc(imc: str) -> str:
-            ipu_host = imc.split('-intel-ipu-imc')[0]
-            return ipu_host
-
-        node = self.config
-        ipu_host_name = host_from_imc(node.bmc)
-        ipu_host_url = f"{ipu_host_name}-drac.anl.eng.bos2.dc.redhat.com"
-        ipu_host_bmc = BMC.from_bmc(ipu_host_url, "root", "calvin")
-        return host.Host(ipu_host_name, ipu_host_bmc)
-
 
 class IPUBMC(BMC):
-    def __init__(self, full_url: str, user: str = "root", password: str = "calvin"):
-        if password == "calvin":
+    def __init__(self, bmc_config: BmcConfig):
+        if bmc_config.password == "calvin":
             password = "calvincalvincalvin"
-        super().__init__(full_url, user, password)
+        else:
+            password = bmc_config.password
+        super().__init__(bmc_config.url, bmc_config.user, password)
 
     def _restart_redfish(self) -> None:
         rh = host.RemoteHost(self.url)

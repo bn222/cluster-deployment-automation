@@ -90,6 +90,13 @@ mac_generator = MacGenerator()
 
 
 @dataclass
+class BmcConfig:
+    url: str
+    user: str = "root"
+    password: str = "calvin"
+
+
+@dataclass
 class NodeConfig:
     cluster_name: str
     name: str
@@ -97,9 +104,8 @@ class NodeConfig:
     kind: str
     image_path: str = field(init=False)
     mac: str = field(default_factory=lambda: mac_generator.next_mac())
-    bmc: str = ""
-    bmc_user: str = "root"
-    bmc_password: str = "calvin"
+    bmc: Optional[BmcConfig] = None
+    bmc_host: Optional[BmcConfig] = None
     host_side_bmc: Optional[str] = None
     ip: Optional[str] = None
     preallocated: str = "true"
@@ -112,12 +118,8 @@ class NodeConfig:
     def __post_init__(self) -> None:
         # bmc ip is mandatory for physical, not for vm
         if self.kind == "physical" or self.kind == "bf" or self.kind == "ipu":
-            if self.bmc == "":
+            if self.bmc is None:
                 raise ValueError("NodeConfig: bmc not provided")
-        else:
-            delattr(self, "bmc")
-            delattr(self, "bmc_user")
-            delattr(self, "bmc_password")
 
         base_path = f'/home/{self.cluster_name}_guests_images'
         qemu_img_name = f'{self.name}.qcow2'

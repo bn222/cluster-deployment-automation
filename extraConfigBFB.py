@@ -54,7 +54,8 @@ def ExtraConfigBFB(cc: ClustersConfig, _: ExtraConfigArgs, futures: dict[str, Fu
     # Assuming that all workers have BF that need to reset to bfb image in
     # dpu mode
     for e in cc.workers:
-        bmc = BMC.from_bmc(e.bmc, e.bmc_user, e.bmc_password)
+        assert e.bmc is not None
+        bmc = BMC.from_bmc_config(e.bmc)
         h = host.HostWithBF2(e.node, bmc)
         futures[e.name].result()
         f = executor.submit(helper, h)
@@ -86,7 +87,8 @@ def ExtraConfigSwitchNicMode(cc: ClustersConfig, _: ExtraConfigArgs, futures: di
 
     logger.info("Cold booting.....")
     for e in cc.workers:
-        bmc = BMC.from_bmc(e.bmc, e.bmc_user, e.bmc_password)
+        assert e.bmc is not None
+        bmc = BMC.from_bmc_config(e.bmc)
         h = host.HostWithBF2(e.node, bmc)
         futures[e.name].result()
         f = executor.submit(helper, h)
