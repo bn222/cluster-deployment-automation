@@ -124,6 +124,13 @@ class IPUClusterNode(ClusterNode):
                 logger.info(helper(node, iso_address))
 
     def post_boot(self, *, desired_ip_range: Optional[tuple[str, str]] = None) -> bool:
+        logger.info("Workaround: cold booting the host since currently driver can't deal with host rebooting without coordination")
+        assert self.config.host_side_bmc is not None
+        ipu_host_bmc = BMC.from_bmc(self.config.host_side_bmc)
+        ipu_host_bmc.cold_boot()
+        assert self.config.ip is not None
+        acc = host.RemoteHost(self.config.ip)
+        self._wait_for_acc_with_retry(acc=acc, timeout=300)
         return True
 
 
