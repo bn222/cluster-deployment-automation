@@ -19,9 +19,10 @@ clusters:
     - name: "mycluster-worker-1"
       kind: "physical"
       node: "..."
-      bmc_user: "root"
-      bmc_password: "..."
-      bmc: "hostname or ip"
+      bmc:
+        user: "root"
+        password: "..."
+        url: "hostname or ip"
     hosts:
     - name: "mycluster-worker-1"
       network_api_port: auto

@@ -29,6 +29,7 @@ clusters:
     - name: "worker-229"
       kind: "physical"
       node: "host229.example.com"
-      bmc_user: "root"
-      bmc_password: "12345"
-      bmc: "172.144.16.67"
+      bmc:
+        user: "root"
+        password: "12345"
+        url: "172.144.16.67"

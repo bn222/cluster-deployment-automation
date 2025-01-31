@@ -19,6 +19,7 @@ clusters:
     - name: "mycluster-worker-1"
       kind: "physical"
       node: "..."
-      bmc_user: "root"
-      bmc_password: "..."
-      bmc: "hostname or ip"
+      bmc:
+        url: "root"
+        password: "..."
+        url: "hostname or ip"
