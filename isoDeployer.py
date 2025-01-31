@@ -63,8 +63,7 @@ class IsoDeployer(BaseDeployer):
             assert bmc is not None
             h = host.RemoteHost(bmc.url)
             h.ssh_connect(bmc.user, bmc.password)
-            # TODO, check if pci dev is marvell
-            return False
+            return "177d:b900" in h.run("lspci -nn -d :b900").out
 
         assert self._master.kind == "dpu"
         assert self._master.bmc is not None

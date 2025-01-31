@@ -2,14 +2,15 @@ import os
 import shlex
 from clustersConfig import ClustersConfig
 from clustersConfig import NodeConfig
+from bmc import BmcConfig
 import dhcpConfig
 import common
 import host
 
 
-def _pxeboot_marvell_dpu(name: str, node: str, mac: str, ip: str, iso: str) -> None:
-    rsh = host.RemoteHost(node)
-    rsh.ssh_connect("core")
+def _pxeboot_marvell_dpu(name: str, bmc: BmcConfig, mac: str, ip: str, iso: str) -> None:
+    rsh = host.RemoteHost(bmc.url)
+    rsh.ssh_connect(bmc.user, bmc.password)
 
     ip_addr = f"{ip}/24"
     ip_gateway, _ = dhcpConfig.get_subnet_range(ip, "255.255.255.0")
@@ -57,7 +58,8 @@ def _pxeboot_marvell_dpu(name: str, node: str, mac: str, ip: str, iso: str) -> N
 
 def MarvellIsoBoot(cc: ClustersConfig, node: NodeConfig, iso: str) -> None:
     assert node.ip is not None
-    _pxeboot_marvell_dpu(node.name, node.node, node.mac, node.ip, iso)
+    assert node.bmc is not None
+    _pxeboot_marvell_dpu(node.name, node.bmc, node.mac, node.ip, iso)
     dhcpConfig.configure_iso_network_port(cc.network_api_port, node.ip)
     dhcpConfig.configure_dhcpd(node)
 
