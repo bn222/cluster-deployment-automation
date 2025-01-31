@@ -21,7 +21,8 @@ clusters:
       kind: "vm"
       node: "localhost"
       ip: "192.168.122.144"
-      bmc: "hostname or ip"
+      bmc:
+        url: "hostname or ip"
     - name: "vm-worker-2"
       kind: "vm"
       node: "localhost"

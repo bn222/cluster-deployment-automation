@@ -9,6 +9,7 @@ clusters:
       kind: "physical"
       node: "wsfd-advnetlab06.anl.lab.eng.bos.redhat.com"
       ip: "10.19.128.15"
-      bmc: "10.19.128.16"
-      bmc_user: "root"
-      bmc_password: "calvin"
+      bmc:
+        url: "10.19.128.16"
+        user: "root"
+        password: "calvin"
