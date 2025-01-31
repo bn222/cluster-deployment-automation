@@ -147,7 +147,7 @@ def _get_cluster_info_desc(
         msg_selector += f" for host {repr(match_hostname)}"
     if match_name is not None:
         if msg_selector:
-            msg_selector += " or"
+            msg_selector += " and"
         if isinstance(match_name, str):
             s = f"{repr(match_name)}"
         else:
@@ -199,36 +199,53 @@ def load_cluster_info(
     if cluster_infos is None:
         cluster_infos = load_all_cluster_info(credentials=credentials)
 
-    cluster_info: Optional[ClusterInfo] = None
+    ci_lst_hostname: Optional[dict[int, ClusterInfo]] = None
+    if match_hostname is not None:
+        if "." in match_hostname:
+            hostname_part = match_hostname.split(".")[0]
+        else:
+            hostname_part = match_hostname
 
-    if match_hostname:
-        cluster_info = cluster_infos.get(match_hostname, None)
+        def _match_hostname(ci_hostname: str) -> bool:
+            if ci_hostname == match_hostname:
+                return True
+            if not try_plain_hostname:
+                return False
+            if "." in ci_hostname and "." in match_hostname:
+                # Both hostnames are FQDN. We don't match by hostname alone.
+                return False
+            return ci_hostname.startswith(hostname_part) and (len(ci_hostname) == len(hostname_part) or ci_hostname[len(hostname_part)] == ".")
 
-    if cluster_info is None:
-        result_list: list[ClusterInfo] = []
-        if try_plain_hostname and match_hostname is not None:
-            if "." in match_hostname:
-                hostname_part = match_hostname.split(".")[0]
-            else:
-                hostname_part = match_hostname
+        ci_lst_hostname = {id(ci): ci for ci in cluster_infos.values() if _match_hostname(ci.provision_host)}
 
-            def _match_hostname(ci_hostname: str) -> bool:
-                if "." in ci_hostname and "." in match_hostname:
-                    # Both hostnames are FQDN. We don't match by hostname alone.
-                    return False
-                return ci_hostname.startswith(hostname_part) and (len(ci_hostname) == len(hostname_part) or ci_hostname[len(hostname_part)] == ".")
-
-            result_list.extend(ci for ci in cluster_infos.values() if _match_hostname(ci.provision_host))
-        if match_name:
+    ci_lst_name: Optional[dict[int, ClusterInfo]] = None
+    if match_name:
+        if isinstance(match_name, str):
 
             def _match_name(name: str) -> bool:
-                if isinstance(match_name, str):
-                    return name == match_name
+                return name == match_name
+
+        else:
+
+            def _match_name(name: str) -> bool:
                 return bool(match_name.search(name))
 
-            result_list.extend(ci for ci in cluster_infos.values() if _match_name(ci.name))
-        if len({ci.provision_host for ci in result_list}) == 1:
-            cluster_info = result_list[0]
+        ci_lst_name = {id(ci): ci for ci in cluster_infos.values() if _match_name(ci.name)}
+
+    ci_lst: Optional[dict[int, ClusterInfo]]
+    if ci_lst_hostname is not None and ci_lst_name is not None:
+        # Both matchers were selected. We do an intersection. Both selectors
+        # must apply.
+        ci_lst = {k: ci_lst_hostname[k] for k in (ci_lst_hostname.keys() & ci_lst_name.keys())}
+    elif ci_lst_hostname is not None:
+        ci_lst = ci_lst_hostname
+    else:
+        ci_lst = ci_lst_name
+
+    cluster_info: Optional[ClusterInfo] = None
+    if ci_lst and len(ci_lst) == 1:
+        # We need a unique match.
+        cluster_info = next(iter(ci_lst.values()))
 
     if cluster_info is None:
         if required:
