@@ -9,8 +9,20 @@ import host
 
 
 def _pxeboot_marvell_dpu(name: str, bmc: BmcConfig, mac: str, ip: str, iso: str) -> None:
+    # For Marvell DPU, we require that our "BMC" is the host on has the DPU
+    # plugged in.
+    #
+    # We also assume, that the user name is "core" and that we can SSH into
+    # that host with public key authentication. We ignore the `bmc.user`
+    # setting. The reason for that is so that dpu-operator's
+    # "hack/cluster-config/config-dpu.yaml" (which should work with IPU and
+    # Marvell DPU) does not need to specify different BMC user name and
+    # passwords. If you solve how to express the BMC authentication in the
+    # cluster config in a way that is suitable for IPU and Marvell DPU at the
+    # same time (e.g. via Jinja2 templates), we can start honoring
+    # bmc.user/bmc.password.
     rsh = host.RemoteHost(bmc.url)
-    rsh.ssh_connect(bmc.user, bmc.password)
+    rsh.ssh_connect("core")
 
     ip_addr = f"{ip}/24"
     ip_gateway, _ = dhcpConfig.get_subnet_range(ip, "255.255.255.0")
