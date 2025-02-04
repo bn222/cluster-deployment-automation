@@ -2,6 +2,7 @@ import ipaddress
 from dataclasses import dataclass, field
 import re
 from typing import Tuple
+from typing import Optional
 from logger import logger
 import common
 from pathlib import Path
@@ -125,7 +126,7 @@ def dhcp_config_from_file(file_path: str = DHCPD_CONFIG_PATH) -> DhcpConfig:
     ntp_servers_pattern = re.compile(r'\s*option\s+ntp-servers\s+([^;]+);')
 
     current_subnet = None
-    current_host = None
+    current_host: Optional[dict[str, str]] = None
 
     for line in lines:
         subnet_match = subnet_pattern.match(line)
@@ -185,7 +186,7 @@ def dhcp_config_from_file(file_path: str = DHCPD_CONFIG_PATH) -> DhcpConfig:
         if host_match:
             if current_host is not None:
                 logger.error_and_exit(f"Malformed host in dhcpd config {file_path}")
-            current_host = {'hostname': host_match.group(1), 'hardware_ethernet': None, 'fixed_address': None}
+            current_host = {'hostname': host_match.group(1), 'hardware_ethernet': '', 'fixed_address': ''}
             continue
 
         if current_host is not None:
@@ -200,7 +201,7 @@ def dhcp_config_from_file(file_path: str = DHCPD_CONFIG_PATH) -> DhcpConfig:
                 continue
 
             if '}' in line:
-                config._host_configs.append(DhcpdHostConfig(hostname=str(current_host['hostname']), hardware_ethernet=str(current_host['hardware_ethernet']), fixed_address=str(current_host['fixed_address'])))
+                config._host_configs.append(DhcpdHostConfig(hostname=current_host['hostname'], hardware_ethernet=current_host['hardware_ethernet'], fixed_address=current_host['fixed_address']))
                 current_host = None
     return config
 
