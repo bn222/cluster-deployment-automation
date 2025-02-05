@@ -67,38 +67,38 @@ class BMC:
     """
 
     def boot_iso_redfish(self, iso_path: str, retries: int = 10, retry_delay: int = 60) -> None:
+        def boot_iso_with_retry(iso_path: str) -> None:
+            logger.info(iso_path)
+            logger.info(f"Trying to boot {self.url} using {iso_path}")
+            red = self._redfish()
+            try:
+                red.eject_iso()
+            except Exception as e:
+                logger.info(e)
+                logger.info("eject failed, but continuing")
+            logger.info(f"inserting iso {iso_path}")
+            red.insert_iso(iso_path)
+            try:
+                red.set_iso_once()
+            except Exception as e:
+                logger.info(e)
+                raise e
+
+            logger.info("setting to boot from iso")
+            red.restart()
+            time.sleep(10)
+            logger.info(f"Finished sending boot to {self.url}")
+
         assert ":" in iso_path
         for attempt in range(retries):
             try:
-                self.boot_iso_with_retry(iso_path)
+                boot_iso_with_retry(iso_path)
                 return
             except Exception as e:
                 if attempt == retries - 1:
                     raise e
                 else:
                     time.sleep(retry_delay)
-
-    def boot_iso_with_retry(self, iso_path: str) -> None:
-        logger.info(iso_path)
-        logger.info(f"Trying to boot {self.url} using {iso_path}")
-        red = self._redfish()
-        try:
-            red.eject_iso()
-        except Exception as e:
-            logger.info(e)
-            logger.info("eject failed, but continuing")
-        logger.info(f"inserting iso {iso_path}")
-        red.insert_iso(iso_path)
-        try:
-            red.set_iso_once()
-        except Exception as e:
-            logger.info(e)
-            raise e
-
-        logger.info("setting to boot from iso")
-        red.restart()
-        time.sleep(10)
-        logger.info(f"Finished sending boot to {self.url}")
 
     def _redfish(self) -> Redfish:
         return Redfish(self.url, self.user, self.password, model='dell', debug=False)
