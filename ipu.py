@@ -413,7 +413,8 @@ systemctl restart redfish
         if self._redfish_available(self.url):
             return "Intel IPU" in self._redfish_name()
         else:
-            return False
+            # workaround: remove when redfish is started properly at boot
+            return self._version_via_ssh() is not None
 
 
 def extract_server(url: str) -> str:
