@@ -58,13 +58,6 @@ class IsoDeployer(BaseDeployer):
             logger.info(f"{k}: {v.duration()}")
 
     def _deploy_master(self) -> None:
-        def is_marvell() -> bool:
-            bmc = self._master.bmc
-            assert bmc is not None
-            h = host.RemoteHost(bmc.url)
-            h.ssh_connect(bmc.user, bmc.password)
-            return "177d:b900" in h.run("lspci -nn -d :b900").out
-
         assert self._master.kind == "dpu"
         assert self._master.bmc is not None
         ipu_bmc = ipu.IPUBMC(self._master.bmc)
@@ -75,7 +68,7 @@ class IsoDeployer(BaseDeployer):
             future = executor.submit(node.start, self._cc.install_iso)
             future.result()
             node.post_boot()
-        elif is_marvell():
+        elif isoCluster.is_marvell(self._master.bmc):
             isoCluster.MarvellIsoBoot(self._cc, self._master, self._cc.install_iso)
         else:
             logger.error("Unknown DPU")
