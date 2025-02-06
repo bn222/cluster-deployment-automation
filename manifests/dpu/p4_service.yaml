@@ -5,9 +5,7 @@ metadata:
 spec:
   selector:
     app: vsp-p4
-  type: NodePort
   ports:
   - protocol: TCP
     port: 9559
     targetPort: 9559
-    nodePort: 30059 

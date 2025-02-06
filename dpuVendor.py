@@ -39,15 +39,12 @@ class IpuPlugin(VendorPlugin):
         # If p4 pod already exists from previous run, kill this first.
         acc.run(f"podman ps --filter ancestor={local_img} --format '{{{{.ID}}}}' | xargs -r podman kill")
 
-        # Temporarily use a container until issue with p4 running as a pod is resolved: https://issues.redhat.com/browse/IIC-465
-        # start_p4_pod(acc, client, local_img)
-        self.start_p4_container(acc, local_img)
+        start_p4_pod(acc, client, local_img)
 
     def start_p4_pod(self, acc: host.Host, client: K8sClient, image: str) -> None:
         self.configure_p4_hugepages(acc)
 
         logger.info("Manually starting P4 pod")
-        acc.run_or_die("mkdir -p /opt/p4/p4-cp-nws/var/run/openvswitch")  # WA https://issues.redhat.com/browse/IIC-421
         with open(self._p4_manifest) as f:
             j2_template = jinja2.Template(f.read())
             rendered = j2_template.render(ipu_vsp_p4=image)
@@ -71,12 +68,6 @@ class IpuPlugin(VendorPlugin):
         rh.run("echo 512 > /sys/devices/system/node/node0/hugepages/hugepages-2048kB/nr_hugepages")
         # Restart microshift to make sure the resource is available
         rh.run_or_die("systemctl restart microshift")
-
-    def start_p4_container(self, acc: host.Host, image: str) -> None:
-        uname = acc.run("uname -r").out.strip()
-        cmd = f"podman run -d --privileged -v /lib/modules/{uname}:/lib/modules/{uname} -v /opt/p4/p4-cp-nws/var/run:/opt/p4/p4-cp-nws/var/run -v /sys:/sys -v /dev:/dev -p 9559:9559 {image}"
-        acc.run_or_die("mkdir -p /opt/p4/p4-cp-nws/var/run/openvswitch")
-        acc.run_or_die(cmd)
 
 
 class MarvellDpuPlugin(VendorPlugin):
