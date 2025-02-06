@@ -392,7 +392,12 @@ systemctl restart redfish
 
     def _version_via_ssh(self) -> Optional[str]:
         rh = host.RemoteHost(self.url)
-        rh.ssh_connect("root", password="", discover_auth=False)
+        # TODO: after mev ts upgrade, remove the timeout + try/except
+        try:
+            rh.ssh_connect("root", password="", discover_auth=False, timeout=5)
+        except:
+            return None
+
         contents = rh.read_file("/etc/issue")
         match = re.search(r"Version: (\S+)", contents)
         if not match:

@@ -146,7 +146,7 @@ class Host:
     def is_localhost(self) -> bool:
         return self._hostname in ("localhost", socket.gethostname())
 
-    def ssh_connect(self, username: str, password: Optional[str] = None, discover_auth: bool = True, rsa_path: str = default_id_rsa_path(), ed25519_path: str = default_ed25519_path()) -> None:
+    def ssh_connect(self, username: str, password: Optional[str] = None, *, discover_auth: bool = True, rsa_path: str = default_id_rsa_path(), ed25519_path: str = default_ed25519_path(), timeout: float = 3600) -> None:
         assert not self.is_localhost()
         if not self.ping():
             logger.info(f"waiting for '{self._hostname}' to respond to ping")
@@ -176,7 +176,7 @@ class Host:
             auto = AutoLogin(self._hostname, username)
             self._logins.append(auto)
 
-        self.ssh_connect_looped(self._logins)
+        self.ssh_connect_looped(self._logins, timeout)
 
     def ssh_connect_looped(self, logins: list[Login], timeout: float = 3600) -> None:
         if not logins:
