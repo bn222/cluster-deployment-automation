@@ -40,7 +40,7 @@ class IpuPlugin(VendorPlugin):
         # If p4 pod already exists from previous run, kill this first.
         acc.run(f"podman ps --filter ancestor={local_img} --format '{{{{.ID}}}}' | xargs -r podman kill")
 
-        start_p4_pod(acc, local_img)
+        self.start_p4_pod(acc, local_img)
 
     def start_p4_pod(self, acc: host.Host, image: str) -> None:
         self.configure_p4_hugepages(acc)
