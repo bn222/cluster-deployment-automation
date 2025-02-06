@@ -26,8 +26,9 @@ class VendorPlugin(ABC):
 class IpuPlugin(VendorPlugin):
     P4_IMG = "wsfd-advnetlab217.anl.eng.bos2.dc.redhat.com:5000/intel-ipu-sdk:kubecon-aarch64"
 
-    def __init__(self) -> None:
+    def __init__(self, client: K8sClient) -> None:
         self._p4_manifest = "./manifests/dpu/dpu_p4_ds.yaml.j2"
+        self._client = client
 
     def build_push_start(self, acc: host.Host, imgReg: ImageRegistry) -> None:
         lh = host.LocalHost()
@@ -39,9 +40,9 @@ class IpuPlugin(VendorPlugin):
         # If p4 pod already exists from previous run, kill this first.
         acc.run(f"podman ps --filter ancestor={local_img} --format '{{{{.ID}}}}' | xargs -r podman kill")
 
-        start_p4_pod(acc, client, local_img)
+        start_p4_pod(acc, local_img)
 
-    def start_p4_pod(self, acc: host.Host, client: K8sClient, image: str) -> None:
+    def start_p4_pod(self, acc: host.Host, image: str) -> None:
         self.configure_p4_hugepages(acc)
 
         logger.info("Manually starting P4 pod")
@@ -52,12 +53,12 @@ class IpuPlugin(VendorPlugin):
             with open(tmp_file, "w") as f:
                 f.write(rendered)
 
-        client.oc(f"delete -f {tmp_file}")
-        client.oc_run_or_die(f"create -f {tmp_file}")
+        self._client.oc(f"delete -f {tmp_file}")
+        self._client.oc_run_or_die(f"create -f {tmp_file}")
 
         # The vsp looks for the service provided by the p4 pod on localhost, make sure to create a service in OCP to expose it
-        client.oc_run_or_die("create -f manifests/dpu/p4_service.yaml")
-        client.wait_ds_running(ds="vsp-p4", namespace="default")
+        self._client.oc_run_or_die("create -f manifests/dpu/p4_service.yaml")
+        self._client.wait_ds_running(ds="vsp-p4", namespace="default")
 
     def configure_p4_hugepages(self, rh: host.Host) -> None:
         logger.info("Configuring hugepages for p4 pod")
@@ -79,7 +80,7 @@ class MarvellDpuPlugin(VendorPlugin):
         logger.warning("Setting up Marvell DPU not yet implemented")
 
 
-def init_vendor_plugin(h: host.Host, node_kind: str) -> VendorPlugin:
+def init_vendor_plugin(h: host.Host, client: K8sClient, node_kind: str) -> VendorPlugin:
     # TODO: Vendor hardware will be handled inside the operator. The user will not explicitely configure the system
     # based on what hardware he is running on. From the perspective of the user, he's dealing with abstract DPUs.
     # This function will therefore be removed completely
@@ -88,7 +89,7 @@ def init_vendor_plugin(h: host.Host, node_kind: str) -> VendorPlugin:
         return MarvellDpuPlugin()
     else:
         logger.info(f"Detected Intel IPU hardware on {h.hostname()}")
-        return IpuPlugin()
+        return IpuPlugin(client)
 
 
 def extractContainerImage(dockerfile: str) -> str:
