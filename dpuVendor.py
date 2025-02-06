@@ -26,8 +26,9 @@ class VendorPlugin(ABC):
 class IpuPlugin(VendorPlugin):
     P4_IMG = "wsfd-advnetlab217.anl.eng.bos2.dc.redhat.com:5000/intel-ipu-sdk:kubecon-aarch64"
 
-    def __init__(self) -> None:
+    def __init__(self, client: K8sClient) -> None:
         self._p4_manifest = "./manifests/dpu/dpu_p4_ds.yaml.j2"
+        self._client = client
 
     def build_push_start(self, acc: host.Host, imgReg: ImageRegistry) -> None:
         lh = host.LocalHost()
@@ -39,15 +40,12 @@ class IpuPlugin(VendorPlugin):
         # If p4 pod already exists from previous run, kill this first.
         acc.run(f"podman ps --filter ancestor={local_img} --format '{{{{.ID}}}}' | xargs -r podman kill")
 
-        # Temporarily use a container until issue with p4 running as a pod is resolved: https://issues.redhat.com/browse/IIC-465
-        # start_p4_pod(acc, client, local_img)
-        self.start_p4_container(acc, local_img)
+        self.start_p4_pod(acc, local_img)
 
-    def start_p4_pod(self, acc: host.Host, client: K8sClient, image: str) -> None:
+    def start_p4_pod(self, acc: host.Host, image: str) -> None:
         self.configure_p4_hugepages(acc)
 
         logger.info("Manually starting P4 pod")
-        acc.run_or_die("mkdir -p /opt/p4/p4-cp-nws/var/run/openvswitch")  # WA https://issues.redhat.com/browse/IIC-421
         with open(self._p4_manifest) as f:
             j2_template = jinja2.Template(f.read())
             rendered = j2_template.render(ipu_vsp_p4=image)
@@ -55,12 +53,13 @@ class IpuPlugin(VendorPlugin):
             with open(tmp_file, "w") as f:
                 f.write(rendered)
 
-        client.oc(f"delete -f {tmp_file}")
-        client.oc_run_or_die(f"create -f {tmp_file}")
+        self._client.oc(f"delete -f {tmp_file}")
+        self._client.oc_run_or_die(f"create -f {tmp_file}")
 
         # The vsp looks for the service provided by the p4 pod on localhost, make sure to create a service in OCP to expose it
-        client.oc_run_or_die("create -f manifests/dpu/p4_service.yaml")
-        client.wait_ds_running(ds="vsp-p4", namespace="default")
+        self._client.oc("delete -f manifests/dpu/p4_service.yaml")
+        self._client.oc_run_or_die("create -f manifests/dpu/p4_service.yaml")
+        self._client.wait_ds_running(ds="vsp-p4", namespace="default")
 
     def configure_p4_hugepages(self, rh: host.Host) -> None:
         logger.info("Configuring hugepages for p4 pod")
@@ -72,12 +71,6 @@ class IpuPlugin(VendorPlugin):
         # Restart microshift to make sure the resource is available
         rh.run_or_die("systemctl restart microshift")
 
-    def start_p4_container(self, acc: host.Host, image: str) -> None:
-        uname = acc.run("uname -r").out.strip()
-        cmd = f"podman run -d --privileged -v /lib/modules/{uname}:/lib/modules/{uname} -v /opt/p4/p4-cp-nws/var/run:/opt/p4/p4-cp-nws/var/run -v /sys:/sys -v /dev:/dev -p 9559:9559 {image}"
-        acc.run_or_die("mkdir -p /opt/p4/p4-cp-nws/var/run/openvswitch")
-        acc.run_or_die(cmd)
-
 
 class MarvellDpuPlugin(VendorPlugin):
     def __init__(self) -> None:
@@ -88,7 +81,7 @@ class MarvellDpuPlugin(VendorPlugin):
         logger.warning("Setting up Marvell DPU not yet implemented")
 
 
-def init_vendor_plugin(h: host.Host, node_kind: str) -> VendorPlugin:
+def init_vendor_plugin(h: host.Host, client: K8sClient, node_kind: str) -> VendorPlugin:
     # TODO: Vendor hardware will be handled inside the operator. The user will not explicitely configure the system
     # based on what hardware he is running on. From the perspective of the user, he's dealing with abstract DPUs.
     # This function will therefore be removed completely
@@ -97,7 +90,7 @@ def init_vendor_plugin(h: host.Host, node_kind: str) -> VendorPlugin:
         return MarvellDpuPlugin()
     else:
         logger.info(f"Detected Intel IPU hardware on {h.hostname()}")
-        return IpuPlugin()
+        return IpuPlugin(client)
 
 
 def extractContainerImage(dockerfile: str) -> str:
