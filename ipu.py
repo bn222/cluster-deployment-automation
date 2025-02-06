@@ -395,7 +395,7 @@ systemctl restart redfish
         # TODO: after mev ts upgrade, remove the timeout + try/except
         try:
             rh.ssh_connect("root", password="", discover_auth=False, timeout=5)
-        except:
+        except Exception:
             return None
 
         contents = rh.read_file("/etc/issue")
