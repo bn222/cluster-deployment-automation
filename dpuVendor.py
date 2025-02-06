@@ -57,6 +57,7 @@ class IpuPlugin(VendorPlugin):
         self._client.oc_run_or_die(f"create -f {tmp_file}")
 
         # The vsp looks for the service provided by the p4 pod on localhost, make sure to create a service in OCP to expose it
+        self._client.oc("delete -f manifests/dpu/p4_service.yaml")
         self._client.oc_run_or_die("create -f manifests/dpu/p4_service.yaml")
         self._client.wait_ds_running(ds="vsp-p4", namespace="default")
 
