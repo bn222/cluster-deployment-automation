@@ -45,7 +45,8 @@ class IpuPlugin(VendorPlugin):
         self.configure_p4_hugepages(acc)
 
         logger.info("Manually starting P4 pod")
-        acc.run_or_die("mkdir -p /opt/p4/p4-cp-nws/var/run/openvswitch") # WA https://issues.redhat.com/browse/IIC-421
+        # WA https://issues.redhat.com/browse/IIC-421
+        acc.run_or_die("mkdir -p /opt/p4/p4-cp-nws/var/run/openvswitch")
         with open(self._p4_manifest) as f:
             j2_template = jinja2.Template(f.read())
             rendered = j2_template.render(ipu_vsp_p4=image)
