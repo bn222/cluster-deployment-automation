@@ -346,12 +346,8 @@ class ClusterDeployer(BaseDeployer):
 
         self._ai.download_kubeconfig_and_secrets(self._cc.name, self._cc.kubeconfig)
 
-        nodes_with_futures = [(n.config.name, executor.submit(n.ensure_reboot)) for n in master_nodes]
-
-        def cb() -> None:
-            self._ai.check_any_host_error()
-
-        wait_futures("reboot node", nodes_with_futures, cb)
+        nodes_with_futures = [(n.config.name, executor.submit(self._wait_master_reboot, infra_env, n)) for n in master_nodes]
+        wait_futures("reboot node", nodes_with_futures)
 
         self._ai.wait_cluster_status(cluster_name, "installed")
 
@@ -442,6 +438,21 @@ class ClusterDeployer(BaseDeployer):
         for h in hosts_with_workers:
             for worker in h.k8s_worker_nodes:
                 worker.set_password()
+
+    def _wait_master_reboot(self, infra_env: str, node: ClusterNode) -> bool:
+        def master_ready(ai: AssistedClientAutomation, node_name: str) -> bool:
+            info = ai.get_ai_host(node_name)
+            return info is not None and (info.status in ["error", "installing-pending-user-action"] or (info.status == "installing-in-progress" and info.status_info == "Rebooting"))
+
+        name = node.config.name
+        common.wait_true(f"master {name}", 0, master_ready, ai=self._ai, node_name=name)
+        info = self._ai.get_ai_host(name)
+        if info is not None and info.status == "installing-in-progress" and info.status_info == "Rebooting" and node.ensure_reboot():
+            logger.info(f"Master {name} reboot finished")
+            return True
+
+        logger.error(f"Master {name} reboot failed")
+        return False
 
     def _install_worker_with_retry(self, infra_env: str, node: ClusterNode) -> bool:
         def installation_finished(ai: AssistedClientAutomation, node_name: str) -> bool:
