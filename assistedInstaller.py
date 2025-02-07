@@ -23,6 +23,7 @@ class AssistedClientHostInfo:
     name: str
     id: str
     status: str
+    status_info: str
     inventory: str
 
 
@@ -182,7 +183,7 @@ class AssistedClientAutomation(AssistedClient):  # type: ignore
     def list_ai_hosts(self) -> list[AssistedClientHostInfo]:
         ret = []
         for h in filter(lambda x: "inventory" in x, self.list_hosts()):
-            ret.append(AssistedClientHostInfo(h["requested_hostname"], h["id"], h["status"], h["inventory"]))
+            ret.append(AssistedClientHostInfo(h["requested_hostname"], h["id"], h["status"], h["status_info"], h["inventory"]))
         return ret
 
     def get_ai_host(self, name: str) -> Optional[AssistedClientHostInfo]:
