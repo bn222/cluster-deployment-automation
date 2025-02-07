@@ -8,7 +8,7 @@ import common
 import host
 
 
-def _pxeboot_marvell_dpu(name: str, bmc: BmcConfig, mac: str, ip: str, iso: str) -> None:
+def marvell_bmc_rsh(bmc: BmcConfig) -> host.Host:
     # For Marvell DPU, we require that our "BMC" is the host on has the DPU
     # plugged in.
     #
@@ -23,6 +23,16 @@ def _pxeboot_marvell_dpu(name: str, bmc: BmcConfig, mac: str, ip: str, iso: str)
     # bmc.user/bmc.password.
     rsh = host.RemoteHost(bmc.url)
     rsh.ssh_connect("core")
+    return rsh
+
+
+def is_marvell(bmc: BmcConfig) -> bool:
+    rsh = marvell_bmc_rsh(bmc)
+    return "177d:b900" in rsh.run("lspci -nn -d :b900").out
+
+
+def _pxeboot_marvell_dpu(name: str, bmc: BmcConfig, mac: str, ip: str, iso: str) -> None:
+    rsh = marvell_bmc_rsh(bmc)
 
     ip_addr = f"{ip}/24"
     ip_gateway, _ = dhcpConfig.get_subnet_range(ip, "255.255.255.0")
