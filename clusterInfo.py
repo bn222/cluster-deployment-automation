@@ -113,7 +113,7 @@ def load_all_cluster_info(
             cluster.iso_server = row["ISO server"]
             cluster.activation_key = row["Activation Key"]
             cluster.organization_id = row["Organization ID"]
-        if row["Provision host"] == "yes":
+        if row["Provision host"] in ("yes", "primary"):
             cluster.provision_host = row["Name"]
             cluster.network_api_port = row["Ports"]
         elif row["Provision host"] == "no":
