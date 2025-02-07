@@ -5,6 +5,22 @@ from k8sClient import K8sClient
 from logger import logger
 from abc import ABC, abstractmethod
 from imageRegistry import ImageRegistry
+import ipu
+import marvell
+import clustersConfig
+
+
+def detect_dpu(node: clustersConfig.NodeConfig) -> str:
+    logger.info("Detecting DPU")
+    assert node.kind == "dpu"
+    assert node.bmc is not None
+    ipu_bmc = ipu.IPUBMC(node.bmc)
+    if ipu_bmc.is_ipu():
+        return "ipu"
+    elif marvell.is_marvell(node.bmc):
+        return "marvell"
+    else:
+        logger.error_and_exit("Unknown DPU")
 
 
 class VendorPlugin(ABC):
@@ -82,16 +98,18 @@ class MarvellDpuPlugin(VendorPlugin):
         logger.warning("Setting up Marvell DPU not yet implemented")
 
 
-def init_vendor_plugin(h: host.Host, node_kind: str) -> VendorPlugin:
+def init_vendor_plugin(h: host.Host, dpu_kind: str) -> VendorPlugin:
     # TODO: Vendor hardware will be handled inside the operator. The user will not explicitely configure the system
     # based on what hardware he is running on. From the perspective of the user, he's dealing with abstract DPUs.
     # This function will therefore be removed completely
-    if node_kind == "marvell-dpu":
+    if dpu_kind == "marvell":
         logger.info(f"Detected Marvell DPU on {h.hostname()}")
         return MarvellDpuPlugin()
-    else:
+    elif dpu_kind == "ipu":
         logger.info(f"Detected Intel IPU hardware on {h.hostname()}")
         return IpuPlugin()
+    else:
+        logger.error_and_exit(f"Unexcpeted dpu kind {dpu_kind}")
 
 
 def extractContainerImage(dockerfile: str) -> str:

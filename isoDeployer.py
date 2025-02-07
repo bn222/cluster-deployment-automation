@@ -2,11 +2,12 @@ import host
 import common
 from logger import logger
 from arguments import PRE_STEP, MASTERS_STEP, POST_STEP
-import isoCluster
+import marvell
 import ipu
 from baseDeployer import BaseDeployer
 from clustersConfig import ClustersConfig
 from concurrent.futures import ThreadPoolExecutor
+from dpuVendor import detect_dpu
 import sys
 
 
@@ -60,16 +61,15 @@ class IsoDeployer(BaseDeployer):
     def _deploy_master(self) -> None:
         assert self._master.kind == "dpu"
         assert self._master.bmc is not None
-        ipu_bmc = ipu.IPUBMC(self._master.bmc)
-        logger.info("Detecting DPU")
-        if ipu_bmc.is_ipu():
+        dpu_kind = detect_dpu(self._master)
+        if dpu_kind == "ipu":
             node = ipu.IPUClusterNode(self._master, self._cc.get_external_port(), self._cc.network_api_port)
             executor = ThreadPoolExecutor(max_workers=len(self._cc.masters))
             future = executor.submit(node.start, self._cc.install_iso)
             future.result()
             node.post_boot()
-        elif isoCluster.is_marvell(self._master.bmc):
-            isoCluster.MarvellIsoBoot(self._cc, self._master, self._cc.install_iso)
+        elif dpu_kind == "marvell":
+            marvell.MarvellIsoBoot(self._cc, self._master, self._cc.install_iso)
         else:
             logger.error("Unknown DPU")
             sys.exit(-1)
