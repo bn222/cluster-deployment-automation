@@ -24,6 +24,7 @@ class ClusterInfo:
     name: str
     provision_host: str = ""
     network_api_port: str = ""
+    secondary_network_port: str = ""
     iso_server: str = ""
     organization_id: str = ""
     activation_key: str = ""
@@ -119,6 +120,8 @@ def load_all_cluster_info(
             cluster.workers.append(row["Name"])
             bmc_host = row["BMC/IMC hostname"][8:] if "https://" in row["BMC/IMC hostname"] else row["BMC/IMC hostname"]
             cluster.bmcs.append(bmc_host)
+        if row["Provision host"] == "secondary":
+            cluster.secondary_network_port = row["Ports"]
     if cluster is not None:
         ret.append(cluster)
     return {x.provision_host: x for x in ret}
