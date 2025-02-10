@@ -23,7 +23,7 @@ SCOPES = ("https://www.googleapis.com/auth/spreadsheets", "https://www.googleapi
 class ClusterInfo:
     name: str
     provision_host: str = ""
-    network_api_port: str = ""
+    primary_network_port: str = ""
     secondary_network_port: str = ""
     iso_server: str = ""
     organization_id: str = ""
@@ -115,7 +115,7 @@ def load_all_cluster_info(
             cluster.organization_id = row["Organization ID"]
         if row["Provision host"] in ("yes", "primary"):
             cluster.provision_host = row["Name"]
-            cluster.network_api_port = row["Ports"]
+            cluster.primary_network_port = row["Ports"]
         elif row["Provision host"] == "no":
             cluster.workers.append(row["Name"])
             bmc_host = row["BMC/IMC hostname"][8:] if "https://" in row["BMC/IMC hostname"] else row["BMC/IMC hostname"]
@@ -130,7 +130,7 @@ def load_all_cluster_info(
 def validate_cluster_info(cluster_info: ClusterInfo) -> None:
     if cluster_info.provision_host == "":
         raise ValueError(f"Provision host missing for cluster {cluster_info.name}")
-    if cluster_info.network_api_port == "":
+    if cluster_info.primary_network_port == "":
         raise ValueError(f"Network api port missing for cluster {cluster_info.name}")
     for e in cluster_info.workers:
         if e == "":
