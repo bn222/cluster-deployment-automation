@@ -420,10 +420,15 @@ class ClustersConfig:
             assert self._cluster_info is not None
             return self._cluster_info.bmcs[a]
 
-        def api_network() -> str:
+        def primary_network_port() -> str:
             self._ensure_clusters_loaded()
             assert self._cluster_info is not None
-            return self._cluster_info.network_api_port
+            return self._cluster_info.primary_network_port
+
+        def secondary_network_port() -> str:
+            self._ensure_clusters_loaded()
+            assert self._cluster_info is not None
+            return self._cluster_info.secondary_network_port
 
         def iso_server() -> str:
             self._ensure_clusters_loaded()
@@ -455,7 +460,9 @@ class ClustersConfig:
         template = jinja2.Template(format_string)
         template.globals['worker_number'] = worker_number
         template.globals['worker_name'] = worker_name
-        template.globals['api_network'] = api_network
+        template.globals['primary_network_port'] = primary_network_port
+        template.globals['api_network'] = primary_network_port
+        template.globals['secondary_network_port'] = secondary_network_port
         template.globals['iso_server'] = iso_server
         template.globals['bmc'] = bmc
         template.globals['activation_key'] = activation_key
