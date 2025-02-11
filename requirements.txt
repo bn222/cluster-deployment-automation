@@ -11,5 +11,6 @@ oauth2client
 jinja2
 kubernetes
 python-hosts
+pydantic
 argcomplete
 yq
