@@ -5,8 +5,8 @@ from typing import Dict, Any, Type, TypeVar
 from logger import logger
 
 
-class StrictBaseModel(BaseModel, frozen=True):
-    model_config = ConfigDict(extra="forbid")
+class StrictBaseModel(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
 
 class LineNumberLoader(yaml.SafeLoader):
@@ -62,7 +62,8 @@ def load(path: str, cls: Type[T]) -> T:
         config = cls(**parsed_data_clean)
     except ValidationError as e:
         for err in e.errors():
-            field = ".".join(err['loc'])  # type: ignore
+            err_list = list(err)
+            field = ".".join(err_list)
             line = field_lines.get(field, "Unknown")
             logger.error_and_exit(f"Error in field '{field}': {err['msg']} (Line {line})")
         logger.error_and_exit("Got value error")

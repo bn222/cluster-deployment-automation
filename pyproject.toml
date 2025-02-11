@@ -6,3 +6,4 @@ skip-string-normalization = 1
 ignore_missing_imports = true
 strict = true
 files = "."
+plugins = ['pydantic.mypy']

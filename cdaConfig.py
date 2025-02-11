@@ -2,7 +2,7 @@ import configLoader
 import os
 
 
-class CdaConfig(configLoader.StrictBaseModel, frozen=True):
+class CdaConfig(configLoader.StrictBaseModel):
     token_user: str
     token: str
     credentials: str = os.path.join(os.environ["HOME"], ".config/gspread/credentials.json")
