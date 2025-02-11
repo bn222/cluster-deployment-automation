@@ -358,7 +358,7 @@ class Host:
         t = timer.Timer("1h")
         while not self.ping():
             if t.triggered():
-                logger.error_and_exit("Waited for 1h for ping")
+                logger.error_and_exit(f"Waited for 1h for ping to {self.hostname()}")
             pass
 
     def ping(self) -> bool:
