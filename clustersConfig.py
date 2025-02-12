@@ -63,6 +63,11 @@ class ExtraConfigArgs:
 
     force_mev_fw_up: bool = False
 
+    # Custom OVN repo URL
+    ovn_repo: Optional[str] = None
+    # Custom OVN ref, it should be existing commit hash or branch
+    ovn_ref: Optional[str] = None
+
     def pre_check(self) -> None:
         if self.sriov_network_operator_local:
             if self.name != "sriov_network_operator":
