@@ -31,14 +31,14 @@ def with_timeout(timeout: int, func: Callable[[], None]) -> None:
     def handler(signum: int, frame: Optional[types.FrameType]) -> None:
         signum = signum
         frame = frame
-        raise Exception(f"Timed out after {timeout}")
+        raise TimeoutError(f"Timed out after {timeout} seconds")
 
     signal.signal(signal.SIGALRM, handler)
     signal.alarm(timeout)
     try:
         return func()
-    except Exception as exc:
-        print(exc)
+    except TimeoutError as e:
+        print(e)
     finally:
         signal.alarm(0)
 

@@ -58,7 +58,7 @@ class DpuOperator:
     def build_push(self, builder_image: str, base_image: str) -> None:
         h = host.LocalHost()
         self._update_all_dockerfiles(builder_image, base_image)
-        logger.info(f"Building dpu operator images in {self.repo_path} on {h.hostname()}")
+        logger.info(f"Building dpu operator images in {self.repo_path} on {h.hostname()} with timeout of 1h")
 
         def build_and_push() -> None:
             h.run_or_die(f"make -C {self.repo_path} local-buildx -j8")
