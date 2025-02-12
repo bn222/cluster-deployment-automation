@@ -382,7 +382,6 @@ systemctl restart redfish
         return match.group(1)
 
     def _redfish_name(self) -> str:
-        print("Getting redfish name")
         url = f"https://{self.url}:8443/redfish/v1/"
         data = self._requests_get(url)
         name = data.get("Name")

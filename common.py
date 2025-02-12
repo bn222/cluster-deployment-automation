@@ -38,7 +38,7 @@ def with_timeout(timeout: int, func: Callable[[], None]) -> None:
     try:
         return func()
     except TimeoutError as e:
-        print(e)
+        logger.error_and_exit(f"{e}")
     finally:
         signal.alarm(0)
 

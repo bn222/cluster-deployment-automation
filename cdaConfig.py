@@ -9,8 +9,7 @@ class CdaConfig(configLoader.StrictBaseModel):
 
 
 def main() -> None:
-    x = configLoader.load("cda-config.yaml", CdaConfig)
-    print(x.token)
+    configLoader.load("cda-config.yaml", CdaConfig)
 
 
 if __name__ == "__main__":
