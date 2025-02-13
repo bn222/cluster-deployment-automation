@@ -15,6 +15,7 @@ from virtualBridge import VirBridge
 import configLoader
 from cdaConfig import CdaConfig
 import auth
+import os
 
 
 def check_and_cleanup_disk(threshold_gb: int = 10) -> None:
@@ -63,8 +64,9 @@ def main_deploy_iso(cc: ClustersConfig, args: argparse.Namespace) -> None:
 
 
 def main_deploy(args: argparse.Namespace) -> None:
-    cdaConfig = configLoader.load(args.cda_config, CdaConfig)
-    auth.prep_auth(cdaConfig.token_user, cdaConfig.token)
+    if os.path.exists(args.cda_config):
+        cdaConfig = configLoader.load(args.cda_config, CdaConfig)
+        auth.prep_auth(cdaConfig.token_user, cdaConfig.token)
 
     cc = ClustersConfig(
         args.config,
