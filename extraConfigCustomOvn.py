@@ -11,15 +11,15 @@ import sys
 
 ORIGINAL_IMAGE = "ovnk-image:original"
 CUSTOM_IMAGE = "ovnk-custom-image:dev"
-OVN_REPO = "https://github.com/ovn-org/ovn.git"
-OVN_BRANCH = "main"
+DEFAULT_OVN_REPO = "https://github.com/ovn-org/ovn.git"
+DEFAULT_OVN_REF = "main"
 # OVN build dependencies that can be removed to simplify build on UBI.
 REMOVE_DEPS = "graphviz groff sphinx-build unbound checkpolicy selinux-policy-devel"
 EXECUTOR_SIZE = 20
 IMAGE_PATH = "/tmp/image.tar"
 
 
-def ExtraConfigCustomOvn(cc: ClustersConfig, _cfg: ExtraConfigArgs, futures: dict[str, Future[Optional[host.Result]]]) -> None:
+def ExtraConfigCustomOvn(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, Future[Optional[host.Result]]]) -> None:
     [f.result() for (_, f) in futures.items()]
     logger.info("Running post config step to build custom OVN from source")
 
@@ -31,7 +31,7 @@ def ExtraConfigCustomOvn(cc: ClustersConfig, _cfg: ExtraConfigArgs, futures: dic
     node.ssh_connect("core")
 
     tag_ovnk_image(node)
-    build_image(node)
+    build_image(node, cfg)
     save_image(node)
 
     executor = ThreadPoolExecutor(max_workers=EXECUTOR_SIZE)
@@ -62,14 +62,14 @@ def tag_ovnk_image(node: host.Host) -> None:
         logger.info(f"Tagging the original image as \"{ORIGINAL_IMAGE}\"")
 
 
-def build_image(node: host.Host) -> None:
+def build_image(node: host.Host, cfg: ExtraConfigArgs) -> None:
     logger.info("Building custom OVN image")
     node.copy_to("manifests/ovn/Dockerfile", "/tmp/Dockerfile")
     node.run_or_die(
         f"sudo podman build -t {CUSTOM_IMAGE} "
         f"--build-arg OVNK_IMAGE={ORIGINAL_IMAGE} "
-        f"--build-arg OVN_REPO={OVN_REPO} "
-        f"--build-arg OVN_BRANCH={OVN_BRANCH} "
+        f"--build-arg OVN_REPO={cfg.ovn_repo or DEFAULT_OVN_REPO} "
+        f"--build-arg OVN_REF={cfg.ovn_ref or DEFAULT_OVN_REF} "
         f"--build-arg OVN_REMOVE_DEPS=\"{REMOVE_DEPS}\" "
         "-f /tmp/Dockerfile . "
         ">/tmp/ovn-custom-image.log 2>&1"

@@ -3,14 +3,14 @@ FROM $OVNK_IMAGE AS builder
 
 ARG OVN_REMOVE_DEPS
 ARG OVN_REPO
-ARG OVN_BRANCH
+ARG OVN_REF
 
 RUN dnf install -y git rpm-build
 
 WORKDIR /root
 RUN rm -rf /root/ovn && git clone ${OVN_REPO}
 WORKDIR /root/ovn
-RUN git checkout ${OVN_BRANCH}
+RUN git checkout ${OVN_REF}
 RUN git submodule update --init
 
 # Remove non-essential dependencies.
