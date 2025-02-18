@@ -40,7 +40,7 @@ class VendorPlugin(ABC):
 
 
 class IpuPlugin(VendorPlugin):
-    P4_IMG = "wsfd-advnetlab217.anl.eng.bos2.dc.redhat.com:5000/intel-ipu-sdk:kubecon-aarch64"
+    P4_IMG = "wsfd-advnetlab217.anl.eng.bos2.dc.redhat.com:5000/intel-ipu-sdk:single-port-aarch64"
 
     def __init__(self) -> None:
         self._p4_manifest = "./manifests/dpu/dpu_p4_ds.yaml.j2"
