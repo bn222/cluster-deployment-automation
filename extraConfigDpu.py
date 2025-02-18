@@ -61,7 +61,13 @@ class DpuOperator:
         logger.info(f"Building dpu operator images in {self.repo_path} on {h.hostname()} with timeout of 1h")
 
         def build_and_push() -> None:
-            h.run_or_die(f"make -C {self.repo_path} local-buildx -j8")
+            # There is an issue that causes go multiarch to hang indefinitely sometimes: https://github.com/golang/go/issues/70329
+            # Per the comments on the issue, it seems setting GOMACPROCS to a small number can relieve this issue as a temporary WA
+            env = os.environ.copy()
+            env["GOMAXPROCS"] = "2"
+            ret = h.run(f"make -C {self.repo_path} local-buildx -j8", env=env)
+            if not ret.success():
+                logger.error_and_exit(f"Error occured while building Dpu operator: err: {ret.err}")
             h.run_or_die(f"make -C {self.repo_path} local-pushx")
 
         common.with_timeout(3600, build_and_push)
