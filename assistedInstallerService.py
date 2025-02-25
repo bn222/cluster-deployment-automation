@@ -111,6 +111,17 @@ class AssistedInstallerService:
         y["data"]["AGENT_DOCKER_IMAGE"] = AssistedInstallerService.AGENT_DOCKER_IMAGE
         y["data"]["OS_IMAGES"] = self._strip_unused_versions(y["data"]["OS_IMAGES"])
 
+        # We need this temporary workaround because as of 2/25 the iso name in https://mirror.openshift.com/pub/openshift-v4/x86_64/dependencies/rhcos/pre-release/dev-4.19/
+        # no longer matches the iso expected by assisted installer service https://github.com/openshift/assisted-service/blob/master/deploy/podman/configmap.yml#L25
+        if "4.19" in self._version:
+            expected_iso_url = "https://mirror.openshift.com/pub/openshift-v4/x86_64/dependencies/rhcos/pre-release/dev-4.19/rhcos-dev-4.19-x86_64-live.x86_64.iso"
+            new_iso_url = "https://mirror.openshift.com/pub/openshift-v4/x86_64/dependencies/rhcos/pre-release/dev-4.19/rhcos-dev-4.19-x86_64-live-iso.x86_64.iso"
+
+            response = requests.head(expected_iso_url, timeout=5, allow_redirects=True)
+            if response.status_code == 404:
+                logger.info(f"coreos iso {expected_iso_url} does not exist, will try to install with {new_iso_url}")
+                y["data"]["OS_IMAGES"] = y["data"]["OS_IMAGES"].replace(expected_iso_url, new_iso_url)
+
         j = json.loads(y["data"]["HW_VALIDATOR_REQUIREMENTS"])
         j[0]["master"]["disk_size_gb"] = 8
         j[0]["worker"]["disk_size_gb"] = 8
