@@ -115,7 +115,7 @@ class AssistedInstallerService:
         # no longer matches the iso expected by assisted installer service https://github.com/openshift/assisted-service/blob/master/deploy/podman/configmap.yml#L25
         if "4.19" in self._version:
             expected_iso_url = "https://mirror.openshift.com/pub/openshift-v4/x86_64/dependencies/rhcos/pre-release/dev-4.19/rhcos-dev-4.19-x86_64-live.x86_64.iso"
-            new_iso_url = "https://mirror.openshift.com/pub/openshift-v4/x86_64/dependencies/rhcos/pre-release/dev-4.19/rhcos-dev-4.19-x86_64-live-iso.x86_64.iso"
+            new_iso_url = "http://wsfd-advnetlab-amp04.anl.eng.bos2.dc.redhat.com/rhcos-full-iso-4.19-418.94.202410090804-0-x86_64.iso"
 
             response = requests.head(expected_iso_url, timeout=5, allow_redirects=True)
             if response.status_code == 404:
