@@ -124,10 +124,18 @@ class IPUClusterNode(ClusterNode):
                 logger.info(helper(node, iso_address))
 
     def post_boot(self, *, desired_ip_range: Optional[tuple[str, str]] = None) -> bool:
-        logger.info("Workaround: cold booting the host since currently driver can't deal with host rebooting without coordination")
-        assert self.config.host_side_bmc is not None
-        ipu_host_bmc = BMC.from_bmc(self.config.host_side_bmc)
-        ipu_host_bmc.cold_boot()
+        # As a WA for https://issues.redhat.com/browse/IIC-527 we need to reload the idpf driver since this seems to fail
+        # after an IMC reboot (which occurs during the RHEL installation)
+        assert self.config.dpu_host is not None
+        logger.info(f"Reloading idpf on IPU host {self.config.dpu_host}")
+
+        ipu_host = host.RemoteHost(self.config.dpu_host)
+        ipu_host.ssh_connect("core")
+        ipu_host.run("sudo rmmod idpf")
+        time.sleep(10)
+        ipu_host.run("sudo modprobe idpf")
+
+        logger.info("Validating ACC is still reachable after driver reload")
         assert self.config.ip is not None
         acc = host.RemoteHost(self.config.ip)
         self._wait_for_acc_with_retry(acc=acc, timeout=300)

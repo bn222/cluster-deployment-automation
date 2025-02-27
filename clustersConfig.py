@@ -106,6 +106,7 @@ class NodeConfig:
     bmc: Optional[BmcConfig] = None
     bmc_host: Optional[BmcConfig] = None
     host_side_bmc: Optional[str] = None
+    dpu_host: Optional[str] = None
     ip: Optional[str] = None
     preallocated: str = "true"
     os_variant: str = "rhel8.6"
