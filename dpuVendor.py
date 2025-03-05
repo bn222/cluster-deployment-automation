@@ -1,7 +1,6 @@
 import jinja2
 import re
 import host
-from k8sClient import K8sClient
 from logger import logger
 from abc import ABC, abstractmethod
 from imageRegistry import ImageRegistry
@@ -25,7 +24,7 @@ def detect_dpu(node: clustersConfig.NodeConfig) -> str:
 
 class VendorPlugin(ABC):
     @abstractmethod
-    def build_push_start(self, acc: host.Host, imgReg: ImageRegistry, client: K8sClient) -> None:
+    def build_push_start(self, acc: host.Host, imgReg: ImageRegistry) -> None:
         raise NotImplementedError("Must implement build_and_start() for VSP")
 
     @staticmethod
@@ -43,40 +42,20 @@ class IpuPlugin(VendorPlugin):
     P4_IMG = "wsfd-advnetlab217.anl.eng.bos2.dc.redhat.com:5000/intel-ipu-sdk:single-port-aarch64"
 
     def __init__(self) -> None:
-        self._p4_manifest = "./manifests/dpu/dpu_p4_ds.yaml.j2"
+        pass
 
-    def build_push_start(self, acc: host.Host, imgReg: ImageRegistry, client: K8sClient) -> None:
+    def build_push_start(self, acc: host.Host, imgReg: ImageRegistry) -> None:
+        # Only need to retag and manage images and config hugepages.
+        # The actual vsp init is done by the dpu-daemon
+        # and vsp-p4 init is done by vsp
         lh = host.LocalHost()
         lh.run_or_die(f"podman pull --tls-verify=false {self.P4_IMG}")
         local_img = f"{imgReg.url()}/intel-ipu-p4-sdk:kubecon-aarch64"
         lh.run_or_die(f"podman tag {self.P4_IMG} {local_img}")
         lh.run_or_die(f"podman push {local_img}")
-
-        # If p4 pod already exists from previous run, kill this first.
-        acc.run(f"podman ps --filter ancestor={local_img} --format '{{{{.ID}}}}' | xargs -r podman kill")
-
-        self.start_p4_pod(acc, local_img, client)
-
-    def start_p4_pod(self, acc: host.Host, image: str, client: K8sClient) -> None:
-        self.configure_p4_hugepages(acc)
-
-        logger.info("Manually starting P4 pod")
         # WA https://issues.redhat.com/browse/IIC-421
         acc.run_or_die("mkdir -p /opt/p4/p4-cp-nws/var/run/openvswitch")
-        with open(self._p4_manifest) as f:
-            j2_template = jinja2.Template(f.read())
-            rendered = j2_template.render(ipu_vsp_p4=image)
-            tmp_file = "/tmp/dpu_p4_ds.yaml"
-            with open(tmp_file, "w") as f:
-                f.write(rendered)
-
-        client.oc(f"delete -f {tmp_file}")
-        client.oc_run_or_die(f"create -f {tmp_file}")
-
-        # The vsp looks for the service provided by the p4 pod on localhost, make sure to create a service in OCP to expose it
-        client.oc("delete -f manifests/dpu/p4_service.yaml")
-        client.oc_run_or_die("create -f manifests/dpu/p4_service.yaml")
-        client.wait_ds_running(ds="vsp-p4", namespace="default")
+        self.configure_p4_hugepages(acc)
 
     def configure_p4_hugepages(self, rh: host.Host) -> None:
         logger.info("Configuring hugepages for p4 pod")
@@ -93,7 +72,7 @@ class MarvellDpuPlugin(VendorPlugin):
     def __init__(self) -> None:
         pass
 
-    def build_push_start(self, acc: host.Host, imgReg: ImageRegistry, client: K8sClient) -> None:
+    def build_push_start(self, acc: host.Host, imgReg: ImageRegistry) -> None:
         # TODO: https://github.com/openshift/dpu-operator/pull/82
         logger.warning("Setting up Marvell DPU not yet implemented")
 

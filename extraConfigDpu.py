@@ -143,9 +143,8 @@ def ExtraConfigDpu(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, 
     acc.run("systemctl disable firewalld")
 
     vendor_plugin = init_vendor_plugin(acc, detect_dpu(dpu_node))
-    # TODO: Remove when this container is properly started by the vsp
-    # We need to manually start the p4 sdk container currently for the IPU plugin
-    vendor_plugin.build_push_start(acc, imgReg, client)
+    # TODO: For Intel, this configures hugepages. Figure out a better way
+    vendor_plugin.build_push_start(acc, imgReg)
 
     repo = cfg.resolve_dpu_operator_path()
     dpu_operator = DpuOperator(repo)
