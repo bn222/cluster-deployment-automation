@@ -50,7 +50,7 @@ class IpuPlugin(VendorPlugin):
         # and vsp-p4 init is done by vsp
         lh = host.LocalHost()
         lh.run_or_die(f"podman pull --tls-verify=false {self.P4_IMG}")
-        local_img = f"{imgReg.url()}/intel-ipu-p4-sdk:kubecon-aarch64"
+        local_img = f"{imgReg.url()}/intel-vsp-p4:dev"
         lh.run_or_die(f"podman tag {self.P4_IMG} {local_img}")
         lh.run_or_die(f"podman push {local_img}")
         # WA https://issues.redhat.com/browse/IIC-421
