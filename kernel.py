@@ -3,21 +3,22 @@ from logger import logger
 import time
 
 KERNEL_RPMS = [
-    "https://download-01.beak-001.prod.iad2.dc.redhat.com/brewroot/vol/rhel-9/packages/kernel/5.14.0/427.2.1.el9_4/x86_64/kernel-5.14.0-427.2.1.el9_4.x86_64.rpm",
-    "https://download-01.beak-001.prod.iad2.dc.redhat.com/brewroot/vol/rhel-9/packages/kernel/5.14.0/427.2.1.el9_4/x86_64/kernel-core-5.14.0-427.2.1.el9_4.x86_64.rpm",
-    "https://download-01.beak-001.prod.iad2.dc.redhat.com/brewroot/vol/rhel-9/packages/kernel/5.14.0/427.2.1.el9_4/x86_64/kernel-modules-5.14.0-427.2.1.el9_4.x86_64.rpm",
-    "https://download-01.beak-001.prod.iad2.dc.redhat.com/brewroot/vol/rhel-9/packages/kernel/5.14.0/427.2.1.el9_4/x86_64/kernel-modules-core-5.14.0-427.2.1.el9_4.x86_64.rpm",
-    "https://download-01.beak-001.prod.iad2.dc.redhat.com/brewroot/vol/rhel-9/packages/kernel/5.14.0/427.2.1.el9_4/x86_64/kernel-modules-extra-5.14.0-427.2.1.el9_4.x86_64.rpm",
+    "https://download.devel.redhat.com/brewroot/work/tasks/2286/66882286/kernel-5.14.0-570.idpf.IIC_500.el9_6.x86_64.rpm",
+    "https://download.devel.redhat.com/brewroot/work/tasks/2286/66882286/kernel-core-5.14.0-570.idpf.IIC_500.el9_6.x86_64.rpm",
+    "https://download.devel.redhat.com/brewroot/work/tasks/2286/66882286/kernel-modules-5.14.0-570.idpf.IIC_500.el9_6.x86_64.rpm",
+    "https://download.devel.redhat.com/brewroot/work/tasks/2286/66882286/kernel-modules-core-5.14.0-570.idpf.IIC_500.el9_6.x86_64.rpm",
+    "https://download.devel.redhat.com/brewroot/work/tasks/2286/66882286/kernel-modules-extra-5.14.0-570.idpf.IIC_500.el9_6.x86_64.rpm",
 ]
 
 
-def ensure_rhel_9_4_kernel_is_installed(h: host.Host) -> None:
+def ensure_IIC_500_kernel_is_installed(h: host.Host) -> None:
     h.ssh_connect("core")
     ret = h.run("uname -r")
-    if "el9_4" in ret.out:
+    if "5.14.0-570.idpf.IIC_500.el9_6.x86_64" in ret.out:
+        logger.info("5.14.0-570.idpf.IIC_500.el9_6.x86_64 kernel already installed, skipping")
         return
 
-    logger.info(f"Installing RHEL 9.4 kernel on {h.hostname()}")
+    logger.info(f"Installing 5.14.0-570.idpf.IIC_500.el9_6.x86_64 kernel on {h.hostname()}")
 
     wd = "working_dir"
     h.run(f"rm -rf {wd}")
@@ -26,7 +27,7 @@ def ensure_rhel_9_4_kernel_is_installed(h: host.Host) -> None:
 
     for e in KERNEL_RPMS:
         fn = e.split("/")[-1]
-        cmd = f"curl -k {e} --create-dirs > {wd}/{fn}"
+        cmd = f"curl -k -L -o {wd}/{fn} {e}"
         h.run(cmd)
 
     cmd = f"sudo rpm-ostree override replace {wd}/*.rpm"
@@ -44,5 +45,5 @@ def ensure_rhel_9_4_kernel_is_installed(h: host.Host) -> None:
     time.sleep(10)
     h.ssh_connect("core")
     ret = h.run("uname -r")
-    if "el9_4" not in ret.out:
-        logger.error_and_exit(f"Failed to install rhel 9.4 kernel on host {h.hostname()}")
+    if "5.14.0-570.idpf.IIC_500.el9_6.x86_64" not in ret.out:
+        logger.error_and_exit(f"Failed to install 5.14.0-570.idpf.IIC_500.el9_6.x86_64 kernel on host {h.hostname()}")
