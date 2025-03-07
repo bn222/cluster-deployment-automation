@@ -1,7 +1,7 @@
 from clustersConfig import ClustersConfig
 import host
 from k8sClient import K8sClient
-from concurrent.futures import Future, ThreadPoolExecutor
+from concurrent.futures import Future
 import os
 import time
 from typing import Optional, List
@@ -13,7 +13,6 @@ from dpuVendor import init_vendor_plugin
 import common
 import re
 from dpuVendor import detect_dpu
-from kernel import ensure_IIC_500_kernel_is_installed
 
 MICROSHIFT_KUBECONFIG = "/root/kubeconfig.microshift"
 
@@ -167,22 +166,6 @@ def ExtraConfigDpuHost(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[s
     logger.info("Running post config step to start DPU operator on Host")
     lh = host.LocalHost()
     client = K8sClient(cc.kubeconfig)
-
-    # Workaround to ensure patched kernel is deployed on IPU host to avoid issue in IIC-500
-    def helper(h: host.Host) -> Optional[host.Result]:
-        ensure_IIC_500_kernel_is_installed(h)
-        return None
-
-    executor = ThreadPoolExecutor(max_workers=len(cc.workers))
-    f = []
-    # Assuming that all workers have a DPU
-    for e in cc.workers:
-        logger.info(f"Calling helper function for node {e.node}")
-        h = host.RemoteHost(e.node)
-        f.append(executor.submit(helper, h))
-
-    for thread in f:
-        logger.info(thread.result())
 
     imgReg = imageRegistry.ensure_local_registry_running(lh, delete_all=False)
     imgReg.ocp_trust(client)

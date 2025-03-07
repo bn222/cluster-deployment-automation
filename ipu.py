@@ -7,7 +7,6 @@ import dhcpConfig
 from clustersConfig import NodeConfig
 from bmc import BmcConfig
 from clusterNode import ClusterNode
-from kernel import ensure_IIC_500_kernel_is_installed
 import host
 from bmc import BMC
 import common
@@ -94,10 +93,6 @@ class IPUClusterNode(ClusterNode):
         ipu_bmc = IPUBMC(self.config.bmc)
         if ipu_bmc.version() != "1.8.0":
             logger.error_and_exit(f"Unexpected version {ipu_bmc.version()}, should be 1.8.0")
-
-        # Workaround to ensure patched kernel is deployed on IPU host to avoid issue in IIC-500
-        self._patch_ipu_host_kernel()
-
         self._boot_iso(iso_or_image_path)
         return True
 
@@ -127,11 +122,6 @@ class IPUClusterNode(ClusterNode):
             with common.HttpServerManager(serve_path, 8000) as http_server:
                 iso_address = f"http://{lh_ip}:{str(http_server.port)}/{iso_name}"
                 logger.info(helper(node, iso_address))
-
-    def _patch_ipu_host_kernel(self) -> None:
-        assert self.config.dpu_host is not None
-        ipu_host = host.RemoteHost(self.config.dpu_host)
-        ensure_IIC_500_kernel_is_installed(ipu_host)
 
     def post_boot(self, *, desired_ip_range: Optional[tuple[str, str]] = None) -> bool:
         # As a WA for https://issues.redhat.com/browse/IIC-527 we need to reload the idpf driver since this seems to fail
