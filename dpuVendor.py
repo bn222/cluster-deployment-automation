@@ -61,9 +61,26 @@ class IpuPlugin(VendorPlugin):
         logger.info("Configuring hugepages for p4 pod")
         # The p4 container typically sets this up. If we are running the container as a daemonset in microshift, we need to
         # ensure this resource is available prior to the pod starting to ensure dpdk is successful
-        rh.run("mkdir -p /dev/hugepages")
-        rh.run("mount -t hugetlbfs -o pagesize=2M none /dev/hugepages || true")
-        rh.run("echo 512 > /sys/devices/system/node/node0/hugepages/hugepages-2048kB/nr_hugepages")
+        hugepages_service = """[Unit]
+Description=Setup Hugepages
+Before=microshift.service
+Wants=microshift.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/mkdir -p /dev/hugepages
+ExecStart=/bin/mount -t hugetlbfs -o pagesize=2M none /dev/hugepages
+ExecStart=/bin/sh -c 'echo 512 > /sys/devices/system/node/node0/hugepages/hugepages-2048kB/nr_hugepages'
+
+[Install]
+WantedBy=multi-user.target"""
+
+        rh.write("/etc/systemd/system/hugepages-setup.service", hugepages_service)
+        rh.run_or_die("sudo systemctl daemon-reload")
+        rh.run_or_die("sudo systemctl enable hugepages-setup.service")
+        rh.run_or_die("sudo systemctl start hugepages-setup.service")
+
         # Restart microshift to make sure the resource is available
         rh.run_or_die("systemctl restart microshift")
 
