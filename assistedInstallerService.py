@@ -114,8 +114,8 @@ class AssistedInstallerService:
         # We need this temporary workaround because as of 2/25 the iso name in https://mirror.openshift.com/pub/openshift-v4/x86_64/dependencies/rhcos/pre-release/dev-4.19/
         # no longer matches the iso expected by assisted installer service https://github.com/openshift/assisted-service/blob/master/deploy/podman/configmap.yml#L25
 
-        # The configmap now properly points to the new image, however the new image fails to run bootkube.sh when starting, pin it for now to a local image.
-        broken_iso_url = "https://mirror.openshift.com/pub/openshift-v4/x86_64/dependencies/rhcos/pre-release/dev-4.19/rhcos-dev-4.19-x86_64-live-iso.x86_64.iso"
+        # Update: The configmap now properly points to the new image, however the new image fails to run bootkube.sh when starting, pin it for now to a local image.
+        broken_iso_url = "quay.io/openshift-release-dev/ocp-release:4.19.0-ec.3-x86_64"
         new_iso_url = "http://wsfd-advnetlab-amp04.anl.eng.bos2.dc.redhat.com/rhcos-full-iso-4.19-418.94.202410090804-0-x86_64.iso"
 
         if broken_iso_url in y["data"]["OS_IMAGES"]:
