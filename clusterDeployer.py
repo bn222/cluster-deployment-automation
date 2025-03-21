@@ -512,7 +512,7 @@ class ClusterDeployer(BaseDeployer):
             logger.error(f"Worker {node.config.name} doesn't have an IP in range {ip_range}.")
             return False
 
-        for try_count in range(30):
+        for try_count in range(60):
             info = self._ai.get_ai_host_by_ip(node.ip())
             if info is not None:
                 self._ai.update_host(info.id, {"name": node.config.name})
