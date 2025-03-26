@@ -42,6 +42,11 @@ def _pxeboot_marvell_dpu(name: str, bmc: BmcConfig, mac: str, ip: str, iso: str)
 
     ssh_key_options = [f"--ssh-key={shlex.quote(s)}" for s in ssh_keys]
 
+    extra_args = ""
+    v = os.environ.get("CDA_MARVELL_TOOLS_EXTRA_ARGS", None)
+    if v:
+        extra_args = shlex.join(shlex.split(v)) + " "
+
     image = os.environ.get("CDA_MARVELL_TOOLS_IMAGE", "quay.io/sdaniele/marvell-tools:latest")
 
     r = rsh.run(
@@ -71,6 +76,7 @@ def _pxeboot_marvell_dpu(name: str, bmc: BmcConfig, mac: str, ip: str, iso: str)
         "--default-extra-packages "
         f"{' '.join(ssh_key_options)} "
         f"{shlex.quote(iso)} "
+        f"{extra_args}"
         "2>&1 "
         "| tee \"/tmp/pxeboot-log-$(date '+%Y%m%d-%H%M%S')\""
     )
