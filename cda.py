@@ -3,7 +3,7 @@
 # PYTHON_ARGCOMPLETE_OK
 from assistedInstaller import AssistedClientAutomation
 from assistedInstallerService import AssistedInstallerService
-from clustersConfig import ClustersConfig
+from clustersConfig import ClustersConfig, ExtraConfigArgs
 from clusterDeployer import ClusterDeployer
 from isoDeployer import IsoDeployer
 from arguments import parse_args
@@ -47,6 +47,11 @@ def main_deploy_openshift(cc: ClustersConfig, args: argparse.Namespace) -> None:
     """
     ai = AssistedClientAutomation(f"{args.url}:8090")
     cd = ClusterDeployer(cc, ai, args.steps, args.secrets_path)
+
+    if args.additional_post_config:
+        ec = ExtraConfigArgs("", args.additional_post_config)
+        cd._prepost_config(ec)
+        return
 
     if args.teardown or args.teardown_full:
         cd.teardown_workers()
@@ -106,9 +111,9 @@ def main_snapshot(args: argparse.Namespace) -> None:
 def main() -> None:
     args = parse_args()
 
-    if not (args.config.endswith('.yaml') or args.config.endswith('.yml')):
-        print("Please specify a yaml configuration file")
-        raise SystemExit(1)
+    is_yaml = args.config.endswith('.yaml') or args.config.endswith('.yml')
+    if not is_yaml:
+        logger.error_and_exit("Please specify a yaml configuration file")
 
     if args.subcommand == "deploy":
         main_deploy(args)

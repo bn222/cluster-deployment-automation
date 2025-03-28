@@ -6,6 +6,7 @@ import logging
 import argcomplete
 import difflib
 import typing
+from extraConfigRunner import extra_config
 from logger import logger, configure_logger
 from typing import Optional
 
@@ -89,11 +90,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--assisted-installer-url', dest='url', default='192.168.122.1', action='store', type=str, help='If set to 0.0.0.0 (the default), Assisted Installer will be started locally')
 
     subparsers = parser.add_subparsers(title='subcommands', dest='subcommand')
-    deploy_parser = subparsers.add_parser('deploy', help='Deploy clusters')
+
+    config_list = "List of available post-deployment configurations:\n" + "\n".join(extra_config.keys())
+
+    deploy_parser = subparsers.add_parser('deploy', help='Deploy clusters', epilog=config_list, formatter_class=argparse.RawDescriptionHelpFormatter)
     deploy_parser.add_argument('-t', '--teardown', dest='teardown', action='store_true', help='Remove anything that would be created by setting up the cluster(s)')
     deploy_parser.add_argument('-f', '--teardown-full', dest='teardown_full', action='store_true', help='Remove anything that would be created by setting up the cluster(s), included ai')
 
     deploy_parser.add_argument('-s', '--steps', dest='steps', type=str, default=join_valid_steps(), help=f'Comma-separated list of steps to run (by default: {join_valid_steps()})').completer = step_completer  # type: ignore
+    deploy_parser.add_argument('-a', '--additional-post-config', dest='additional_post_config', type=str, default=join_valid_steps(), help='Post-deployment configuration to run')
     deploy_parser.add_argument('-d', '--skip-steps', dest='skip_steps', type=str, default="", help="Comma-separated list of steps to skip").completer = step_completer  # type: ignore
     deploy_parser.add_argument('-w', '--workers', action=WorkersIncludeExcludeAction, help='Range and/or list of workers to include')
     deploy_parser.add_argument('-sw', '--skip-workers', action=WorkersIncludeExcludeAction, help='Range and/or list of workers to exclude')
@@ -109,7 +114,11 @@ def parse_args() -> argparse.Namespace:
         args.steps = remove_empty_strings(args.steps)
         args.skip_steps = remove_empty_strings(args.skip_steps)
 
-        invalid_steps = [step for step in args.steps + args.skip_steps if step not in all_steps()]
+        invalid_steps = []
+        for s in args.steps + args.skip_steps:
+            if s not in all_steps():
+                invalid_steps.append(s)
+
         if invalid_steps:
             for step in invalid_steps:
                 suggested_step = fuzzy_match(step)
