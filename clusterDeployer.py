@@ -183,6 +183,7 @@ class ClusterDeployer(BaseDeployer):
 
     def deploy(self) -> None:
         duration = self._empty_timers()
+
         if self._cc.masters:
             if PRE_STEP in self.steps:
                 duration[PRE_STEP].start()
