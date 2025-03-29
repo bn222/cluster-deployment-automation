@@ -39,4 +39,5 @@ systemctl enable osbuild-composer.socket cockpit.socket --now
 
 cat requirements.txt  | xargs -n1 $PYTHON_CMD -m pip install
 
-sudo $PYTHON_CMD $(which activate-global-python-argcomplete)
+export PYTHON_CMD_FULL=$(which $PYTHON_CMD)
+sudo -E $PYTHON_CMD_FULL $(which activate-global-python-argcomplete)
