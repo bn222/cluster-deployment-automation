@@ -39,7 +39,7 @@ class VendorPlugin(ABC):
 
 
 class IpuPlugin(VendorPlugin):
-    P4_URL = "wsfd-advnetlab-amp04.anl.eng.bos2.dc.redhat.com/webserver/p4_1.8.tar.gz"
+    P4_URL = "wsfd-advnetlab-amp04.anl.eng.bos2.dc.redhat.com/p4_1.8.tar.gz"
     P4_IMG = "wsfd-advnetlab217.anl.eng.bos2.dc.redhat.com:5000/intel-ipu-sdk:p4_without_tar-aarch64"
 
     def __init__(self) -> None:
