@@ -45,6 +45,7 @@ def _pxeboot_marvell_dpu(name: str, bmc: BmcConfig, mac: str, ip: str, iso: str)
     image = os.environ.get("CDA_MARVELL_TOOLS_IMAGE", "quay.io/sdaniele/marvell-tools:latest")
 
     r = rsh.run(
+        "set -o pipefail ; "
         "sudo "
         "podman "
         "run "
@@ -70,7 +71,8 @@ def _pxeboot_marvell_dpu(name: str, bmc: BmcConfig, mac: str, ip: str, iso: str)
         "--default-extra-packages "
         f"{' '.join(ssh_key_options)} "
         f"{shlex.quote(iso)} "
-        "2>&1"
+        "2>&1 "
+        "| tee \"/tmp/pxeboot-log-$(date '+%Y%m%d-%H%M%S')\""
     )
     if not r.success():
         raise RuntimeError(f"Failure to to pxeboot: {r}")
