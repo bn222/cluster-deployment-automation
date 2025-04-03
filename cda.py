@@ -22,6 +22,7 @@ def check_and_cleanup_disk(threshold_gb: int = 10) -> None:
     h = host.LocalHost()
     _, _, free = h.disk_usage("/")
     if free < threshold_gb * 1024 * 1024 * 1024:
+        logger.warning(f"image space is {free} which is less than 10GB treshold, pruning images")
         h.run("podman image prune -a -f")
 
 
