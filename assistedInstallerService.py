@@ -153,6 +153,7 @@ class AssistedInstallerService:
             if image.startswith('quay.io/edge-infrastructure/assisted'):
                 container['image'] = image.replace(':latest', f':{AssistedInstallerService.SAAS_VERSION}')
                 container['securityContext'] = {"runAsUser": 0}
+                container['imagePullPolicy'] = 'Always'
         return y
 
     def prep_version(self, version: str) -> dict[str, Union[str, Sequence[str]]]:
