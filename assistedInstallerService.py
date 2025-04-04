@@ -19,6 +19,22 @@ import hashlib
 import copy
 
 
+# We need this temporary workaround because as of 2/25 the iso name in
+# https://mirror.openshift.com/pub/openshift-v4/x86_64/dependencies/rhcos/pre-release/dev-4.19/
+# no longer matches the iso expected by assisted installer service
+# https://github.com/openshift/assisted-service/blob/master/deploy/podman/configmap.yml#L25
+def replace_broken_images(os_images: str) -> str:
+    # Update: The configmap now properly points to the new image, however the new image fails to run bootkube.sh when starting, pin it for now to a local image.
+    broken_iso_url = "https://mirror.openshift.com/pub/openshift-v4/x86_64/dependencies/rhcos/pre-release/4.19.0-ec.3/rhcos-4.19.0-ec.3-x86_64-live-iso.x86_64.iso"
+    new_iso_url = "http://wsfd-advnetlab-amp04.anl.eng.bos2.dc.redhat.com/rhcos-full-iso-4.19-418.94.202410090804-0-x86_64.iso"
+
+    if broken_iso_url in os_images:
+        logger.info(f"coreos iso {broken_iso_url} does not work, will try to install with {new_iso_url}")
+        return os_images.replace(broken_iso_url, new_iso_url)
+    else:
+        return os_images
+
+
 def load_url_or_file(url_or_file: str) -> str:
     if url_or_file.startswith("http"):
         return get_url(url_or_file).text
@@ -111,16 +127,7 @@ class AssistedInstallerService:
         y["data"]["AGENT_DOCKER_IMAGE"] = AssistedInstallerService.AGENT_DOCKER_IMAGE
         y["data"]["OS_IMAGES"] = self._strip_unused_versions(y["data"]["OS_IMAGES"])
 
-        # We need this temporary workaround because as of 2/25 the iso name in https://mirror.openshift.com/pub/openshift-v4/x86_64/dependencies/rhcos/pre-release/dev-4.19/
-        # no longer matches the iso expected by assisted installer service https://github.com/openshift/assisted-service/blob/master/deploy/podman/configmap.yml#L25
-
-        # Update: The configmap now properly points to the new image, however the new image fails to run bootkube.sh when starting, pin it for now to a local image.
-        broken_iso_url = "https://mirror.openshift.com/pub/openshift-v4/x86_64/dependencies/rhcos/pre-release/4.19.0-ec.3/rhcos-4.19.0-ec.3-x86_64-live-iso.x86_64.iso"
-        new_iso_url = "http://wsfd-advnetlab-amp04.anl.eng.bos2.dc.redhat.com/rhcos-full-iso-4.19-418.94.202410090804-0-x86_64.iso"
-
-        if broken_iso_url in y["data"]["OS_IMAGES"]:
-            logger.info(f"coreos iso {broken_iso_url} does not work, will try to install with {new_iso_url}")
-            y["data"]["OS_IMAGES"] = y["data"]["OS_IMAGES"].replace(broken_iso_url, new_iso_url)
+        # y["data"]["OS_IMAGES"] = replace_broken_images(y["data"]["OS_IMAGES"])
 
         j = json.loads(y["data"]["HW_VALIDATOR_REQUIREMENTS"])
         j[0]["master"]["disk_size_gb"] = 8
