@@ -79,9 +79,9 @@ class AssistedInstallerService:
     # https://gitlab.cee.redhat.com/service/app-interface/-/blob/ee5f631ce539537085b5ef043bbd9593fa74f860/data/services/assisted-installer/cicd/target/production/assisted-service.yaml#L44-47
     #
     SAAS_VERSION = "latest"
-    INSTALLER_IMAGE = "registry.redhat.io/rhai-tech-preview/assisted-installer-rhel8:v1.0.0-347"
-    CONTROLLER_IMAGE = "registry.redhat.io/rhai-tech-preview/assisted-installer-reporter-rhel8:v1.0.0-425"
-    AGENT_DOCKER_IMAGE = "registry.redhat.io/rhai-tech-preview/assisted-installer-agent-rhel8:v1.0.0-328"
+    INSTALLER_IMAGE = "registry.redhat.io/rhai/assisted-installer-rhel9:d50758cab25829bba67ab8250e8209b13b3e3833"
+    CONTROLLER_IMAGE = "registry.redhat.io/rhai/assisted-installer-controller-rhel9:d50758cab25829bba67ab8250e8209b13b3e3833"
+    AGENT_DOCKER_IMAGE = "registry.redhat.io/rhai/assisted-installer-agent-rhel9:8266f8816db76d47dff55ad2e319093eddccc6e7"
 
     def __init__(self, version: str, ip: str, resume_deployment: bool = False, proxy: Optional[str] = None, noproxy: Optional[str] = None, branch: str = "master"):
         self._version = version
@@ -443,10 +443,13 @@ class AssistedInstallerService:
         pod_labeled = self._add_hash_labels(pod, cm)
 
         if self.stop_needed(pod, cm, force):
+            logger.info("Need to stop assisted-installer")
             self.stop()
+        else:
+            logger.info("No need to stop assisted-installer")
 
         if not self.pod_running():
-            logger.info("Starting assisted-installer.")
+            logger.info("Starting assisted-installer")
             self._play_kube(pod_labeled, cm)
 
     def _play_kube(self, pod: dict[str, Any], cm: dict[str, Any]) -> host.Result:
