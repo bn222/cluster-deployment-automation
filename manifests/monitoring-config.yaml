@@ -6,5 +6,5 @@ metadata:
 data:
   config.yaml: |
     prometheusK8s:
-      retention: "72h"
+      retention: "24h"
 
