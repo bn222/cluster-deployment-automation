@@ -513,6 +513,7 @@ class ClusterDeployer(BaseDeployer):
             logger.error(f"Worker {node.config.name} doesn't have an IP in range {ip_range}.")
             return False
 
+        logger.info(f"Waiting for {node.config.name} rename to succeed")
         for try_count in range(60):
             info = self._ai.get_ai_host_by_ip(node.ip())
             if info is not None:
@@ -520,7 +521,6 @@ class ClusterDeployer(BaseDeployer):
                 logger.info(f"Renamed {node.config.name}")
                 return True
 
-            logger.info(f"Waiting for {node.config.name} rename, retrying (try #{try_count})")
             time.sleep(10)
 
         return False
