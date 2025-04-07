@@ -39,8 +39,7 @@ class VendorPlugin(ABC):
 
 
 class IpuPlugin(VendorPlugin):
-    P4_URL = "wsfd-advnetlab-amp04.anl.eng.bos2.dc.redhat.com/p4_1.8.tar.gz"
-    P4_IMG = "wsfd-advnetlab217.anl.eng.bos2.dc.redhat.com:5000/intel-ipu-sdk:p4_without_tar-aarch64"
+    P4_IMG = "wsfd-advnetlab217.anl.eng.bos2.dc.redhat.com:5000/intel-ipu-sdk:single-port-aarch64"
 
     def __init__(self) -> None:
         pass
@@ -54,15 +53,9 @@ class IpuPlugin(VendorPlugin):
         local_img = f"{imgReg.url()}/intel-vsp-p4:dev"
         lh.run_or_die(f"podman tag {self.P4_IMG} {local_img}")
         lh.run_or_die(f"podman push {local_img}")
-
-        self.download_p4_tar(acc)
+        # WA https://issues.redhat.com/browse/IIC-421
+        acc.run_or_die("mkdir -p /opt/p4/p4-cp-nws/var/run/openvswitch")
         self.configure_p4_hugepages(acc)
-
-    def download_p4_tar(self, rh: host.Host) -> None:
-        logger.info("Downloading p4.tar.gz")
-        rh.run_or_die(f"curl -L {self.P4_URL} -o /tmp/p4.tar.gz")
-        rh.run("rm -rf /opt/p4")
-        rh.run_or_die("tar -U -C /opt/ -xzf /tmp/p4.tar.gz")
 
     def configure_p4_hugepages(self, rh: host.Host) -> None:
         logger.info("Configuring hugepages for p4 pod")
