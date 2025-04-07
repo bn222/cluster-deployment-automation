@@ -1,5 +1,6 @@
 import base64
 import json
+import os
 
 
 def encode_to_base64(input_string: str) -> str:
@@ -15,5 +16,6 @@ def prep_contents(user: str, token: str) -> str:
 
 
 def prep_auth(user: str, token: str) -> None:
+    os.makedirs("/run/user/0/containers", exist_ok=True)
     with open("/run/user/0/containers/auth.json", "w") as f:
         f.write(prep_contents(user, token))
