@@ -21,7 +21,7 @@ def go_is_installed(host: host.Host) -> bool:
     ret = host.run("sh -c 'go version'")
     if ret.returncode == 0:
         installed_version = ret.out.strip().split(' ')[2]
-        if installed_version.startswith("go1.22"):
+        if installed_version.startswith("go1.23"):
             return True
     return False
 
