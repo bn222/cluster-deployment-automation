@@ -35,9 +35,9 @@ def go_install(host: host.Host) -> None:
     ret = host.run_or_die("uname -m")
     architecture = ret.out.strip()
     if architecture == "x86_64":
-        go_tarball = "go1.22.3.linux-amd64.tar.gz"
+        go_tarball = "go1.23.6.linux-amd64.tar.gz"
     elif architecture == "aarch64":
-        go_tarball = "go1.22.3.linux-arm64.tar.gz"
+        go_tarball = "go1.23.6.linux-arm64.tar.gz"
     else:
         logger.error_and_exit(f"Unsupported architecture: {architecture}")
 
