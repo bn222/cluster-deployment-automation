@@ -61,7 +61,7 @@ class DpuOperator:
         logger.info(f"Building dpu operator images in {self.repo_path} on {h.hostname()} with timeout of 1h")
 
         def build_and_push() -> None:
-            h.run_or_die(f"make -C {self.repo_path} local-buildx -j8")
+            h.run_or_die(f"make -C {self.repo_path} local-buildx")
             h.run_or_die(f"make -C {self.repo_path} local-pushx")
 
         common.with_timeout(3600, build_and_push)
