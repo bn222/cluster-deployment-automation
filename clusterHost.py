@@ -74,7 +74,7 @@ class ClusterHost:
 
         # This host needs an api network port if it runs vms and there are more
         # than one physical host in the deployment.
-        self.needs_api_network = self.hosts_vms and any(node_config.node != c.name for node_config in cc.all_nodes())
+        self.needs_api_network = (self.hosts_vms and any(node_config.node != c.name for node_config in cc.all_nodes())) or self.hostconn.is_localhost()
         if self.needs_api_network:
             if self.config.network_api_port == "auto":
                 self.api_port = common.get_auto_port(self.hostconn)
@@ -119,19 +119,13 @@ class ClusterHost:
 
         self.bridge.configure(self.api_port)
 
-    def setup_dhcp_entries(self, vms: list[NodeConfig]) -> None:
-        if not self.hosts_vms:
-            return
-
-        self.bridge.setup_dhcp_entries(vms)
+    def setup_dhcp_entries(self, nodes: list[NodeConfig]) -> None:
+        self.bridge.setup_dhcp_entries(nodes)
         # bridge.remove_dhcp_entries might remove the master of the bridge (through virsh net-destroy/net-start). Add it back.
         self.ensure_linked_to_network(self.bridge)
 
-    def remove_dhcp_entries(self, vms: list[NodeConfig]) -> None:
-        if not self.hosts_vms:
-            return
-
-        self.bridge.remove_dhcp_entries(vms)
+    def remove_dhcp_entries(self, nodes: list[NodeConfig]) -> None:
+        self.bridge.remove_dhcp_entries(nodes)
         # bridge.remove_dhcp_entries might remove the master of the bridge (through virsh net-destroy/net-start). Add it back.
         self.ensure_linked_to_network(self.bridge)
 

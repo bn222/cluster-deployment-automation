@@ -40,13 +40,14 @@ class VirBridge:
         self.config = config
         self.libvirt = Libvirt(h)
 
-    def setup_dhcp_entries(self, vms: list[NodeConfig]) -> None:
+    def setup_dhcp_entries(self, nodes: list[NodeConfig]) -> None:
         # DHCP entries should have been removed during teardown.
         # However, leases sometimes came back.
-        self.remove_dhcp_entries(vms)
-        for cfg in vms:
+        self.remove_dhcp_entries(nodes)
+        for cfg in nodes:
             if cfg.ip is None:
-                logger.error_and_exit(f"Missing IP for node {cfg.name}")
+                logger.debug(f"Missing IP for node {cfg.name}, skipping...")
+                continue
             ip = cfg.ip
             mac = cfg.mac
             name = cfg.name
@@ -56,7 +57,7 @@ class VirBridge:
             cmd = f"virsh net-update default add ip-dhcp-host \"{host_xml}\" --live --config"
             self.hostconn.run_or_die(cmd)
 
-    def remove_dhcp_entries(self, vms: list[NodeConfig]) -> None:
+    def remove_dhcp_entries(self, nodes: list[NodeConfig]) -> None:
         def filter_dhcp_leases(j: list[dict[str, str]], removed_macs: list[str], names: list[str]) -> list[dict[str, str]]:
             filtered = []
             for entry in j:
@@ -73,8 +74,8 @@ class VirBridge:
         xml_str = self.hostconn.run("virsh net-dumpxml default").out
         q = et.fromstring(xml_str)
         removed_macs = []  # type: list[str]
-        names = [vm.name for vm in vms]
-        ips = [vm.ip for vm in vms]
+        names = [node.name for node in nodes]
+        ips = [node.ip for node in nodes if node.ip]
         ip_tree = next((it for it in q.iter("ip")), et.Element(''))
         dhcp = next((it for it in ip_tree.iter("dhcp")), et.Element(''))
         for e in dhcp:
@@ -96,7 +97,7 @@ class VirBridge:
 
         if contents:
             j = json.loads(contents)
-            names = [vm.name for vm in vms]
+            names = [node.name for node in nodes]
             logger.info(f'Cleaning up {fn}')
             logger.info(f'removing hosts with mac in {removed_macs} or name in {names}')
             filtered = filter_dhcp_leases(j, removed_macs, names)
