@@ -17,6 +17,10 @@ from dataclasses import dataclass, field
 from bmc import BmcConfig
 
 
+def base_iso_path(cluster_name: str) -> str:
+    return f"/home/{cluster_name}_guests_images"
+
+
 @dataclass
 class ExtraConfigArgs:
     base_path: str
@@ -120,7 +124,7 @@ class NodeConfig:
             if self.bmc is None:
                 raise ValueError("NodeConfig: bmc not provided")
 
-        base_path = f'/home/{self.cluster_name}_guests_images'
+        base_path = base_iso_path(self.cluster_name)
         qemu_img_name = f'{self.name}.qcow2'
         self.image_path = os.path.join(base_path, qemu_img_name)
 
