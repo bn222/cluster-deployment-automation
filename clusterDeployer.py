@@ -13,7 +13,7 @@ import logging
 from assistedInstaller import AssistedClientAutomation
 import host
 from clusterNode import ClusterNode
-from clustersConfig import ClustersConfig
+from clustersConfig import ClustersConfig, base_iso_path
 from common import wait_futures
 from k8sClient import K8sClient
 import common
@@ -343,7 +343,7 @@ class ClusterDeployer(BaseDeployer):
 
         # Start all masters on all hosts.
         executor = ThreadPoolExecutor(max_workers=len(self._cc.masters))
-        iso_path = os.getcwd()
+        iso_path = base_iso_path(cluster_name)
         iso_file = os.path.join(iso_path, f"{infra_env}.iso")
         self._ai.download_iso_with_retry(infra_env, iso_path)
 
@@ -419,7 +419,7 @@ class ClusterDeployer(BaseDeployer):
 
         # Start all workers on all hosts.
         if not self.is_bf:
-            iso_path = os.getcwd()
+            iso_path = base_iso_path(cluster_name)
         else:
             # BF images are NFS mounted from _BF_ISO_PATH.
             iso_path = _BF_ISO_PATH
