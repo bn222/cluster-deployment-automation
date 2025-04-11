@@ -52,6 +52,9 @@ class NFS:
                 break
             if time.monotonic() > started_at + 60:
                 logger.error_and_exit(f"failed to `systemctl restart nfs-server`: {ret}")
+            ret = self._host.run("sudo systemctl disable --now firewalld")
+            if ret.success():
+                break
             time.sleep(1)
 
     def _ip(self) -> Optional[str]:
