@@ -175,8 +175,6 @@ if [ -d "$WORKDIR" ]; then
 fi
 cd $CURDIR
 date -s "Thu Sep 19 08:18:22 AM EDT 2024"
-cp /work/cli_fix/libmev_imc_ipumgmtd.so /usr/lib64
-cp /work/cli_fix/ipumgmtd /usr/bin
 cp /work/redfish/redfish-1.8-iso-filesize-hotfix /usr/bin/ipu-redfish-server
 cp /work/redfish/certs/server.key /etc/pki/ca-trust/source/anchors/
 cp /work/redfish/certs/server.crt /etc/pki/ca-trust/source/anchors/
@@ -195,15 +193,6 @@ systemctl restart redfish
         # WA: default MeV 1.8 Redfish silently fails when booting isos above 9.5GB, install MeV 1.20 Redfish binary in the meantime
         server.copy_from("/root/webserver/redfish-1.8-iso-filesize-hotfix", "/tmp/redfish-1.8-iso-filesize-hotfix")
         imc.copy_to("/tmp/redfish-1.8-iso-filesize-hotfix", "/work/redfish/redfish-1.8-iso-filesize-hotfix")
-
-        # WA: There is a cli-client concurrency issue that can cause the vsp to fail. The fix will be in MeV 1.20, for now install
-        # the hotfixed binaries
-        imc.run("mkdir -pm 0700 /work/cli_fix")
-        server.copy_from("/root/webserver/ipu-mgmt-hotfix/ipumgmtd", "/tmp/ipumgmtd")
-        server.copy_from("/root/webserver/ipu-mgmt-hotfix/libmev_imc_ipumgmtd.so", "/tmp/libmev_imc_ipumgmtd.so")
-        imc.copy_to("/tmp/ipumgmtd", "/work/cli_fix/ipumgmtd")
-        imc.copy_to("/tmp/libmev_imc_ipumgmtd.so", "/work/cli_fix/libmev_imc_ipumgmtd.so")
-
         imc.write("/work/redfish/certs/server.crt", server.read_file("/root/.local-container-registry/domain.crt"))
         imc.write("/work/redfish/certs/server.key", server.read_file("/root/.local-container-registry/domain.key"))
 
