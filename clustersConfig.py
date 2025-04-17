@@ -59,7 +59,7 @@ class ExtraConfigArgs:
 
     base_image: str = ""
 
-    mev_version: str = "1.8.0.10052"  # latest supported fw version
+    mev_version: str = "2.0.0.11126"  # latest supported fw version
 
     force_firmware_update: bool = False
 
