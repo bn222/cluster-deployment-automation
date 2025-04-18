@@ -40,21 +40,12 @@ class VendorPlugin(ABC):
 
 class IpuPlugin(VendorPlugin):
     P4_URL = "wsfd-advnetlab-amp04.anl.eng.bos2.dc.redhat.com/p4_1.8.tar.gz"
-    P4_IMG = "wsfd-advnetlab217.anl.eng.bos2.dc.redhat.com:5000/intel-ipu-sdk:p4_without_tar-aarch64"
 
     def __init__(self) -> None:
         pass
 
     def build_push_start(self, acc: host.Host, imgReg: ImageRegistry) -> None:
-        # Only need to retag and manage images and config hugepages.
-        # The actual vsp init is done by the dpu-daemon
-        # and vsp-p4 init is done by vsp
-        lh = host.LocalHost()
-        lh.run_or_die(f"podman pull --tls-verify=false {self.P4_IMG}")
-        local_img = f"{imgReg.url()}/intel-vsp-p4:dev"
-        lh.run_or_die(f"podman tag {self.P4_IMG} {local_img}")
-        lh.run_or_die(f"podman push {local_img}")
-
+        # Config huge pages and pull vsp-p4sde
         self.download_p4_tar(acc)
         self.configure_p4_hugepages(acc)
 
