@@ -124,9 +124,12 @@ class NodeConfig:
         qemu_img_name = f'{self.name}.qcow2'
         self.image_path = os.path.join(base_path, qemu_img_name)
 
-        # TODO: fix this properly
+        # TODO: fix this properly when moving to pydantic
         if self.bmc is not None:
             self.bmc = BmcConfig(**self.bmc)  # type: ignore
+
+        if self.bmc_host is not None:
+            self.bmc_host = BmcConfig(**self.bmc_host)  # type: ignore
 
     def is_preallocated(self) -> bool:
         return self.preallocated == "true"
