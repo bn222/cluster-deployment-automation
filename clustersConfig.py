@@ -128,7 +128,9 @@ class NodeConfig:
         if self.bmc is not None:
             self.bmc = BmcConfig(**self.bmc)  # type: ignore
 
+        logger.info(f"post init of node {self.name}")
         if self.bmc_host is not None:
+            logger.info("Setting BMC host")
             self.bmc_host = BmcConfig(**self.bmc_host)  # type: ignore
 
     def is_preallocated(self) -> bool:
