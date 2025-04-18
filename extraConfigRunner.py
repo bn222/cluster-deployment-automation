@@ -14,7 +14,7 @@ from extraConfigCX import ExtraConfigCX
 from extraConfigMicroshift import ExtraConfigMicroshift
 from extraConfigRhSubscription import ExtraConfigRhSubscription
 from extraConfigDpu import ExtraConfigDpu, ExtraConfigDpuHost
-from extraConfigMev import ExtraConfigMevFwUp
+from extraConfigDpuFirmware import ExtraConfigDpuFirmware
 from clustersConfig import ClustersConfig
 from clustersConfig import ExtraConfigArgs
 from concurrent.futures import Future
@@ -49,7 +49,7 @@ extra_config: dict[str, Callable[[ClustersConfig, ExtraConfigArgs, dict[str, Fut
     "rh_subscription": ExtraConfigRhSubscription,
     "dpu_operator_host": ExtraConfigDpuHost,
     "dpu_operator_dpu": ExtraConfigDpu,
-    "mev_firmware_up": ExtraConfigMevFwUp,
+    "dpu_firmware": ExtraConfigDpuFirmware,
 }
 
 

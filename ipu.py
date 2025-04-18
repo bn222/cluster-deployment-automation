@@ -143,12 +143,13 @@ class IPUClusterNode(ClusterNode):
 
 
 class IPUBMC(BMC):
-    def __init__(self, bmc_config: BmcConfig):
+    def __init__(self, bmc_config: BmcConfig, host_bmc: Optional[BMC] = None):
         if bmc_config.password == "calvin":
             password = "calvincalvincalvin"
         else:
             password = bmc_config.password
         super().__init__(bmc_config.url, bmc_config.user, password)
+        self._host_bmc = host_bmc
 
     def _restart_redfish(self) -> None:
         rh = host.RemoteHost(self.url)
@@ -387,6 +388,10 @@ systemctl restart redfish
         pass
 
     def cold_boot(self) -> None:
+        assert self._host_bmc is not None
+        self._host_bmc.cold_boot()
+        # Cold boot should also reboot IMC, give time to settle before trying to ping IMC
+        time.sleep(20)
         pass
 
     def _redfish_version(self) -> str:
@@ -438,6 +443,45 @@ systemctl restart redfish
         else:
             # workaround: remove when redfish is started properly at boot
             return self._version_via_ssh() is not None
+
+    def ensure_firmware(self, force: bool, version: str) -> None:
+        def firmware_is_same() -> bool:
+            imc.ssh_connect(self.user, self.password)
+            ret = imc.run("cat /etc/issue.net")
+            if version in ret.out:
+                logger.info(f"Current MeV fw version is {ret.out.strip()}")
+                return False
+            else:
+                return True
+
+        assert self.is_ipu()
+        imc = host.Host(self.url)
+
+        logger.info(f"Will ensure {self.url} is on firmware version: {version}")
+        logger.info("Checking if firmware update is required")
+
+        if not force and firmware_is_same():
+            logger.info("Leaving fimware unchainged")
+            return
+        else:
+            logger.info("Proceeding with firmware update")
+
+        # Perform upgrade
+        lh = host.LocalHost()
+
+        logger.info("Starting flash of SSD/SPI (this will take some time ~40min)")
+        fw_up_cmd = f"--dpu-type ipu --imc-address {self.url} firmware up --version {version}"
+        ret = lh.run_in_container(fw_up_cmd, interactive=True)
+
+        if not ret.success():
+            logger.error_and_exit(f"Failed to flash new firmware. Error: {ret.err}")
+
+        self.cold_boot()
+
+        if not firmware_is_same():
+            logger.error_and_exit(f"Mev firmware release is not the expected version: {ret.out}")
+
+        logger.info("MeV firmware flash complete")
 
 
 def extract_server(url: str) -> str:
