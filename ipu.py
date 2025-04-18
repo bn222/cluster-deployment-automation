@@ -460,11 +460,11 @@ systemctl restart redfish
         logger.info(f"Will ensure {self.url} is on firmware version: {version}")
         logger.info("Checking if firmware update is required")
 
-        if not force and firmware_is_same():
+        if force or (not firmware_is_same()):
+            logger.info("Proceeding with firmware update")
+        else:
             logger.info("Leaving fimware unchainged")
             return
-        else:
-            logger.info("Proceeding with firmware update")
 
         # Perform upgrade
         lh = host.LocalHost()
