@@ -22,4 +22,4 @@ def ExtraConfigDpuFirmware(cc: ClustersConfig, cfg: ExtraConfigArgs, _: dict[str
     if ipu_bmc.is_ipu():
         ipu_bmc.ensure_firmware(cfg.force_firmware_update, cfg.mev_version)
     else:
-        logger.error_and_exit("Unimplemented updating firmware on DPU that is not IPU")
+        logger.warning("Skipping DPU firmware setup since it's not an IPU")
