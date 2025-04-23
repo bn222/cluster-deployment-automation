@@ -60,7 +60,7 @@ class IsoDeployer(BaseDeployer):
             logger.info(f"{k}: {v.duration()}")
 
     def _deploy_master(self) -> None:
-        self._setup_dhcp()
+        self._setup_networking()
         assert self._master.kind == "dpu"
         assert self._master.bmc is not None
         dpu_kind = detect_dpu(self._master)
@@ -76,7 +76,15 @@ class IsoDeployer(BaseDeployer):
             logger.error("Unknown DPU")
             sys.exit(-1)
 
-    def _setup_dhcp(self) -> None:
+    def _setup_networking(self) -> None:
         assert self._master.ip is not None
-        dhcpConfig.configure_iso_network_port(self._cc.network_api_port, self._master.ip)
+        gw = common.ip_to_gateway(self._master.ip, "255.255.255.0")
+        self.configure_iso_network_port(self._cc.network_api_port, gw)
         dhcpConfig.configure_dhcpd(self._master)
+
+    def configure_iso_network_port(self, api_port: str, gateway_ip: str) -> None:
+        lh = host.LocalHost()
+        logger.info(f"Flushing cluster port {api_port} and setting ip to {gateway_ip}")
+        lh.run_or_die(f"ip addr flush dev {api_port}")
+        lh.run_or_die(f"ip addr add {gateway_ip}/24 dev {api_port}")
+        lh.run(f"ip link set {api_port} up")

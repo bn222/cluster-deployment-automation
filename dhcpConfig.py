@@ -271,12 +271,3 @@ def configure_dhcpd(node: NodeConfig) -> None:
     if ret.returncode != 0:
         logger.error(f"Failed to restart dhcpd with err: {ret.err}")
         sys.exit(-1)
-
-
-def configure_iso_network_port(api_port: str, node_ip: str) -> None:
-    start, _ = get_subnet_range(node_ip, "255.255.255.0")
-    lh = host.LocalHost()
-    logger.info(f"Flushing cluster port {api_port} and setting ip to {start}")
-    lh.run_or_die(f"ip addr flush dev {api_port}")
-    lh.run_or_die(f"ip addr add {start}/24 dev {api_port}")
-    lh.run(f"ip link set {api_port} up")
