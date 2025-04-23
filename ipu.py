@@ -447,9 +447,9 @@ systemctl restart redfish
             ret = imc.run("cat /etc/issue.net")
             if version in ret.out:
                 logger.info(f"Current MeV fw version is {ret.out.strip()}")
-                return False
-            else:
                 return True
+            else:
+                return False
 
         assert self.is_ipu()
         imc = host.Host(self.url)
