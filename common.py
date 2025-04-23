@@ -405,6 +405,12 @@ def ip_range(start_addr: str, n_addrs: int) -> tuple[str, str]:
     return start_addr, str(ipaddress.ip_address(start_addr) + n_addrs)
 
 
+def ip_to_gateway(ipv4_address: str, subnet_mask: str) -> str:
+    network = ipaddress.ip_network(f"{ipv4_address}/{subnet_mask}", strict=False)
+    range_start = network.network_address + 1
+    return str(range_start)
+
+
 def ip_range_contains(range: tuple[str, str], ip: str) -> bool:
     ip_val = ipaddress.IPv4Address(ip)
     return ipaddress.IPv4Address(range[0]) <= ip_val and ipaddress.IPv4Address(range[1]) > ip_val

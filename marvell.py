@@ -2,7 +2,6 @@ import os
 import shlex
 from clustersConfig import NodeConfig
 from bmc import BmcConfig
-import dhcpConfig
 import common
 import host
 
@@ -34,7 +33,7 @@ def _pxeboot_marvell_dpu(name: str, bmc: BmcConfig, mac: str, ip: str, iso: str)
     rsh = marvell_bmc_rsh(bmc)
 
     ip_addr = f"{ip}/24"
-    ip_gateway, _ = dhcpConfig.get_subnet_range(ip, "255.255.255.0")
+    ip_gateway = common.ip_to_gateway(ip, "255.255.255.0")
 
     # An empty entry means to use the host's "id_ed25519.pub". We want that.
     ssh_keys = [""]
