@@ -3,7 +3,6 @@ import os
 import time
 import typing
 from logger import logger
-import dhcpConfig
 from clustersConfig import NodeConfig
 from bmc import BmcConfig
 from clusterNode import ClusterNode
@@ -53,8 +52,6 @@ class IPUClusterNode(ClusterNode):
 
     def _boot_iso(self, iso: str) -> None:
         assert self.config.ip
-        dhcpConfig.configure_iso_network_port(self.network_api_port, self.config.ip)
-        dhcpConfig.configure_dhcpd(self.config)
         self._redfish_boot_ipu(self.external_port, self.config, iso)
         logger.info(f"Redfish boot triggered, attempting to connect to ACC at ip {self.config.ip}")
         # wait on install + reboot to complete

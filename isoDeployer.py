@@ -9,6 +9,7 @@ from clustersConfig import ClustersConfig
 from concurrent.futures import ThreadPoolExecutor
 from dpuVendor import detect_dpu
 import sys
+import dhcpConfig
 
 
 class IsoDeployer(BaseDeployer):
@@ -59,6 +60,7 @@ class IsoDeployer(BaseDeployer):
             logger.info(f"{k}: {v.duration()}")
 
     def _deploy_master(self) -> None:
+        self._setup_dhcp()
         assert self._master.kind == "dpu"
         assert self._master.bmc is not None
         dpu_kind = detect_dpu(self._master)
@@ -69,7 +71,12 @@ class IsoDeployer(BaseDeployer):
             future.result()
             node.post_boot()
         elif dpu_kind == "marvell":
-            marvell.MarvellIsoBoot(self._cc, self._master, self._cc.install_iso)
+            marvell.MarvellIsoBoot(self._master, self._cc.install_iso)
         else:
             logger.error("Unknown DPU")
             sys.exit(-1)
+
+    def _setup_dhcp(self) -> None:
+        assert self._master.ip is not None
+        dhcpConfig.configure_iso_network_port(self._cc.network_api_port, self._master.ip)
+        dhcpConfig.configure_dhcpd(self._master)

@@ -1,6 +1,5 @@
 import os
 import shlex
-from clustersConfig import ClustersConfig
 from clustersConfig import NodeConfig
 from bmc import BmcConfig
 import dhcpConfig
@@ -78,12 +77,10 @@ def _pxeboot_marvell_dpu(name: str, bmc: BmcConfig, mac: str, ip: str, iso: str)
         raise RuntimeError(f"Failure to to pxeboot: {r}")
 
 
-def MarvellIsoBoot(cc: ClustersConfig, node: NodeConfig, iso: str) -> None:
+def MarvellIsoBoot(node: NodeConfig, iso: str) -> None:
     assert node.ip is not None
     assert node.bmc is not None
     _pxeboot_marvell_dpu(node.name, node.bmc, node.mac, node.ip, iso)
-    dhcpConfig.configure_iso_network_port(cc.network_api_port, node.ip)
-    dhcpConfig.configure_dhcpd(node)
 
 
 def main() -> None:
