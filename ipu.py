@@ -443,7 +443,7 @@ systemctl restart redfish
         if force or (not firmware_is_same()):
             logger.info("Proceeding with firmware update")
         else:
-            logger.info("Leaving fimware unchainged")
+            logger.info("Skipping firmware update")
             return
 
         # Perform upgrade
