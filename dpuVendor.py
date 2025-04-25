@@ -39,13 +39,17 @@ class VendorPlugin(ABC):
 
 
 class IpuPlugin(VendorPlugin):
-    P4_URL = "wsfd-advnetlab-amp04.anl.eng.bos2.dc.redhat.com/p4_1.8.tar.gz"
+    P4_URL = "wsfd-advnetlab-amp04.anl.eng.bos2.dc.redhat.com/intel-ipu-acc-components-2.0.0.11126.tar.gz"
 
     def __init__(self) -> None:
         pass
 
     def build_push_start(self, acc: host.Host, imgReg: ImageRegistry) -> None:
         # Config huge pages and pull vsp-p4sde
+        # The actual vsp init is done by the dpu-daemon
+        # and vsp-p4 init is done by vsp
+        # lh.run_or_die(f"podman pull --tls-verify=false {imgReg.url()}/intel-vsp-p4:dev")
+
         self.download_p4_tar(acc)
         self.configure_p4_hugepages(acc)
 
@@ -54,6 +58,9 @@ class IpuPlugin(VendorPlugin):
         rh.run_or_die(f"curl -L {self.P4_URL} -o /tmp/p4.tar.gz")
         rh.run("rm -rf /opt/p4")
         rh.run_or_die("tar -U -C /opt/ -xzf /tmp/p4.tar.gz")
+        rh.run("mv /opt/intel-ipu-acc-components-2.0.0.11126 /opt/p4")
+        rh.run("mv /opt/p4/p4-cp /opt/p4/p4-cp-nws")
+        rh.run("mv /opt/p4/p4-sde /opt/p4/p4sde")
 
     def configure_p4_hugepages(self, rh: host.Host) -> None:
         logger.info("Configuring hugepages for p4 pod")
