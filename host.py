@@ -320,7 +320,7 @@ class Host:
                 logger.debug(ret.out.strip())
                 return ret
             else:
-                logger.error(f"{cmd} failed (attempt {attempt + 1}/{retry + 1}): {ret.err}")
+                logger.error(f"{cmd} failed (attempt {attempt + 1}/{retry}): {ret.err}")
                 if attempt < retry:
                     logger.info("Retrying in 5 seconds...")
                     time.sleep(5)
