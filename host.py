@@ -313,14 +313,18 @@ class Host:
                     logger.log(log_level, "Connection lost while running command, reconnecting...")
                 self.ssh_connect_looped(self._logins)
 
-    def run_or_die(self, cmd: str) -> Result:
-        ret = self.run(cmd)
-        if ret.returncode:
-            logger.error(f"{cmd} failed: {ret.err}")
-            sys.exit(-1)
-        else:
-            logger.debug(ret.out.strip())
-        return ret
+    def run_or_die(self, cmd: str, retry: int = 1) -> Result:
+        for attempt in range(retry + 1):
+            ret = self.run(cmd)
+            if ret.returncode == 0:
+                logger.debug(ret.out.strip())
+                return ret
+            else:
+                logger.error(f"{cmd} failed (attempt {attempt + 1}/{retry + 1}): {ret.err}")
+                if attempt < retry:
+                    logger.info("Retrying in 5 seconds...")
+                    time.sleep(5)
+        sys.exit(-1)
 
     def run_in_container(self, cmd: str, interactive: bool = False, verbose: bool = True, dry_run: bool = False) -> Result:
         name = "dpu-tools"
