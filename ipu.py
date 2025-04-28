@@ -88,8 +88,8 @@ class IPUClusterNode(ClusterNode):
     def start(self, iso_or_image_path: str) -> bool:
         assert self.config.bmc is not None
         ipu_bmc = IPUBMC(self.config.bmc)
-        if ipu_bmc.version() != "1.8.0":
-            logger.error_and_exit(f"Unexpected version {ipu_bmc.version()}, should be 1.8.0")
+        if ipu_bmc.version() != "1.8.0" and ipu_bmc.version() != "2.0.0":
+            logger.error_and_exit(f"Unexpected version {ipu_bmc.version()}, should be 1.8.0 or 2.0.0")
         self._boot_iso(iso_or_image_path)
         return True
 
