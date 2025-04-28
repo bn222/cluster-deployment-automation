@@ -321,7 +321,7 @@ class Host:
                 return ret
             else:
                 logger.error(f"{cmd} failed (attempt {attempt + 1}/{retry}): {ret.err}")
-                if attempt < retry:
+                if attempt + 1 < retry:
                     logger.info("Retrying in 5 seconds...")
                     time.sleep(5)
         sys.exit(-1)
