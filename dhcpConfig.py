@@ -115,14 +115,24 @@ def get_router_ip(ipv4_address: str, subnet_mask: str) -> str:
     return str(router_ip)
 
 
+def dns_servers(lh: host.Host) -> list[str]:
+    """Get the DNS servers for the given interface."""
+    ret = []
+    for e in lh.run("nmcli -g IP4.DNS device show").out.split():
+        for d in e.strip().split("|"):
+            if d:
+                ret.append(d)
+    return ret
+
+
 def subnet_config_from_host_config(hc: DhcpdHostConfig) -> DhcpdSubnetConfig:
     netmask = DEFAULT_NETMASK
     subnet_ip = get_subnet_ip(hc.fixed_address, netmask)
     range_start, range_end = get_subnet_range(hc.fixed_address, netmask)
     broadcast_address = str(ipaddress.ip_network(f"{hc.fixed_address}/{netmask}", strict=False).broadcast_address)
     routers = get_router_ip(hc.fixed_address, netmask)
-    dns_servers = ["10.2.70.215", "10.11.5.160"]
-    return DhcpdSubnetConfig(subnet=subnet_ip, netmask=netmask, range_start=range_start, range_end=range_end, broadcast_address=broadcast_address, routers=routers, dns_servers=dns_servers)
+    dns = dns_servers(host.LocalHost())
+    return DhcpdSubnetConfig(subnet=subnet_ip, netmask=netmask, range_start=range_start, range_end=range_end, broadcast_address=broadcast_address, routers=routers, dns_servers=dns)
 
 
 def _convert_to_cidr(ipv4_address: str, subnet_mask: str) -> str:
