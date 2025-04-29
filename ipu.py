@@ -174,7 +174,6 @@ cd $CURDIR
 date -s "Thu Sep 19 08:18:22 AM EDT 2024"
 cp /work/redfish/certs/server.key /etc/pki/ca-trust/source/anchors/
 cp /work/redfish/certs/server.crt /etc/pki/ca-trust/source/anchors/
-rm -rf /home/root/MtRemoteRunner # workaround to free up some space: https://issues.redhat.com/browse/IIC-372
 update-ca-trust
 sleep 10 # wait for ip address so that redfish starts with that in place
 systemctl restart redfish
