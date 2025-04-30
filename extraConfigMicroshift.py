@@ -100,14 +100,14 @@ def ExtraConfigMicroshift(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dic
     time.sleep(1)
     logger.info("Checking if time is set properly to avoid OCSR errors")
     logger.info(acc.run("systemctl status chronyd --no-pager -l"))
-    lh_date = host.LocalHost().run("date").out
-    acc_date = host.LocalHost().run("date").out
+    lh_date = host.LocalHost().run("date").out.strip()
+    acc_date = host.LocalHost().run("date").out.strip()
     logger.info(f"LocalHost date: {lh_date}")
     logger.info(f"ACC date: {acc_date}")
     logger.info("Manually synchronizing time")
     host.sync_time(lh, acc)
-    lh_date = host.LocalHost().run("date").out
-    acc_date = host.LocalHost().run("date").out
+    lh_date = host.LocalHost().run("date").out.strip()
+    acc_date = host.LocalHost().run("date").out.strip()
     logger.info(f"LocalHost date: {lh_date}")
     logger.info(f"ACC date: {acc_date}")
 
