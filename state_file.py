@@ -25,7 +25,7 @@ class StateFile:
             return dict[str, str](json.load(f))
 
     def _save_state(self, state: dict[str, str]) -> None:
-        os.makedirs(os.path.abspath(self.path), exist_ok=True)
+        os.makedirs(os.path.dirname(self.path), exist_ok=True)
         with open(self.path, 'w') as f:
             f.write(json.dumps(state))
 
