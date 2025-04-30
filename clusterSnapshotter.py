@@ -9,6 +9,7 @@ from logger import logger
 import coreosBuilder
 from concurrent.futures import ThreadPoolExecutor
 from nfs import NFS
+from state_file import StateFile
 
 
 def get_part_table(h: host.Host, drive: str) -> list[str]:
@@ -73,14 +74,14 @@ class ClusterSnapshotter:
         for x in futures:
             x.result()
 
-    def import_cluster(self) -> None:
+    def import_cluster(self, state_path: StateFile) -> None:
         self._ais.import_snapshot(self._snapshot_dir())
         ai_nodes = [h["requested_hostname"] for h in self._ai.list_hosts()]
         active_vms = [x for x in self._cc.all_vms() if x.name in ai_nodes]
 
         def load_vms() -> None:
             for e in active_vms:
-                self._import_vm(e)
+                self._import_vm(e, state_path)
 
             lh = host.LocalHost()
             for e in active_vms:
@@ -129,7 +130,7 @@ class ClusterSnapshotter:
         logger.info(f"Copying {src} to {dst}")
         lh.copy_to(src, dst)
 
-    def _import_vm(self, config: NodeConfig) -> None:
+    def _import_vm(self, config: NodeConfig, state_path: StateFile) -> None:
         lh = host.LocalHost()
         src = config.image_path
         os.makedirs(os.path.dirname(src), exist_ok=True)
@@ -137,7 +138,7 @@ class ClusterSnapshotter:
         logger.info(f"Copying {dst} to {src}")
         lh.copy_to(dst, src)
         VmClusterNode(lh, config).setup_vm(config.image_path)
-        ClusterDeployer(self._cc, self._ai, [], "").update_etc_hosts()
+        ClusterDeployer(self._cc, self._ai, [], "", state_path).update_etc_hosts()
 
     def _snapshot_dir(self) -> str:
         return os.path.join("/root/snapshots", self._name)

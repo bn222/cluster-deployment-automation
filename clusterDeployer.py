@@ -26,6 +26,7 @@ from virshPool import VirshPool
 from arguments import PRE_STEP, WORKERS_STEP, MASTERS_STEP, POST_STEP
 from libvirt import Libvirt
 from baseDeployer import BaseDeployer
+from state_file import StateFile
 
 
 def match_to_proper_version_format(version_cluster_config: str) -> str:
@@ -41,12 +42,17 @@ _BF_ISO_PATH = "/root/iso"
 
 
 class ClusterDeployer(BaseDeployer):
-    def __init__(self, cc: ClustersConfig, ai: AssistedClientAutomation, steps: list[str], secrets_path: str):
+    def __init__(self, cc: ClustersConfig, ai: AssistedClientAutomation, steps: list[str], secrets_path: str, state_file: StateFile, should_resume: bool = False):
         super().__init__(cc, steps)
         self.bf_connections: dict[str, host.Host] = {}
         self._client: Optional[K8sClient] = None
         self._ai = ai
         self._secrets_path = secrets_path
+
+        self.state = state_file
+        if not should_resume:
+            logger.info("Resetting state file...")
+            self.state.clear_state()
 
         lh = host.LocalHost()
         lh_config = list(filter(lambda hc: hc.name == lh.hostname(), self._cc.hosts))[0]
@@ -185,31 +191,36 @@ class ClusterDeployer(BaseDeployer):
         duration = self._empty_timers()
 
         if self._cc.masters:
-            if PRE_STEP in self.steps:
+            if PRE_STEP in self.steps and self.state.not_deployed("pre-step"):
                 duration[PRE_STEP].start()
                 self._preconfig()
                 duration[PRE_STEP].stop()
+                self.state["pre-step"] = "deployed"
             else:
                 logger.info("Skipping pre configuration.")
 
             if self._cc.kind != "microshift":
-                if WORKERS_STEP in self.steps or MASTERS_STEP in self.steps:
+                if (WORKERS_STEP in self.steps or MASTERS_STEP in self.steps) and self.state.not_deployed("workers"):
                     self.teardown_workers()
-                if MASTERS_STEP in self.steps:
+                    self.state["workers"] = "offline"
+                if MASTERS_STEP in self.steps and self.state.not_deployed("masters"):
                     duration[MASTERS_STEP].start()
                     self.teardown_masters()
                     self.create_cluster()
                     self.create_masters()
                     duration[MASTERS_STEP].stop()
+                    self.state["masters"] = "deployed"
                 else:
                     logger.info("Skipping master creation.")
 
-                if WORKERS_STEP in self.steps:
+                if WORKERS_STEP in self.steps and self.state.not_deployed("workers"):
                     duration[WORKERS_STEP].start()
                     self.create_workers()
                     duration[WORKERS_STEP].stop()
+                    self.state["workers"] = "deployed"
                 else:
                     logger.info("Skipping worker creation.")
+
         if self._cc.kind == "microshift":
             version = match_to_proper_version_format(self._cc.version)
 
@@ -219,10 +230,11 @@ class ClusterDeployer(BaseDeployer):
                 duration[MASTERS_STEP].stop()
             else:
                 logger.error_and_exit("Masters must be of length one for deploying microshift")
-        if POST_STEP in self.steps:
+        if POST_STEP in self.steps and self.state.not_deployed("post-step"):
             duration[POST_STEP].start()
             self._postconfig()
             duration[POST_STEP].stop()
+            self.state["post-step"] = "deployed"
         else:
             logger.info("Skipping post configuration.")
         for k, v in duration.items():
