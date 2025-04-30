@@ -197,7 +197,7 @@ systemctl restart redfish
         if imc.exists("/mnt/imc/acc_variable/acc-config.json"):
             acc_config = imc.read_file("/mnt/imc/acc_variable/acc-config.json")
         else:
-            contents = { "acc_watchdog_timer": 9999, "kernel": { "boot_params" : "" } }
+            contents = {"acc_watchdog_timer": 9999, "kernel": {"boot_params": ""}}
             acc_config = json.dumps(contents)
         imc.write("/mnt/imc/acc_variable/acc-config.json", acc_config.replace("\"acc_watchdog_timer\": 60", "\"acc_watchdog_timer\": 9999"))
 
