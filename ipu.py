@@ -194,7 +194,11 @@ systemctl restart redfish
         imc.run("/usr/bin/imc-scripts/cfg_boot_options \"init_app_acc_nboot_stage\"  \"2\"")
         # When developing / frequently re-deploying the ACC, we can update the watchdog timeout to avoid ending up in recovery mode
         # https://issues.redhat.com/browse/IIC-369
-        acc_config = imc.read_file("/mnt/imc/acc_variable/acc-config.json")
+        if imc.exists("/mnt/imc/acc_variable/acc-config.json"):
+            acc_config = imc.read_file("/mnt/imc/acc_variable/acc-config.json")
+        else:
+            contents = { "acc_watchdog_timer": 9999, "kernel": { "boot_params" : "" } }
+            acc_config = json.dumps(contents)
         imc.write("/mnt/imc/acc_variable/acc-config.json", acc_config.replace("\"acc_watchdog_timer\": 60", "\"acc_watchdog_timer\": 9999"))
 
         imc.run("mkdir -m 0700 /work/redfish")
