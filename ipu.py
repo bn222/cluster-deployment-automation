@@ -371,7 +371,6 @@ systemctl restart redfish
         self._host_bmc.cold_boot()
         # Cold boot should also reboot IMC, give time to settle before trying to ping IMC
         time.sleep(20)
-        pass
 
     def _redfish_version(self) -> str:
         url = f"https://{self.url}:8443/redfish/v1/Managers/1"
