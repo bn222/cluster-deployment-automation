@@ -115,8 +115,8 @@ class K8sClient:
         minutes, seconds = divmod(int(time.time() - start), 60)
         logger.info(f"It took {minutes}m {seconds}s for all mcp to be updated (attempts: {iteration})")
 
-    def wait_for_crd(self, name: str, cr_name: str, namespace: str) -> None:
-        logger.info(f"Waiting for crd {cr_name} to become available")
+    def wait_for_cr(self, name: str, cr_name: str, namespace: str) -> None:
+        logger.info(f"Waiting for cr {cr_name} to become available")
         ret = self.oc(f"get {cr_name}/{name} -n {namespace}")
         retries = 10
         while ret.returncode != 0:
