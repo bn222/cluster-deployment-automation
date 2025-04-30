@@ -669,7 +669,7 @@ def wait_true(name: str, n_tries: int, func: Callable[..., bool], **func_kwargs:
             logger.info(f"The limit of {n_tries} tries was reached for {name}")
             return False
 
-        time.sleep(30)
+        time.sleep(5)
 
     return True
 

@@ -532,7 +532,7 @@ class ClusterDeployer(BaseDeployer):
                 logger.info(f"Renamed {node.config.name}")
                 return True
 
-            time.sleep(10)
+            time.sleep(2)
 
         return False
 
