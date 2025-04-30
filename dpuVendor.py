@@ -1,9 +1,7 @@
-import jinja2
 import re
 import host
 from logger import logger
 from abc import ABC, abstractmethod
-from imageRegistry import ImageRegistry
 import ipu
 import marvell
 import clustersConfig
@@ -24,18 +22,8 @@ def detect_dpu(node: clustersConfig.NodeConfig) -> str:
 
 class VendorPlugin(ABC):
     @abstractmethod
-    def build_push_start(self, acc: host.Host, imgReg: ImageRegistry) -> None:
-        raise NotImplementedError("Must implement build_and_start() for VSP")
-
-    @staticmethod
-    def render_dpu_vsp_ds(vsp_ds_manifest: str, ipu_plugin_image: str, outfilename: str) -> None:
-        with open(vsp_ds_manifest) as f:
-            j2_template = jinja2.Template(f.read())
-            rendered = j2_template.render(ipu_plugin_image=ipu_plugin_image)
-            logger.info(rendered)
-
-        with open(outfilename, "w") as outFile:
-            outFile.write(rendered)
+    def setup(self, dpu: host.Host) -> None:
+        raise NotImplementedError("Must implement setup() for VSP")
 
 
 class IpuPlugin(VendorPlugin):
@@ -44,14 +32,9 @@ class IpuPlugin(VendorPlugin):
     def __init__(self) -> None:
         pass
 
-    def build_push_start(self, acc: host.Host, imgReg: ImageRegistry) -> None:
-        # Config huge pages and pull vsp-p4sde
-        # The actual vsp init is done by the dpu-daemon
-        # and vsp-p4 init is done by vsp
-        # lh.run_or_die(f"podman pull --tls-verify=false {imgReg.url()}/intel-vsp-p4:dev")
-
-        self.download_p4_tar(acc)
-        self.configure_p4_hugepages(acc)
+    def setup(self, dpu: host.Host) -> None:
+        self.download_p4_tar(dpu)
+        self.configure_p4_hugepages(dpu)
 
     def download_p4_tar(self, rh: host.Host) -> None:
         logger.info("Downloading p4.tar.gz")
@@ -94,9 +77,8 @@ class MarvellDpuPlugin(VendorPlugin):
     def __init__(self) -> None:
         pass
 
-    def build_push_start(self, acc: host.Host, imgReg: ImageRegistry) -> None:
-        # TODO: https://github.com/openshift/dpu-operator/pull/82
-        logger.warning("Setting up Marvell DPU not yet implemented")
+    def setup(self, dpu: host.Host) -> None:
+        logger.warning("Nothing to set up on Marvell DPU")
 
 
 def init_vendor_plugin(h: host.Host, dpu_kind: str) -> VendorPlugin:
