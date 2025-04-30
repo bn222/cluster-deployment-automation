@@ -105,7 +105,7 @@ def main_snapshot(args: argparse.Namespace, cc: ClustersConfig, state_path: str)
 
 def main_state(args: argparse.Namespace, path: str) -> None:
     s = StateFile(path)
-    s.formatted()
+    print(s)
     return
 
 

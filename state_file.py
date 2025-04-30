@@ -46,5 +46,5 @@ class StateFile:
         state[key] = value
         self._save_state(state)
 
-    def formatted(self) -> None:
-        print(json.dumps(self._load_state(), indent=4))
+    def __str__(self) -> str:
+        return json.dumps(self._load_state(), indent=4)
