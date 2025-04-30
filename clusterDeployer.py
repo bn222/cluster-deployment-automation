@@ -444,7 +444,6 @@ class ClusterDeployer(BaseDeployer):
         nodes_with_futures = [(n.config.name, executor.submit(self._install_worker_with_retry, infra_env, n)) for n in worker_nodes]
         wait_futures("install worker", nodes_with_futures)
 
-        logger.info("waiting for workers to be ready")
         self.wait_for_workers()
 
         logger.info("Setting password to for root to redhat")
