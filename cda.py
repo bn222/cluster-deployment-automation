@@ -130,7 +130,6 @@ def main() -> None:
 
     if not args.subcommand:
         logger.error_and_exit("No subcommand: select either deploy, state or snapshot ")
-        return
 
     if args.subcommand == "state":
         cc = ClustersConfig(args.config)
