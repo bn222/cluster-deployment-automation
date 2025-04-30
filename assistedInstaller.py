@@ -47,7 +47,7 @@ class AssistedClientAutomation(AssistedClient):  # type: ignore
                 self.delete_cluster(name)
             except Exception:
                 logger.info("failed to delete cluster, will retry..")
-            time.sleep(5)
+            time.sleep(1)
 
     def ensure_infraenv_created(self, name: str, cfg: dict[str, str]) -> None:
         if name not in (x["name"] for x in self.list_infra_envs()):
@@ -99,7 +99,7 @@ class AssistedClientAutomation(AssistedClient):  # type: ignore
 
     def download_iso_with_retry(self, infra_env: str, path: str = os.getcwd()) -> None:
         logger.info(self.info_iso(infra_env, {}))
-        retries, timeout = 25, 30
+        retries, timeout = 150, 5
         logger.info(f"Download iso from {infra_env} to {path}, retrying for {retries * timeout}s")
         for _ in range(retries):
             try:
@@ -117,7 +117,7 @@ class AssistedClientAutomation(AssistedClient):  # type: ignore
             new_state = self.cluster_state(cluster_name)
             if new_state != cur_state:
                 logger.info(f"Cluster state changed to {new_state}")
-            time.sleep(10)
+            time.sleep(1)
             cur_state = new_state
             if cur_state == status:
                 break
@@ -177,7 +177,7 @@ class AssistedClientAutomation(AssistedClient):  # type: ignore
                     pass
             elif cs == "installing":
                 break
-            time.sleep(10)
+            time.sleep(5)
         logger.info(f"Took {tries} tries to start cluster {cluster_name}")
 
     def list_ai_hosts(self) -> list[AssistedClientHostInfo]:
