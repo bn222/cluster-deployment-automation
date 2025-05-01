@@ -51,7 +51,7 @@ class ClusterDeployer(BaseDeployer):
 
         self.state = state_file
         if not should_resume:
-            logger.info("Resetting state file...")
+            logger.info(f"Resetting state file at {self.state.path}")
             self.state.clear_state()
 
         lh = host.LocalHost()
