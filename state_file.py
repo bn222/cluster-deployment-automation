@@ -26,9 +26,9 @@ class StateFile:
         with open(self.path, 'w') as f:
             f.write(json.dumps(state))
 
-    def not_deployed(self, name: str) -> bool:
+    def deployed(self, name: str) -> bool:
         state = self._load_state()
-        return self.cluster_name in state and name in self.cluster_name and state[self.cluster_name][name] == "offline"
+        return self.cluster_name in state and name in self.cluster_name and state[self.cluster_name][name] == "online"
 
     def clear_state(self) -> None:
         state = self._load_state()

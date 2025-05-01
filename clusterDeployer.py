@@ -191,7 +191,7 @@ class ClusterDeployer(BaseDeployer):
         duration = self._empty_timers()
 
         if self._cc.masters:
-            if PRE_STEP in self.steps and self.state.not_deployed("pre-step"):
+            if PRE_STEP in self.steps and not self.state.deployed("pre-step"):
                 duration[PRE_STEP].start()
                 self._preconfig()
                 duration[PRE_STEP].stop()
@@ -200,10 +200,10 @@ class ClusterDeployer(BaseDeployer):
                 logger.info("Skipping pre configuration.")
 
             if self._cc.kind != "microshift":
-                if (WORKERS_STEP in self.steps or MASTERS_STEP in self.steps) and self.state.not_deployed("workers"):
+                if (WORKERS_STEP in self.steps or MASTERS_STEP in self.steps) and not self.state.deployed("workers"):
                     self.teardown_workers()
                     self.state["workers"] = "offline"
-                if MASTERS_STEP in self.steps and self.state.not_deployed("masters"):
+                if MASTERS_STEP in self.steps and not self.state.deployed("masters"):
                     duration[MASTERS_STEP].start()
                     self.teardown_masters()
                     self.create_cluster()
@@ -213,7 +213,7 @@ class ClusterDeployer(BaseDeployer):
                 else:
                     logger.info("Skipping master creation.")
 
-                if WORKERS_STEP in self.steps and self.state.not_deployed("workers"):
+                if WORKERS_STEP in self.steps and not self.state.deployed("workers"):
                     duration[WORKERS_STEP].start()
                     self.create_workers()
                     duration[WORKERS_STEP].stop()
@@ -230,7 +230,7 @@ class ClusterDeployer(BaseDeployer):
                 duration[MASTERS_STEP].stop()
             else:
                 logger.error_and_exit("Masters must be of length one for deploying microshift")
-        if POST_STEP in self.steps and self.state.not_deployed("post-step"):
+        if POST_STEP in self.steps and not self.state.deployed("post-step"):
             duration[POST_STEP].start()
             self._postconfig()
             duration[POST_STEP].stop()
