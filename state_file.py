@@ -38,12 +38,17 @@ class StateFile:
 
     def __getitem__(self, key: str) -> str | None:
         state = self._load_state()
+        if self.cluster_name not in state:
+            state[self.cluster_name] = {}
+        if key not in state[self.cluster_name]:
+            state[self.cluster_name][key] = "offline"
         return state[self.cluster_name][key]
 
     def __setitem__(self, key: str, value: str) -> None:
         state = self._load_state()
         if self.cluster_name not in state:
-            state[self.cluster_name][key] = value
+            state[self.cluster_name] = {}
+        state[self.cluster_name][key] = value
         self._save_state(state)
 
     def __str__(self) -> str:
