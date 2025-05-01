@@ -4,47 +4,46 @@ import json
 
 class StateFile:
     default_dict = {
-        "cluster-name": "",
         "pre-step": "offline",
         "masters": "offline",
         "workers": "offline",
         "post-step": "offline",
     }
 
-    def __init__(self, path: str) -> None:
+    def __init__(self, cluster_name: str, path: str) -> None:
+        self.cluster_name = cluster_name
         self.path = path
-        if not os.path.exists(path):
-            self.clear_state()
-            dir = os.path.dirname(path)
-            if dir != '':
-                os.makedirs(dir, exist_ok=True)
-        self["cluster-name"] = os.path.basename(path)
 
-    def _load_state(self) -> dict[str, str]:
-        with open(self.path, 'r') as f:
-            return dict[str, str](json.load(f))
+    def _load_state(self) -> dict[str, dict[str, str]]:
+        if os.path.exists(self.path):
+            with open(self.path, 'r') as f:
+                return dict[str, dict[str, str]](json.load(f))
+        else:
+            return {}
 
-    def _save_state(self, state: dict[str, str]) -> None:
+    def _save_state(self, state: dict[str, dict[str, str]]) -> None:
         os.makedirs(os.path.dirname(self.path), exist_ok=True)
         with open(self.path, 'w') as f:
             f.write(json.dumps(state))
 
-    def cluster_name(self) -> str:
-        return self._load_state()["cluster-name"]
-
     def not_deployed(self, name: str) -> bool:
-        return self._load_state()[name] == "offline"
+        state = self._load_state()
+        return self.cluster_name in state and name in self.cluster_name and state[self.cluster_name][name] == "offline"
 
     def clear_state(self) -> None:
-        self._save_state(self.default_dict)
+        state = self._load_state()
+        if self.cluster_name in state:
+            del state[self.cluster_name]
+        self._save_state(state)
 
     def __getitem__(self, key: str) -> str | None:
         state = self._load_state()
-        return state.get(key)
+        return state[self.cluster_name][key]
 
     def __setitem__(self, key: str, value: str) -> None:
         state = self._load_state()
-        state[key] = value
+        if self.cluster_name not in state:
+            state[self.cluster_name][key] = value
         self._save_state(state)
 
     def __str__(self) -> str:

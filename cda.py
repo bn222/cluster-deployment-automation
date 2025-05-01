@@ -27,7 +27,7 @@ def check_and_cleanup_disk(threshold_gb: int = 10) -> None:
         h.run("podman image prune -a -f")
 
 
-def main_deploy_openshift(cc: ClustersConfig, args: argparse.Namespace, state_path: str) -> None:
+def main_deploy_openshift(cc: ClustersConfig, args: argparse.Namespace, state_file_path: str) -> None:
     # Make sure the local virtual bridge base configuration is correct.
     local_bridge = VirBridge(host.LocalHost(), cc.local_bridge_config)
     local_bridge.configure(api_port=None)
@@ -41,7 +41,7 @@ def main_deploy_openshift(cc: ClustersConfig, args: argparse.Namespace, state_pa
         logger.info(f"Will use Assisted Installer running at {args.url}")
         ais = None
 
-    sf = StateFile(state_path)
+    sf = StateFile(cc.name, state_file_path)
     """
     Here we will use the AssistedClient from the aicli package from:
         https://github.com/karmab/aicli
@@ -73,14 +73,14 @@ def main_deploy_iso(cc: ClustersConfig, args: argparse.Namespace) -> None:
     id.deploy()
 
 
-def main_deploy(args: argparse.Namespace, cc: ClustersConfig, state_path: str, token_user: str = "", token: str = "") -> None:
-    if token_user != "" and token != "":
-        auth.prep_auth(token_user, token)
+def main_deploy(args: argparse.Namespace, cc: ClustersConfig, conf: CdaConfig) -> None:
+    if conf.token_user != "" and conf.token != "":
+        auth.prep_auth(conf.token_user, conf.token)
 
     check_and_cleanup_disk(10)
 
     if cc.kind == "openshift":
-        main_deploy_openshift(cc, args, state_path)
+        main_deploy_openshift(cc, args, conf.state_file_path)
     else:
         main_deploy_iso(cc, args)
 
@@ -93,7 +93,7 @@ def main_snapshot(args: argparse.Namespace, cc: ClustersConfig, state_path: str)
 
     name = cc.name if args.name is None else args.name
     cs = ClusterSnapshotter(cc, ais, ai, name)
-    sf = StateFile(state_path)
+    sf = StateFile(cc.name, state_path)
 
     if args.loadsave == "load":
         cs.import_cluster(sf)
@@ -101,12 +101,6 @@ def main_snapshot(args: argparse.Namespace, cc: ClustersConfig, state_path: str)
         cs.export_cluster()
     else:
         logger.error(f"Unexpected action {args.actions}")
-
-
-def main_state(args: argparse.Namespace, path: str) -> None:
-    s = StateFile(path)
-    print(s)
-    return
 
 
 def is_yaml(config: str) -> bool:
@@ -119,22 +113,17 @@ def main() -> None:
     if not is_yaml(args.config):
         logger.error_and_exit("Please specify a yaml configuration file")
 
-    path: str = ""
-    token_user: str = ""
-    token: str = ""
     if os.path.exists(args.cda_config):
         conf = configLoader.load(args.cda_config, CdaConfig)
-        token_user = conf.token_user
-        token = conf.token
-        path = conf.state_file_dir
+    else:
+        conf = CdaConfig()
 
     if not args.subcommand:
         logger.error_and_exit("No subcommand: select either deploy, state or snapshot ")
 
     if args.subcommand == "state":
         cc = ClustersConfig(args.config)
-        path += cc.name
-        main_state(args, path)
+        print(StateFile(cc.name, conf.state_file_path))
         return
 
     cc = ClustersConfig(
@@ -143,12 +132,10 @@ def main() -> None:
         worker_range=args.worker_range,
     )
 
-    path += cc.name
-
     if args.subcommand == "deploy":
-        main_deploy(args, cc, path, token_user, token)
+        main_deploy(args, cc, conf)
     elif args.subcommand == "snapshot":
-        main_snapshot(args, cc, path)
+        main_snapshot(args, cc, conf.state_file_path)
 
 
 if __name__ == "__main__":
