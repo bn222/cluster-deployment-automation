@@ -207,8 +207,9 @@ systemctl restart redfish
 
         logger.info("Rebooting IMC")
         imc.run("reboot")
-        time.sleep(10)
+        time.sleep(20)
         imc.wait_ping()
+        imc.ssh_connect("root", password="", discover_auth=False)
         logger.info("Reboot IMC finished")
 
     def _create_imc_rsh(self) -> host.Host:
