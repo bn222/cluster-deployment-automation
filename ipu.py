@@ -16,6 +16,7 @@ from typing import Optional
 import json
 import requests
 import re
+import hashlib
 
 
 def is_http_url(url: str) -> bool:
@@ -178,9 +179,14 @@ update-ca-trust
 sleep 10 # wait for ip address so that redfish starts with that in place
 systemctl restart redfish
         """
+        sha = self.current_file_sha()
         server = host.RemoteHost(server_with_key)
         server.ssh_connect("root", "redhat")
         imc = self._create_imc_rsh()
+        if imc.exists("/work/cda_sha") and imc.read_file("/work/cda_sha") == sha:
+            logger.info("Skipping preparing IMC")
+            return
+
         imc.run("mkdir -pm 0700 /work/redfish/certs")
         imc.run("chmod 0700 /work/redfish")
         imc.run("chmod 0700 /work/redfish/certs")
@@ -211,6 +217,16 @@ systemctl restart redfish
         imc.wait_ping()
         imc.ssh_connect("root", password="", discover_auth=False)
         logger.info("Reboot IMC finished")
+        imc.write("/work/cda_sha", sha)
+
+    def current_file_sha(self) -> str:
+        def sha(input: str) -> str:
+            hash_object = hashlib.sha512()
+            hash_object.update(input.encode('utf-8'))
+            return hash_object.hexdigest()
+
+        with open(__file__) as f:
+            return sha("".join(f.readlines()))
 
     def _create_imc_rsh(self) -> host.Host:
         rsh = host.RemoteHost(self.url)
