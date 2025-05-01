@@ -205,9 +205,11 @@ systemctl restart redfish
         imc.run("cp /etc/imc-redfish-configuration.json /work/redfish/")
         imc.run(f"echo {self.password} | bash /usr/bin/ipu-redfish-generate-password-hash.sh")
 
+        logger.info("Rebooting IMC")
         imc.run("reboot")
         time.sleep(10)
         imc.wait_ping()
+        logger.info("Reboot IMC finished")
 
     def _create_imc_rsh(self) -> host.Host:
         rsh = host.RemoteHost(self.url)
