@@ -133,7 +133,6 @@ def ExtraConfigDpu(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, 
     acc = host.Host(dpu_node.ip)
     lh = host.LocalHost()
     acc.ssh_connect("root", "redhat")
-    client = K8sClient(MICROSHIFT_KUBECONFIG)
 
     imgReg = imageRegistry.ensure_local_registry_running(lh, delete_all=False)
     imgReg.trust(acc)
@@ -146,20 +145,6 @@ def ExtraConfigDpu(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, 
     # TODO: For Intel, this configures hugepages. Figure out a better way
     vendor_plugin.setup(acc)
 
-    repo = cfg.resolve_dpu_operator_path()
-    dpu_operator = DpuOperator(repo)
-    dpu_operator.build_push(cfg.builder_image, cfg.base_image)
-    dpu_operator.start(client)
-
-    # Deploy dpu daemon
-    client.oc_run_or_die(f"label no {dpu_node.name} dpu=true")
-    logger.info("Waiting for all pods to become ready")
-    client.oc_run_or_die("wait --for=condition=Ready pod --all --all-namespaces --timeout=2m")
-    client.oc_run_or_die(f"create -f {repo}/examples/dpu.yaml")
-    client.wait_ds_running(ds="vsp", namespace="openshift-dpu-operator")
-    client.oc_run_or_die("wait --for=condition=Ready pod --all --all-namespaces --timeout=3m")
-    logger.info("Finished setting up dpu operator on dpu")
-
 
 def ExtraConfigDpuHost(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, Future[Optional[host.Result]]]) -> None:
     [f.result() for (_, f) in futures.items()]
@@ -171,31 +156,6 @@ def ExtraConfigDpuHost(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[s
     imgReg.ocp_trust(client)
     # Need to trust the registry in OCP / Microshift
     logger.info("Ensuring local registry is trusted in OCP")
-
-    node = cc.workers[0]
-    h = host.Host(node.node)
-    h.ssh_connect("core")
-
-    repo = cfg.resolve_dpu_operator_path()
-    dpu_operator = DpuOperator(repo)
-    dpu_operator.build_push(cfg.builder_image, cfg.base_image)
-    dpu_operator.start(client)
-
-    # Assuming that all workers have a DPU
-    for e in cc.workers:
-        logger.info(f"labeling node {e.name} dpu=true")
-        client.oc_run_or_die(f"label no {e.name} dpu=true")
-
-    logger.info("Verified idpf is providing net-devs on DPU worker nodes")
-
-    # Deploy dpu daemon and wait for dpu pods to come up
-    logger.info("Creating dpu operator config")
-    client.oc_run_or_die(f"create -f {repo}/examples/host.yaml")
-    time.sleep(30)
-    client.wait_ds_running(ds="vsp", namespace="openshift-dpu-operator")
-    client.oc_run_or_die("wait --for=condition=Ready pod --all -n openshift-dpu-operator --timeout=5m")
-    logger.info("Finished setting up dpu operator on host")
-
 
 def main() -> None:
     pass
