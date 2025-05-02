@@ -157,6 +157,7 @@ def ExtraConfigDpuHost(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[s
     # Need to trust the registry in OCP / Microshift
     logger.info("Ensuring local registry is trusted in OCP")
 
+
 def main() -> None:
     pass
 
