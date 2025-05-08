@@ -136,16 +136,18 @@ class IPUClusterNode(ClusterNode):
         assert self.config.ip is not None
         assert self.config.bmc is not None
         logger.info("Applying workaround")
-        imc = host.RemoteHost(self.config.bmc.url)
-        logger.info("Conneting to IMC")
-        imc.ssh_connect(self.config.bmc.user, self.config.bmc.password)
-
-        transport = imc._host.get_transport()
-        if transport is None:
-            return
 
         for tries in itertools.count(0):
             try:
+                imc = host.RemoteHost(self.config.bmc.url)
+                logger.info("Conneting to IMC")
+                imc.ssh_connect(self.config.bmc.user, self.config.bmc.password)
+                logger.info("Connected to IMC")
+                ret = imc.run("hostname")
+                logger.info(f"output of running hostname command: {ret.out}")
+                transport = imc._host.get_transport()
+                assert transport != None
+
                 src_addr = ("192.168.0.1", 22)
                 dest_addr = ("192.168.0.2", 22)
                 chan = transport.open_channel("direct-tcpip", dest_addr, src_addr)
@@ -153,7 +155,9 @@ class IPUClusterNode(ClusterNode):
                 acc.set_missing_host_key_policy(paramiko.AutoAddPolicy())
                 acc.connect(dest_addr[0], username='root', password="redhat", sock=chan)
             except Exception:
+                logger.info(f"Connection still failed {tries}")
                 time.sleep(5)
+                continue
             logger.info(f"Connected to ACC through IMC after {tries}")
             break
 
@@ -167,6 +171,7 @@ class IPUClusterNode(ClusterNode):
         ipu_host.run("sudo rmmod idpf")
         time.sleep(10)
         ipu_host.run("sudo modprobe idpf")
+        logger.info(f"Reload complete")
 
 
 class IPUBMC(BMC):
