@@ -17,6 +17,7 @@ import json
 import requests
 import re
 import hashlib
+import paramiko
 
 
 def is_http_url(url: str) -> bool:
@@ -44,21 +45,31 @@ class IPUClusterNode(ClusterNode):
     external_port: str
     network_api_port: str
     config: NodeConfig
+    apply_work_around: bool
 
     def __init__(self, config: NodeConfig, external_port: str, network_api_port: str):
         super().__init__(config)
         self.external_port = external_port
         self.network_api_port = network_api_port
         self.config = config
+        self.apply_work_around = True
 
     def _boot_iso(self, iso: str) -> None:
         assert self.config.ip
         self._redfish_boot_ipu(self.external_port, self.config, iso)
-        logger.info(f"Redfish boot triggered, attempting to connect to ACC at ip {self.config.ip}")
-        # wait on install + reboot to complete
+        logger.info("Redfish installation triggered")
+
+        if self.apply_work_around:
+            self.work_around()
+
         acc = host.RemoteHost(self.config.ip)
-        # WA since we can't reliably expect the acc to get a dhcp lease due to https://issues.redhat.com/browse/IIC-427
-        self._wait_for_acc_with_retry(acc=acc)
+        self._wait_for_acc_with_retry(acc)
+
+        acc = host.RemoteHost(self.config.ip)
+        logger.info("Validating ACC is still reachable after driver reload")
+        assert self.config.ip is not None
+        acc = host.RemoteHost(self.config.ip)
+        self._wait_for_acc_with_retry(acc=acc, timeout=300)
         # configure_iso_network_port(self.network_api_port, self.config.ip)
 
     def _wait_for_acc_with_retry(self, acc: host.Host, timeout: int = 1200) -> None:
@@ -122,6 +133,26 @@ class IPUClusterNode(ClusterNode):
                 logger.info(helper(node, iso_address))
 
     def post_boot(self, *, desired_ip_range: Optional[tuple[str, str]] = None) -> bool:
+        return True
+
+    def work_around(self) -> None:
+        assert self.config.ip is not None
+        assert self.config.bmc is not None
+        logger.info("Applying workaround")
+        imc = host.RemoteHost(self.config.bmc.url)
+        logger.info("Conneting to IMC")
+        imc.ssh_connect(self.config.bmc.user, self.config.bmc.password)
+
+        transport = imc._host.get_transport()
+        if transport is None:
+            return
+        src_addr = ("192.168.0.1", 22)
+        dest_addr = ("192.168.0.2", 22)
+        chan = transport.open_channel("direct-tcpip", dest_addr, src_addr)
+        acc = paramiko.SSHClient()
+        acc.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        acc.connect(dest_addr[0], username='root', password="redhat", sock=chan)
+        logger.info("Connected to ACC through IMC")
         # As a WA for https://issues.redhat.com/browse/IIC-527 we need to reload the idpf driver since this seems to fail
         # after an IMC reboot (which occurs during the RHEL installation)
         assert self.config.dpu_host is not None
@@ -132,12 +163,6 @@ class IPUClusterNode(ClusterNode):
         ipu_host.run("sudo rmmod idpf")
         time.sleep(10)
         ipu_host.run("sudo modprobe idpf")
-
-        logger.info("Validating ACC is still reachable after driver reload")
-        assert self.config.ip is not None
-        acc = host.RemoteHost(self.config.ip)
-        self._wait_for_acc_with_retry(acc=acc, timeout=300)
-        return True
 
 
 class IPUBMC(BMC):
