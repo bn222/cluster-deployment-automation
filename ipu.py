@@ -146,7 +146,7 @@ class IPUClusterNode(ClusterNode):
                 ret = imc.run("hostname")
                 logger.info(f"output of running hostname command: {ret.out}")
                 transport = imc._host.get_transport()
-                assert transport != None
+                assert transport is not None
 
                 src_addr = ("192.168.0.1", 22)
                 dest_addr = ("192.168.0.2", 22)
@@ -164,14 +164,14 @@ class IPUClusterNode(ClusterNode):
         # As a WA for https://issues.redhat.com/browse/IIC-527 we need to reload the idpf driver since this seems to fail
         # after an IMC reboot (which occurs during the RHEL installation)
         assert self.config.dpu_host is not None
-        logger.info(f"Reloading idpf on IPU host {self.config.dpu_host}")
+        logger.info(f"Reloading idpf on host side {self.config.dpu_host}")
 
         ipu_host = host.RemoteHost(self.config.dpu_host)
         ipu_host.ssh_connect("core")
         ipu_host.run("sudo rmmod idpf")
         time.sleep(10)
         ipu_host.run("sudo modprobe idpf")
-        logger.info(f"Reload complete")
+        logger.info("Reload of idpf on host sode complete")
 
 
 class IPUBMC(BMC):
