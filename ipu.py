@@ -2,6 +2,7 @@ import shlex
 import os
 import time
 import typing
+import itertools
 from logger import logger
 from clustersConfig import NodeConfig
 from bmc import BmcConfig
@@ -62,11 +63,7 @@ class IPUClusterNode(ClusterNode):
         if self.apply_work_around:
             self.work_around()
 
-        acc = host.RemoteHost(self.config.ip)
-        self._wait_for_acc_with_retry(acc)
-
-        acc = host.RemoteHost(self.config.ip)
-        logger.info("Validating ACC is still reachable after driver reload")
+        logger.info("Validating ACC is connectable to make boot iso blocking")
         assert self.config.ip is not None
         acc = host.RemoteHost(self.config.ip)
         self._wait_for_acc_with_retry(acc=acc, timeout=300)
@@ -146,13 +143,20 @@ class IPUClusterNode(ClusterNode):
         transport = imc._host.get_transport()
         if transport is None:
             return
-        src_addr = ("192.168.0.1", 22)
-        dest_addr = ("192.168.0.2", 22)
-        chan = transport.open_channel("direct-tcpip", dest_addr, src_addr)
-        acc = paramiko.SSHClient()
-        acc.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        acc.connect(dest_addr[0], username='root', password="redhat", sock=chan)
-        logger.info("Connected to ACC through IMC")
+
+        for tries in itertools.count(0):
+            try:
+                src_addr = ("192.168.0.1", 22)
+                dest_addr = ("192.168.0.2", 22)
+                chan = transport.open_channel("direct-tcpip", dest_addr, src_addr)
+                acc = paramiko.SSHClient()
+                acc.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+                acc.connect(dest_addr[0], username='root', password="redhat", sock=chan)
+            except Exception:
+                time.sleep(5)
+            logger.info(f"Connected to ACC through IMC after {tries}")
+            break
+
         # As a WA for https://issues.redhat.com/browse/IIC-527 we need to reload the idpf driver since this seems to fail
         # after an IMC reboot (which occurs during the RHEL installation)
         assert self.config.dpu_host is not None
