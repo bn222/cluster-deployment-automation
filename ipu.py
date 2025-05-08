@@ -137,14 +137,15 @@ class IPUClusterNode(ClusterNode):
         assert self.config.bmc is not None
         logger.info("Applying workaround")
 
+        imc = host.RemoteHost(self.config.bmc.url)
+        imc.ssh_connect(self.config.bmc.user, self.config.bmc.password)
+        _ = imc.run("hostname")
         for tries in itertools.count(0):
+            chan = None
+            transport = None
             try:
-                imc = host.RemoteHost(self.config.bmc.url)
-                imc.ssh_connect(self.config.bmc.user, self.config.bmc.password)
-                _ = imc.run("hostname")
                 transport = imc._host.get_transport()
                 assert transport is not None
-
                 src_addr = ("192.168.0.1", 22)
                 dest_addr = ("192.168.0.2", 22)
                 chan = transport.open_channel("direct-tcpip", dest_addr, src_addr)
@@ -154,6 +155,12 @@ class IPUClusterNode(ClusterNode):
             except Exception:
                 time.sleep(5)
                 continue
+            finally:
+                if chan is not None:
+                    chan.close()
+                if transport is not None:
+                    transport.close()
+
             logger.info(f"Connected to ACC through IMC after {tries}")
             break
 
