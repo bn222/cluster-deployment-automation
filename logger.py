@@ -1,6 +1,5 @@
 import logging
 import os
-import sys
 import typing
 from typing import Optional
 from typing import TextIO
@@ -20,7 +19,7 @@ class ExtendedLogger(logging.Logger):
 
     def error_and_exit(self: 'ExtendedLogger', msg: str, *, exit_code: int = -1) -> typing.NoReturn:
         self.error(msg)
-        sys.exit(exit_code)
+        os._exit(exit_code)
 
 
 def configure_logger(lvl: Optional[int] = None) -> ExtendedLogger:
