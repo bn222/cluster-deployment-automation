@@ -459,6 +459,8 @@ class ClusterDeployer(BaseDeployer):
         name = node.config.name
         common.wait_true(f"master {name}", 0, master_ready, ai=self._ai, node_name=name)
         info = self._ai.get_ai_host(name)
+        if info is not None:
+            logger.info(f"{node.config.name} status is now: {info.status}, {info.status_info}")
         if info is not None and info.status == "installing-in-progress" and info.status_info == "Rebooting" and node.ensure_reboot():
             logger.info(f"Master {name} reboot finished")
             return True

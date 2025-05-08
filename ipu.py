@@ -18,7 +18,6 @@ import json
 import requests
 import re
 import hashlib
-import paramiko
 
 
 def is_http_url(url: str) -> bool:
@@ -140,29 +139,15 @@ class IPUClusterNode(ClusterNode):
         imc = host.RemoteHost(self.config.bmc.url)
         imc.ssh_connect(self.config.bmc.user, self.config.bmc.password)
         _ = imc.run("hostname")
+        logger.info("Checking if ssh is up on ACC")
+        cmd = 'ssh -o StrictHostKeyChecking=no -o PubkeyAuthentication=no -o PasswordAuthentication=no -o KbdInteractiveAuthentication=no -o ChallengeResponseAuthentication=no 192.168.0.2 2>&1 | grep "Permission denied"'
         for tries in itertools.count(0):
-            chan = None
-            transport = None
-            try:
-                transport = imc._host.get_transport()
-                assert transport is not None
-                src_addr = ("192.168.0.1", 22)
-                dest_addr = ("192.168.0.2", 22)
-                chan = transport.open_channel("direct-tcpip", dest_addr, src_addr)
-                acc = paramiko.SSHClient()
-                acc.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-                acc.connect(dest_addr[0], username='root', password="redhat", sock=chan)
-            except Exception:
-                time.sleep(5)
-                continue
-            finally:
-                if chan is not None:
-                    chan.close()
-                if transport is not None:
-                    transport.close()
-
-            logger.info(f"Connected to ACC through IMC after {tries}")
-            break
+            ret = imc.run(cmd)
+            logger.info(ret)
+            if ret.returncode == 0:
+                logger.info(f"Connected to ACC through IMC after {tries} tries")
+                break
+            time.sleep(5)
 
         # As a WA for https://issues.redhat.com/browse/IIC-527 we need to reload the idpf driver since this seems to fail
         # after an IMC reboot (which occurs during the RHEL installation)
