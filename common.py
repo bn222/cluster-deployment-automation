@@ -685,7 +685,7 @@ def wait_futures(msg: str, futures: list[tuple[str, Future[bool]]], cb: Callable
 
     state = {name: get_future_state(future) for (name, future) in futures}
     logger.info(f"Waiting for {msg}: {state}")
-    max_tries = 200
+    max_tries = 200 * 6
 
     for tries in itertools.count(0):
         new_state = {name: get_future_state(future) for (name, future) in futures}
@@ -693,12 +693,15 @@ def wait_futures(msg: str, futures: list[tuple[str, Future[bool]]], cb: Callable
         if set(state.items()) - set(new_state.items()):
             logger.info(f"State change of {msg}: {new_state}")
 
+        if any(s == "Fail" for s in new_state.values()):
+            logger.error_and_exit("One future went into Failed state")
+
         state = new_state
 
         if all(future.done() for (_, future) in futures):
             break
 
-        time.sleep(30)
+        time.sleep(5)
         cb()
         if tries == max_tries:
             logger.error_and_exit(f"Failed to wait for futures after {tries} tries")
