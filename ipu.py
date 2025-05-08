@@ -140,11 +140,8 @@ class IPUClusterNode(ClusterNode):
         for tries in itertools.count(0):
             try:
                 imc = host.RemoteHost(self.config.bmc.url)
-                logger.info("Conneting to IMC")
                 imc.ssh_connect(self.config.bmc.user, self.config.bmc.password)
-                logger.info("Connected to IMC")
-                ret = imc.run("hostname")
-                logger.info(f"output of running hostname command: {ret.out}")
+                _ = imc.run("hostname")
                 transport = imc._host.get_transport()
                 assert transport is not None
 
@@ -155,7 +152,6 @@ class IPUClusterNode(ClusterNode):
                 acc.set_missing_host_key_policy(paramiko.AutoAddPolicy())
                 acc.connect(dest_addr[0], username='root', password="redhat", sock=chan)
             except Exception:
-                logger.info(f"Connection still failed {tries}")
                 time.sleep(5)
                 continue
             logger.info(f"Connected to ACC through IMC after {tries}")
