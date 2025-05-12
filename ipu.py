@@ -337,7 +337,7 @@ systemctl restart redfish
             response.raise_for_status()
             logger.debug(f"HTTP Code: {response.status_code}")
         except requests.exceptions.RequestException as e:
-            logger.error(f"Request failed: {e}")
+            logger.error_and_exit(f"Request failed: {e}")
 
     def _redfish_available(self, url: str) -> bool:
         full_url = f"https://{url}:8443/redfish/v1/Systems/1"
