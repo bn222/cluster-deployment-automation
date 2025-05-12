@@ -12,7 +12,7 @@ class StateFile:
 
     def __init__(self, cluster_name: str, path: str) -> None:
         self.cluster_name = cluster_name
-        self.path = path
+        self.path = path.normpath(path) + "/" + cluster_name
 
     def _load_state(self) -> dict[str, dict[str, str]]:
         if os.path.exists(self.path):
