@@ -18,6 +18,7 @@ import json
 import requests
 import re
 import hashlib
+import timer
 
 
 def is_http_url(url: str) -> bool:
@@ -141,6 +142,7 @@ class IPUClusterNode(ClusterNode):
         _ = imc.run("hostname")
         logger.info("Checking if ssh is up on ACC")
         cmd = 'ssh -o StrictHostKeyChecking=no -o PubkeyAuthentication=no -o PasswordAuthentication=no -o KbdInteractiveAuthentication=no -o ChallengeResponseAuthentication=no 192.168.0.2 2>&1 | grep "Permission denied"'
+        timeout_timer = timer.Timer("25m")
         for tries in itertools.count(0):
             ret = imc.run(cmd)
             logger.info(ret)
@@ -148,6 +150,8 @@ class IPUClusterNode(ClusterNode):
                 logger.info(f"Connected to ACC through IMC after {tries} tries")
                 break
             time.sleep(5)
+            if timeout_timer.triggered():
+                logger.error_and_exit(f"Waited for {timeout_timer.initial_duration()} but ACC wasn't reachable through IMC")
 
         # As a WA for https://issues.redhat.com/browse/IIC-527 we need to reload the idpf driver since this seems to fail
         # after an IMC reboot (which occurs during the RHEL installation)

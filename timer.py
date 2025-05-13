@@ -42,6 +42,7 @@ class StopWatch:
 class Timer:
     def __init__(self, duration: str) -> None:
         self.stopwatch = StopWatch(duration)
+        self.init_duration = duration
 
     def start(self, duration: str) -> None:
         self.stopwatch = StopWatch(duration)
@@ -52,3 +53,9 @@ class Timer:
         current_time = time.time()
         elapsed_time = current_time - self.stopwatch.start_time
         return elapsed_time >= (self.stopwatch.end_time - self.stopwatch.start_time)
+
+    def duration(self) -> str:
+        return self.stopwatch.duration()
+
+    def initial_duration(self) -> str:
+        return self.init_duration
