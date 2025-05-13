@@ -145,7 +145,6 @@ class IPUClusterNode(ClusterNode):
         timeout_timer = timer.Timer("25m")
         for tries in itertools.count(0):
             ret = imc.run(cmd)
-            logger.info(ret)
             if ret.returncode == 0:
                 logger.info(f"Connected to ACC through IMC after {tries} tries")
                 break
