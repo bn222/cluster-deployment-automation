@@ -41,16 +41,9 @@ def ExtraConfigRhSubscription(cc: ClustersConfig, cfg: ExtraConfigArgs, futures:
         common.with_timeout(1800, lambda: x.append(helper(node)))
         return x[0]
 
-    executor = ThreadPoolExecutor(max_workers=len(cc.all_nodes()))
-    # Assume we are attaching subscription on all nodes
-
-    f = []
-    for node in cc.all_nodes():
-        f.append(executor.submit(helper_with_timeout, node))
-
-    for thread in f:
-        ret = thread.result()
-        logger.info(ret.out)
-        if ret.returncode != 0:
-            logger.error(f"Failed to attach subscription: {ret.err}")
-            sys.exit(-1)
+    assert len(cc.all_nodes()) == 1
+    ret = helper_with_timeout(cc.all_nodes()[0])
+    logger.info(ret.out)
+    if ret.returncode != 0:
+        logger.error(f"Failed to attach subscription: {ret.err}")
+        sys.exit(-1)
