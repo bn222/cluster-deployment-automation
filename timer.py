@@ -44,6 +44,9 @@ class Timer:
         self.stopwatch = StopWatch(duration)
         self.init_duration = duration
 
+    def reset(self) -> None:
+        self.start(self.init_duration)
+
     def start(self, duration: str) -> None:
         self.stopwatch = StopWatch(duration)
 

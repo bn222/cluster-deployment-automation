@@ -66,29 +66,30 @@ class IPUClusterNode(ClusterNode):
         logger.info("Validating ACC is connectable to make boot iso blocking")
         assert self.config.ip is not None
         acc = host.RemoteHost(self.config.ip)
-        self._wait_for_acc_with_retry(acc=acc, timeout=300)
+        self._wait_for_acc_with_retry(acc=acc)
         # configure_iso_network_port(self.network_api_port, self.config.ip)
 
-    def _wait_for_acc_with_retry(self, acc: host.Host, timeout: int = 1200) -> None:
-        # Typically if the acc booted properly it will take < 20 minutes to come up (including the 10 min sleep we do during boot)
+    def _wait_for_acc_with_retry(self, acc: host.Host) -> None:
         logger.info("Waiting for ACC to come up")
         failures = 0
+        # Typically if the acc booted properly it will take < 20 minutes to come up (including the 10 min sleep we do during boot)
+        t = timer.Timer("10m")
         while True:
             if acc.ping():
                 logger.info("ACC responded to ping, connecting")
                 break
-            time.sleep(20)
-            timeout -= 20
-            if timeout <= 0:
+            if t.triggered():
+                logger.info("ACC has not responded in a reasonable amount of time")
                 failures += 1
                 if failures == 5:
-                    logger.error_and_exit("Too many failures trying to get ACC up")
-                logger.info("ACC has not responded in a reasonable amount of time, rebooting IMC")
-                assert self.config.bmc is not None
-                imc = host.RemoteHost(self.config.bmc.url)
-                imc.ssh_connect(self.config.bmc.user, self.config.bmc.password)
-                imc.run("reboot")
-                timeout = 240
+                    logger.error_and_exit(f"Too many failures {failures} trying to get ACC up")
+                else:
+                    assert self.config.bmc is not None
+                    imc = host.RemoteHost(self.config.bmc.url)
+                    imc.ssh_connect(self.config.bmc.user, self.config.bmc.password)
+                    imc.run("reboot")
+                    t.reset()
+            time.sleep(1)
 
         acc.ssh_connect("root", "redhat")
         logger.info(acc.run("uname -a"))
