@@ -140,8 +140,8 @@ class IPUClusterNode(ClusterNode):
 
         imc = host.RemoteHost(self.config.bmc.url)
         imc.ssh_connect(self.config.bmc.user, self.config.bmc.password)
-        _ = imc.run("hostname")
-        logger.info("Checking if ssh is up on ACC")
+        imc.run("hostname")
+        logger.info("Waiting until ssh is up on ACC")
         cmd = 'ssh -o StrictHostKeyChecking=no -o PubkeyAuthentication=no -o PasswordAuthentication=no -o KbdInteractiveAuthentication=no -o ChallengeResponseAuthentication=no 192.168.0.2 2>&1 | grep "Permission denied"'
         timeout_timer = timer.Timer("25m")
         for tries in itertools.count(0):
