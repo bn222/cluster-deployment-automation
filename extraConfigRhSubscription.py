@@ -7,6 +7,7 @@ from clustersConfig import ClustersConfig, NodeConfig
 from clustersConfig import ExtraConfigArgs
 import host
 from extraConfigMicroshift import masquarade
+import common
 
 
 def ExtraConfigRhSubscription(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, Future[Optional[host.Result]]]) -> None:
@@ -35,12 +36,17 @@ def ExtraConfigRhSubscription(cc: ClustersConfig, cfg: ExtraConfigArgs, futures:
             raise Exception(f"Failed to attach subscription on {node.name}")
         return ret
 
+    def helper_with_timeout(node: NodeConfig) -> host.Result:
+        x = []
+        common.with_timeout(1800, lambda: x.append(helper(node)))
+        return x[0]
+
     executor = ThreadPoolExecutor(max_workers=len(cc.all_nodes()))
     # Assume we are attaching subscription on all nodes
 
     f = []
     for node in cc.all_nodes():
-        f.append(executor.submit(helper, node))
+        f.append(executor.submit(helper_with_timeout, node))
 
     for thread in f:
         ret = thread.result()
