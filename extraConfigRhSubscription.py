@@ -1,4 +1,4 @@
-from concurrent.futures import Future, ThreadPoolExecutor
+from concurrent.futures import Future
 from typing import Optional
 import sys
 from tenacity import retry, stop_after_attempt, wait_incrementing
