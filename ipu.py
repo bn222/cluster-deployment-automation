@@ -379,6 +379,7 @@ systemctl restart redfish
 
         logger.info(f"Downloading {repr(iso_path)} on BMC")
         loop_count = 0
+        t = timer.StopWatch()
         while not self._virtual_media_is_inserted(filename):
             time.sleep(10)
             if time.monotonic() >= wait_until:
@@ -386,7 +387,7 @@ systemctl restart redfish
             if loop_count % 6 == 0:
                 log_progress()
             loop_count += 1
-        logger.info(f"Done iso_path {repr(iso_path)} is inserted as VirtualMedia")
+        logger.info(f"Done iso_path {repr(iso_path)} is inserted as VirtualMedia, took {t.duration()}")
 
     def _insert_media(self, iso_path: str, *, expected_size: int) -> None:
         url = f"https://{self.url}:8443/redfish/v1/Systems/1/VirtualMedia/1/Actions/VirtualMedia.InsertMedia"
