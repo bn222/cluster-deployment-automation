@@ -18,51 +18,65 @@ def duration_to_str(duration: float) -> str:
     return duration_str
 
 
+def str_to_duration(duration: str) -> tuple[int, int, int, float]:
+    pattern = r'(?:(\d+)d)?(?:(\d+)h)?(?:(\d+)m)?(?:(\d+(?:\.\d+)?)s)?'
+    match = re.fullmatch(pattern, duration)
+    if not match:
+        raise ValueError("Invalid time format. Expected format like '1d2h30m15.5s'.")
+    days, hours, minutes, seconds = (float(x or 0) for x in match.groups())
+    return int(days), int(hours), int(minutes), seconds
+
+
+def str_to_duration_float(duration: str) -> float:
+    days, hours, minutes, seconds = str_to_duration(duration)
+    return days * 86400 + hours * 3600 + minutes * 60 + seconds
+
+
 class StopWatch:
-    def __init__(self, init_duration: str = "0s") -> None:
-        self.start_time = time.time()
-        self.end_time = self.start_time
-        self.set_duration_from_string(init_duration)
+    start_time: float
+    end_time: float
+
+    def __init__(self) -> None:
+        self.start()
 
     def start(self) -> None:
         self.start_time = time.time()
+        self.end_time = self.start_time
 
     def stop(self) -> None:
         self.end_time = time.time()
 
-    def duration(self) -> str:
-        return duration_to_str(self.end_time - self.start_time)
+    def __str__(self) -> str:
+        current = time.time()
+        return duration_to_str(current - self.start_time)
 
-    def set_duration_from_string(self, time_format: str) -> None:
-        pattern = r'(?:(\d+)d)?(?:(\d+)h)?(?:(\d+)m)?(?:(\d+(?:\.\d+)?)s)?'
-        match = re.fullmatch(pattern, time_format)
-        if not match:
-            raise ValueError("Invalid time format. Expected format like '1d2h30m15.5s'.")
-        days, hours, minutes, seconds = (float(x or 0) for x in match.groups())
-        self.end_time = self.start_time + int(days * 86400 + hours * 3600 + minutes * 60 + seconds)
+    def elapsed(self) -> float:
+        current = time.time()
+        return current - self.start_time
+
+    def set_duration_from_string(self, duration: str) -> None:
+        self.end_time = self.start_time + str_to_duration_float(duration)
 
 
 class Timer:
-    def __init__(self, duration: str) -> None:
-        self.stopwatch = StopWatch(duration)
+    stopwatch: StopWatch
+    d: float
+
+    def __init__(self, target_duration: str) -> None:
+        self.start(target_duration)
 
     def reset(self) -> None:
-        self.stopwatch = StopWatch(self.stopwatch.duration())
+        self.stopwatch = StopWatch()
 
-    def start(self, duration: str) -> None:
-        self.stopwatch = StopWatch(duration)
+    def start(self, target_duration: str) -> None:
+        self.stopwatch = StopWatch()
+        self.d = str_to_duration_float(target_duration)
 
     def triggered(self) -> bool:
-        if not self.stopwatch:
-            raise ValueError("Timer has not been started.")
-        current_time = time.time()
-        elapsed_time = current_time - self.stopwatch.start_time
-        return elapsed_time >= (self.stopwatch.end_time - self.stopwatch.start_time)
+        return self.stopwatch.elapsed() >= self.d
 
     def elapsed(self) -> str:
-        current_time = time.time()
-        elapsed_time = current_time - self.stopwatch.start_time
-        return duration_to_str(elapsed_time)
+        return duration_to_str(min(self.stopwatch.elapsed(), self.d))
 
-    def duration(self) -> str:
-        return self.stopwatch.duration()
+    def target_duration(self) -> str:
+        return duration_to_str(self.d)

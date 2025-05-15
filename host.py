@@ -359,13 +359,11 @@ class Host:
         self._bmc.cold_boot()
 
     def wait_ping(self) -> None:
-        sw = timer.StopWatch()
         t = timer.Timer("1h")
         while not self.ping():
             if t.triggered():
                 logger.error_and_exit(f"Waited for 1h for ping to {self.hostname()}")
-        sw.stop()
-        logger.info(f"Waited for {sw.duration()} for {self.hostname()} to respond")
+        logger.info(f"Waited for {t.elapsed()} for {self.hostname()} to respond")
 
     def ping(self) -> bool:
         lh = Host("localhost")

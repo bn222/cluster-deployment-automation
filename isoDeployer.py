@@ -57,7 +57,7 @@ class IsoDeployer(BaseDeployer):
         else:
             logger.info("Skipping post configuration.")
         for k, v in duration.items():
-            logger.info(f"{k}: {v.duration()}")
+            logger.info(f"{k}: {v}")
 
     def _deploy_master(self) -> None:
         self._setup_networking()

@@ -238,7 +238,7 @@ class ClusterDeployer(BaseDeployer):
         else:
             logger.info("Skipping post configuration.")
         for k, v in duration.items():
-            logger.info(f"{k}: {v.duration()}")
+            logger.info(f"{k}: {v}")
 
     def _validate(self) -> None:
         if self._cc.is_sno():

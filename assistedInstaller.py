@@ -101,7 +101,7 @@ class AssistedClientAutomation(AssistedClient):  # type: ignore
     def download_iso_with_retry(self, infra_env: str, path: str = os.getcwd()) -> None:
         logger.info(self.info_iso(infra_env, {}))
         t = timer.Timer("15m")
-        logger.info(f"Download iso from {infra_env} to {path}, retrying for {t.duration()}")
+        logger.info(f"Download iso from {infra_env} to {path}, retrying for {t.target_duration()}")
         while not t.triggered():
             try:
                 self.download_iso(infra_env, path)
@@ -109,7 +109,7 @@ class AssistedClientAutomation(AssistedClient):  # type: ignore
                 return
             except Exception:
                 time.sleep(1)
-        logger.error_and_exit(f"Failed to download the ISO after with {t.duration()}")
+        logger.error_and_exit(f"Failed to download the ISO after with {t.elapsed()}")
 
     def wait_cluster_status(self, cluster_name: str, status: str) -> None:
         logger.info("Waiting for cluster state to be ready")

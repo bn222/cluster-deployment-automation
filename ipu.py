@@ -151,7 +151,7 @@ class IPUClusterNode(ClusterNode):
                 break
             time.sleep(5)
             if timeout_timer.triggered():
-                logger.error_and_exit(f"Waited for {timeout_timer.duration()} but ACC wasn't reachable through IMC")
+                logger.error_and_exit(f"Waited for {timeout_timer.elapsed()} but ACC wasn't reachable through IMC")
 
         # As a WA for https://issues.redhat.com/browse/IIC-527 we need to reload the idpf driver since this seems to fail
         # after an IMC reboot (which occurs during the RHEL installation)
@@ -384,7 +384,7 @@ systemctl restart redfish
             if loop_count % 60 == 0:
                 log_progress()
             if t.triggered():
-                raise RuntimeError(f"Timeout waiting for {t.duration()} to be inserted as VirtualMedia")
+                raise RuntimeError(f"Timeout waiting for {t.elapsed()} to be inserted as VirtualMedia")
             if self._virtual_media_is_inserted(filename):
                 break
         logger.info(f"Done iso_path {repr(iso_path)} is inserted as VirtualMedia, took {t.elapsed()}")
