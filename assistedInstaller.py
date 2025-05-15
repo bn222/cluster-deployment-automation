@@ -10,6 +10,7 @@ import common
 from logger import logger
 import sys
 import tenacity
+import timer
 
 
 @dataclass
@@ -99,16 +100,16 @@ class AssistedClientAutomation(AssistedClient):  # type: ignore
 
     def download_iso_with_retry(self, infra_env: str, path: str = os.getcwd()) -> None:
         logger.info(self.info_iso(infra_env, {}))
-        retries, timeout = 150, 5
-        logger.info(f"Download iso from {infra_env} to {path}, retrying for {retries * timeout}s")
-        for _ in range(retries):
+        t = timer.Timer("15m")
+        logger.info(f"Download iso from {infra_env} to {path}, retrying for {t.duration()}")
+        while not t.triggered():
             try:
                 self.download_iso(infra_env, path)
-                break
+                logger.info(f"Downloaded iso after {t.elapsed()}")
+                return
             except Exception:
-                time.sleep(timeout)
-        else:
-            logger.error_and_exit(f"Failed to download the ISO after {retries} attempts")
+                time.sleep(1)
+        logger.error_and_exit(f"Failed to download the ISO after with {t.duration()}")
 
     def wait_cluster_status(self, cluster_name: str, status: str) -> None:
         logger.info("Waiting for cluster state to be ready")

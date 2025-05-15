@@ -151,7 +151,7 @@ class IPUClusterNode(ClusterNode):
                 break
             time.sleep(5)
             if timeout_timer.triggered():
-                logger.error_and_exit(f"Waited for {timeout_timer.initial_duration()} but ACC wasn't reachable through IMC")
+                logger.error_and_exit(f"Waited for {timeout_timer.duration()} but ACC wasn't reachable through IMC")
 
         # As a WA for https://issues.redhat.com/browse/IIC-527 we need to reload the idpf driver since this seems to fail
         # after an IMC reboot (which occurs during the RHEL installation)
