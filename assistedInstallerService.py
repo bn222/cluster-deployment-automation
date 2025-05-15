@@ -18,6 +18,7 @@ import tempfile
 import hashlib
 import copy
 import itertools
+import timer
 
 
 # We need this temporary workaround because as of 2/25 the iso name in
@@ -457,12 +458,13 @@ class AssistedInstallerService:
     def _wait_for_db(self) -> None:
         check_cmd = "podman exec assisted-installer-db psql -d installer -c \"SELECT * FROM release_images;\""
         lh = host.LocalHost()
-        for try_count in itertools.count(0):
+        s = timer.StopWatch()
+        for _ in itertools.count(0):
             result = lh.run(check_cmd)
             if "multi" not in result.out:
                 time.sleep(1)
             else:
-                logger.info(f"Took {try_count} tries for DB to get populated")
+                logger.info(f"Took {s} for DB to get populated")
                 break
 
     def _play_kube(self, pod: dict[str, Any], cm: dict[str, Any]) -> host.Result:

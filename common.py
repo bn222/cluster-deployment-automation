@@ -25,6 +25,7 @@ import time
 import itertools
 import signal
 import types
+import timer
 
 
 def with_timeout(timeout: int, func: Callable[[], None]) -> None:
@@ -660,9 +661,10 @@ def wait_true(name: str, n_tries: int, func: Callable[..., bool], **func_kwargs:
     # Wait until the "func" is successful, or we will reach "n_tries".
     # When "n_tries" is zero it will run until "func" succeeds.
     logger.info(f"Waiting for {name}")
+    s = timer.StopWatch()
     for try_count in itertools.count(0):
         if func(**func_kwargs):
-            logger.info(f"Took {try_count} tries for {name}")
+            logger.info(f"Took {s} for {name}")
             return True
 
         if n_tries and try_count >= n_tries:
