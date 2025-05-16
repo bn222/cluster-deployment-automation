@@ -146,7 +146,7 @@ class Host:
     def is_localhost(self) -> bool:
         return self._hostname in ("localhost", socket.gethostname())
 
-    def ssh_connect(self, username: str, password: Optional[str] = None, *, discover_auth: bool = True, rsa_path: str = default_id_rsa_path(), ed25519_path: str = default_ed25519_path(), timeout: float = 3600) -> None:
+    def ssh_connect(self, username: str, password: Optional[str] = None, *, discover_auth: bool = True, rsa_path: str = default_id_rsa_path(), ed25519_path: str = default_ed25519_path(), timeout: str = "1h") -> None:
         assert not self.is_localhost()
         if not self.ping():
             logger.info(f"waiting for '{self._hostname}' to respond to ping")
@@ -178,7 +178,7 @@ class Host:
 
         self.ssh_connect_looped(self._logins, timeout)
 
-    def ssh_connect_looped(self, logins: list[Login], timeout: float = 3600) -> None:
+    def ssh_connect_looped(self, logins: list[Login], timeout: str = "1h") -> None:
         if not logins:
             raise RuntimeError("No usable logins found")
 
@@ -186,8 +186,8 @@ class Host:
         logger.info(f"Attempting SSH connections on {self._hostname} with logins: {login_details}")
 
         first_attempt = True
-        end_time = time.monotonic() + timeout
-        while time.monotonic() < end_time:
+        t = timer.Timer(timeout)
+        while not t.triggered():
             for login in logins:
                 try:
                     self._host = login.quiet_login()
@@ -204,7 +204,8 @@ class Host:
                     logger.exception(f"SSH connect, login {login.debug_details()} user {login._username} on host {self._hostname}: {type(e).__name__} - {str(e)}")
                     raise e
 
-        raise ConnectionError(f"Failed to establish an SSH connection to {self._hostname}")
+
+        raise ConnectionError(f"Failed to establish an SSH connection to {self._hostname} after {timeout}")
 
     def _rsa_login(self) -> Optional[KeyLogin]:
         for x in self._logins:

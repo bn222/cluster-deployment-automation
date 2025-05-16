@@ -63,7 +63,7 @@ class IPUClusterNode(ClusterNode):
         if self.apply_work_around:
             self.work_around()
 
-        logger.info("Validating ACC is connectable to make boot iso blocking")
+        logger.info("Validating ACC is connectable to block before proceeding")
         assert self.config.ip is not None
         acc = host.RemoteHost(self.config.ip)
         self._wait_for_acc_with_retry(acc=acc)
@@ -149,7 +149,7 @@ class IPUClusterNode(ClusterNode):
             if ret.returncode == 0:
                 logger.info(f"Connected to ACC through IMC after {tries} tries")
                 break
-            time.sleep(5)
+            time.sleep(1)
             if timeout_timer.triggered():
                 logger.error_and_exit(f"Waited for {timeout_timer.elapsed()} but ACC wasn't reachable through IMC")
 
@@ -445,8 +445,9 @@ systemctl restart redfish
         rh = host.RemoteHost(self.url)
         # TODO: after mev ts upgrade, remove the timeout + try/except
         try:
-            rh.ssh_connect("root", password="", discover_auth=False, timeout=5)
-        except Exception:
+            rh.ssh_connect("root", password="", discover_auth=False, timeout="5s")
+        except Exception as e:
+            logger.info(f"Couldn't connect to IPU through SSH with exception {e}")
             return None
 
         contents = rh.read_file("/etc/issue")
@@ -470,6 +471,7 @@ systemctl restart redfish
             return "Intel IPU" in self._redfish_name()
         else:
             # workaround: remove when redfish is started properly at boot
+            logger.info(f"Redfish is not up on {self.url}, using SSH to check")
             return self._version_via_ssh() is not None
 
     def ensure_firmware(self, force: bool, version: str) -> None:
