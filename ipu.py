@@ -223,7 +223,7 @@ systemctl restart redfish
         # WA: use idpf for ACC to IMC. Remove when we've moved to icc-net:
         # https://issues.redhat.com/browse/IIC-485
         imc.run("/usr/bin/imc-scripts/cfg_boot_options \"init_app_acc_nboot_net_name\" \"enp0s1f0\"")
-        imc.run("/usr/bin/imc-scripts/cfg_boot_options \"init_app_acc_nboot_stage\"  \"2\"")
+        imc.run("/usr/bin/imc-scripts/cfg_boot_options \"init_app_acc_nboot_stage\"  \"0\"")
         # When developing / frequently re-deploying the ACC, we can update the watchdog timeout to avoid ending up in recovery mode
         # https://issues.redhat.com/browse/IIC-369
         if imc.exists("/mnt/imc/acc_variable/acc-config.json"):
