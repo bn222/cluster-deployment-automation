@@ -204,7 +204,6 @@ class Host:
                     logger.exception(f"SSH connect, login {login.debug_details()} user {login._username} on host {self._hostname}: {type(e).__name__} - {str(e)}")
                     raise e
 
-
         raise ConnectionError(f"Failed to establish an SSH connection to {self._hostname} after {timeout}")
 
     def _rsa_login(self) -> Optional[KeyLogin]:
