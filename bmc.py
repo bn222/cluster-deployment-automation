@@ -4,6 +4,7 @@ from ailib import Redfish
 from dataclasses import dataclass
 import requests
 import timer
+import json
 
 
 @dataclass(frozen=True)
@@ -69,9 +70,9 @@ class BMC:
     """
 
     def boot_iso_redfish(self, iso_path: str, retries: int = 10, retry_delay: int = 60) -> None:
-        def boot_iso_with_retry(iso_path: str) -> None:
+        def boot_iso_with_retry(iso_path: str, attempt: int) -> None:
             logger.info(iso_path)
-            logger.info(f"Trying to boot {self.url} using {iso_path}")
+            logger.info(f"Trying to boot {self.url} using {iso_path}, attempt {attempt}")
             red = self._redfish()
             try:
                 red.eject_iso()
@@ -94,7 +95,7 @@ class BMC:
         assert ":" in iso_path
         for attempt in range(retries):
             try:
-                boot_iso_with_retry(iso_path)
+                boot_iso_with_retry(iso_path, attempt)
                 return
             except Exception as e:
                 if attempt % 5 == 4:
@@ -105,12 +106,13 @@ class BMC:
                 time.sleep(retry_delay)
 
     def restart_redfish(self) -> None:
+        headers = {"Content-Type": "application/json"}
         payload = {"ResetType": "GracefulRestart"}
-        response = requests.post(self.url, data=payload, auth=(self.user, self.password), verify=False, timeout=5)
+        response = requests.post(self.url, headers=headers, data=json.dumps(payload), auth=(self.user, self.password), verify=False, timeout=5)
         if 200 <= response.status_code < 300:
             logger.info("Command to reset redfish sent successfully")
         else:
-            logger.error(f"Failed to reset redfish with status {response.status_code}")
+            logger.error_and_exit(f"Failed to reset redfish with status {response.status_code}")
 
         t = timer.Timer("10m")
 
