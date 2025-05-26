@@ -2,6 +2,9 @@ from logger import logger
 import time
 from ailib import Redfish
 from dataclasses import dataclass
+import json
+import requests
+import timer
 
 
 @dataclass(frozen=True)
@@ -95,10 +98,32 @@ class BMC:
                 boot_iso_with_retry(iso_path)
                 return
             except Exception as e:
-                if attempt == retries - 1:
+                if attempt % 5 == 4:
+                    logger.info("Restarting redfish")
+                    self.restart_redfish()
+                elif attempt == retries - 1:
                     raise e
-                else:
-                    time.sleep(retry_delay)
+                time.sleep(retry_delay)
+
+    def restart_redfish(self) -> None:
+        payload = {"ResetType": "GracefulRestart"}
+        response = requests.post(self.url, data=payload, auth=(self.user, self.password), verify=False, timeout=5)
+        if 200 <= response.status_code < 300:
+            logger.info("Command to reset redfish sent successfully")
+        else:
+            logger.error(f"Failed to reset redfish with status {response.status_code}")
+
+        t = timer.Timer("10m")
+
+        while not t.triggered():
+            response = requests.get(self.url, auth=(self.user, self.password), verify=False, timeout=5)
+            if response.status_code == 200:
+                logger.info("Redfish reset completed")
+                return
+            else:
+                logger.info("Waiting for redfish reset to complete")
+                time.sleep(1)
+        logger.error_and_exit(f"Redfish didn't come up after {t} time")
 
     def _redfish(self) -> Redfish:
         return Redfish(self.url, self.user, self.password, model='dell', debug=False)
