@@ -2,7 +2,6 @@ from logger import logger
 import time
 from ailib import Redfish
 from dataclasses import dataclass
-import json
 import requests
 import timer
 
