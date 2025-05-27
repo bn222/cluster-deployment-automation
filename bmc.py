@@ -4,7 +4,6 @@ from ailib import Redfish
 from dataclasses import dataclass
 import requests
 import timer
-import json
 
 
 @dataclass(frozen=True)
@@ -109,7 +108,7 @@ class BMC:
         headers = {"Content-Type": "application/json"}
         payload = {"ResetType": "GracefulRestart"}
         full_url = f"{self.url}/redfish/v1/Managers/iDRAC.Embedded.1/Actions/Manager.Reset"
-        response = requests.post(full_url, headers=headers, data=json.dumps(payload), auth=(self.user, self.password), verify=False, timeout=5)
+        response = requests.post(full_url, auth=(self.user, self.password), headers=headers, data=payload, verify=False)
         if 200 <= response.status_code < 300:
             logger.info("Command to reset redfish sent successfully")
         else:
