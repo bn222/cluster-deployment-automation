@@ -105,14 +105,17 @@ class BMC:
                 time.sleep(retry_delay)
 
     def restart_redfish(self) -> None:
-        headers = {"Content-Type": "application/json"}
-        payload = {"ResetType": "GracefulRestart"}
-        full_url = f"{self.url}/redfish/v1/Managers/iDRAC.Embedded.1/Actions/Manager.Reset"
-        response = requests.post(full_url, auth=(self.user, self.password), headers=headers, json=payload, verify=False)
-        if 200 <= response.status_code < 300:
-            logger.info("Command to reset redfish sent successfully")
-        else:
-            logger.error_and_exit(f"Failed to reset redfish with status {response.status_code} while sending request to {full_url}")
+        for _ in range(10):
+            headers = {"Content-Type": "application/json"}
+            payload = {"ResetType": "GracefulRestart"}
+            full_url = f"{self.url}/redfish/v1/Managers/iDRAC.Embedded.1/Actions/Manager.Reset"
+            response = requests.post(full_url, auth=(self.user, self.password), headers=headers, json=payload, verify=False)
+            if 200 <= response.status_code < 300:
+                logger.info("Command to reset redfish sent successfully")
+                break
+            else:
+                logger.error(f"Failed to reset redfish with status {response.status_code} while sending request to {full_url}")
+                time.sleep(5)
 
         t = timer.Timer("10m")
 
