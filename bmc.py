@@ -108,7 +108,7 @@ class BMC:
         headers = {"Content-Type": "application/json"}
         payload = {"ResetType": "GracefulRestart"}
         full_url = f"{self.url}/redfish/v1/Managers/iDRAC.Embedded.1/Actions/Manager.Reset"
-        response = requests.post(full_url, auth=(self.user, self.password), headers=headers, data=payload, verify=False)
+        response = requests.post(full_url, auth=(self.user, self.password), headers=headers, json=payload, verify=False)
         if 200 <= response.status_code < 300:
             logger.info("Command to reset redfish sent successfully")
         else:
