@@ -42,17 +42,22 @@ class StopWatch:
     def start(self) -> None:
         self.start_time = time.time()
         self.end_time = self.start_time
+        self.stopped = False
 
     def stop(self) -> None:
         self.end_time = time.time()
+        self.stopped = True
 
     def __str__(self) -> str:
         current = time.time()
         return duration_to_str(current - self.start_time)
 
     def elapsed(self) -> float:
-        current = time.time()
-        return current - self.start_time
+        if self.stopped:
+            return self.end_time - self.start_time
+        else:
+            current = time.time()
+            return current - self.start_time
 
     def set_duration_from_string(self, duration: str) -> None:
         self.end_time = self.start_time + str_to_duration_float(duration)
