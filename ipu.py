@@ -72,7 +72,8 @@ class IPUClusterNode(ClusterNode):
     def _wait_for_acc_with_retry(self, acc: host.Host) -> None:
         logger.info("Waiting for ACC to come up")
         failures = 0
-        # Typically if the acc booted properly it will take < 20 minutes to come up (including the 10 min sleep we do during boot)
+        # Typically if the acc booted properly it will take < 20 minutes to come
+        # up (including the 10 min sleep we do during boot)
         t = timer.Timer("10m")
         while True:
             if acc.ping():
