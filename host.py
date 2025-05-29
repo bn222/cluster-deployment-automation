@@ -10,8 +10,7 @@ import sys
 import logging
 import tempfile
 from bmc import BMC
-from typing import Optional
-from typing import Union
+from typing import Iterator, Optional, Union
 from functools import lru_cache
 import paramiko
 from paramiko import ssh_exception, RSAKey, Ed25519Key
@@ -36,6 +35,12 @@ class Result:
 
     def __str__(self) -> str:
         return f"(returncode: {self.returncode}, error: {self.err})"
+
+    def __iter__(self) -> Iterator[Union[int, str]]:
+        # This allows unpacking like: stderr, stdout, rtcode = h.run(...), but retains the result = h.run(...) functionality when only one value is taken
+        yield self.err
+        yield self.out
+        yield self.returncode
 
     def success(self) -> bool:
         return self.returncode == 0
