@@ -5,6 +5,8 @@ import sys
 from jinja2 import Template
 import os
 from typing import Optional, Callable
+import tempfile
+import shutil
 
 
 # uses jinja to generate a kickstart file
@@ -64,3 +66,91 @@ def ensure_image_is_built(h: host.Host, image_name: str, build_action: Callable[
         logger.info(f"Building '{image_name}'...")
         build_action()  # Execute the provided build logic
         logger.info(f"Successfully ensured image '{image_name}' is available.")
+
+
+def build_iso_builder_image_action(h: host.Host, iso_builder_image_name: str) -> None:
+    """
+    Action to build the ISO builder image. This will be passed to ensure_image_is_built.
+    Handles its own temporary directory and git cloning.
+    """
+    with tempfile.TemporaryDirectory() as tmpdir_path:
+        git_repo = os.path.join(tmpdir_path, "iso-builder")
+        common.git_repo_setup(git_repo, repo_wipe=True, url="https://github.com/SamD2021/ipu-rhel-iso-builder.git")
+        err, out, returncode = h.run(f"sudo podman build --security-opt label=type:unconfined_t " f"--platform linux/arm64 -t {iso_builder_image_name} {git_repo}")
+        if returncode:
+            logger.error_and_exit(f"Failed to build ISO builder image '{iso_builder_image_name}' with error: {err}")
+        logger.debug(f"ISO builder build output (stdout): {out}")
+        logger.debug(f"ISO builder build errors (stderr): {err}")
+
+
+def bootc_iso_builder(
+    h: host.Host,
+    name_of_final_iso: str,
+    secrets_path: str,
+    organization_id: str,
+    activation_key: str,
+    bootc_image_url: str,
+    image_builder_url: str,
+    rhel_version: str = "9.6",
+    input_iso: Optional[str] = None,
+    kickstart: Optional[str] = None,
+    kargs: Optional[str] = None,
+) -> None:
+    """
+    Uses temp directories to optionally build the Bootc iso builder and runs it as a cross arch container to build an arm64 image mode iso ready for DPU's
+    """
+    # Ensure the main bootc image is built
+    ensure_image_is_built(h=h, image_name=bootc_image_url, build_action=lambda: build_image_mode_container(h, False, bootc_image_url, secrets_path))
+
+    ensure_image_is_built(h=h, image_name=image_builder_url, build_action=lambda: build_iso_builder_image_action(h, image_builder_url))
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        workdir = os.path.join(tmpdir, "workdir")
+        os.makedirs(workdir, exist_ok=True)
+        if kickstart is None:
+            logger.info("No kickstart given, generating it...")
+            final_kickstart = os.path.join(workdir, "kickstart.ks")
+            generate_kickstart_image_mode(secrets_path, final_kickstart, organization_id, activation_key)
+            kickstart = "kickstart.ks"
+
+        # Set default kernel arguments if not provided
+        default_kargs = "ip=192.168.0.2:::255.255.255.0::enp0s1f0:off " "netroot=iscsi:192.168.0.1::::iqn.e2000:acc acpi=force"
+        final_kargs = kargs or default_kargs
+
+        # Begin base command args
+        args = [
+            "sudo podman run --rm --privileged",
+            "--security-opt label=type:unconfined_t",
+            "--arch aarch64",
+            f"-v {secrets_path}:/run/containers/0/auth.json:ro",
+            "-v /var/lib/containers:/var/lib/containers",
+            "-v /run/containers/storage:/run/containers/storage",
+            "-v /dev:/dev",
+            f"-v {workdir}:/workdir",
+            image_builder_url,
+            f"-u {bootc_image_url}",
+            f"-v {rhel_version}",
+            f"-a {final_kargs}",
+            "-o output.iso",
+        ]
+
+        # Only add if non-empty
+        if input_iso:
+            args.append(f"-i {input_iso}")
+        if kickstart:
+            args.append(f"-k {kickstart}")
+
+        full_command = " ".join(args)
+        logger.info(f"Running Bootc ISO Builder:\n{full_command}")
+        result = h.run(full_command)
+        if result.returncode:
+            logger.error(f"Running bootc ISO Builder failed with: {result.err}")
+            sys.exit(1)
+        logger.debug(f"Running bootc ISO Builder stdout: {result.out}")
+        logger.debug(f"Running bootc ISO Builder stderr: {result.err}")
+
+        output_path = os.path.join(workdir, "output.iso")
+        if not os.path.exists(output_path):
+            logger.error_and_exit(f"Expected output ISO {output_path} not found!")
+        shutil.copy(output_path, name_of_final_iso)
+        logger.info(f"ISO successfully written to {name_of_final_iso}")
