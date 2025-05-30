@@ -19,6 +19,7 @@ import requests
 import re
 import hashlib
 import timer
+from datetime import datetime
 
 
 def is_http_url(url: str) -> bool:
@@ -184,16 +185,17 @@ class IPUBMC(BMC):
         # it takes some time before the server is ready to accept incoming connections
         time.sleep(10)
 
-    ## TODO: Not thrilled with setting a hardcoded date.
     def _prepare_imc(self, server_with_key: str) -> None:
-        script = """
+        ## TODO: Not thrilled about a hardcoded time, but lets at least start with the time it was installed.
+        now  = datetime.datetime.now()
+        script = '''
 #!/bin/sh
-date -s "Thu Sep 19 08:18:22 AM EDT 2024"
+date -s "''' + now.strftime("%c") + '''"
 cp /work/redfish/certs/server.key /etc/pki/ca-trust/source/anchors/
 cp /work/redfish/certs/server.crt /etc/pki/ca-trust/source/anchors/
 update-ca-trust &
 systemctl restart redfish
-        """
+        '''
         sha = self.current_file_sha()
         server = host.RemoteHost(server_with_key)
         server.ssh_connect("root", "redhat")
