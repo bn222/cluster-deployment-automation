@@ -579,3 +579,9 @@ class AssistedInstallerService:
 
         self.start(True)
         time.sleep(30)
+
+    def healthy(self) -> bool:
+        pod = self.find_pod("assisted-installer")
+        if pod is None:
+            return False
+        return pod["Status"] == "Running"

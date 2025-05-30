@@ -48,7 +48,7 @@ def main_deploy_openshift(cc: ClustersConfig, args: argparse.Namespace, state_fi
     The usage details are here:
         https://aicli.readthedocs.io/en/latest/
     """
-    ai = AssistedClientAutomation(f"{args.url}:8090")
+    ai = AssistedClientAutomation(f"{args.url}:8090", ais)
     cd = ClusterDeployer(cc, ai, args.steps, args.secrets_path, sf, args.resume)
 
     if args.additional_post_config:

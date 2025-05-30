@@ -11,6 +11,7 @@ from logger import logger
 import sys
 import tenacity
 import timer
+from assistedInstallerService import AssistedInstallerService
 
 
 @dataclass
@@ -35,8 +36,9 @@ class ClusterInfo:
 
 
 class AssistedClientAutomation(AssistedClient):  # type: ignore
-    def __init__(self, url: str):
+    def __init__(self, url: str, ais: Optional[AssistedInstallerService]):
         super().__init__(url, quiet=True, debug=False)
+        self.ais = ais
 
     def cluster_exists(self, name: str) -> bool:
         return any(name == x.name for x in self.get_cluster_info_all())
@@ -108,7 +110,11 @@ class AssistedClientAutomation(AssistedClient):  # type: ignore
                 logger.info(f"Downloaded iso after {t.elapsed()}")
                 return
             except Exception:
-                time.sleep(1)
+                pass
+            time.sleep(1)
+            if self.ais and not self.ais.healthy():
+                logger.error_and_exit("Assisted installer pods become unhealthy")
+
         logger.error_and_exit(f"Failed to download the ISO after with {t.elapsed()}")
 
     def wait_cluster_status(self, cluster_name: str, status: str) -> None:
