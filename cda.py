@@ -89,7 +89,7 @@ def main_snapshot(args: argparse.Namespace, cc: ClustersConfig, state_path: str)
     args = parse_args()
 
     ais = AssistedInstallerService(cc.version, args.url)
-    ai = AssistedClientAutomation(f"{args.url}:8090")
+    ai = AssistedClientAutomation(f"{args.url}:8090", ais)
 
     name = cc.name if args.name is None else args.name
     cs = ClusterSnapshotter(cc, ais, ai, name)
