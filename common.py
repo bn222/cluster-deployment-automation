@@ -291,7 +291,8 @@ def _parse_json_list(jstr: str, *, strict_parsing: bool = False) -> list[typing.
                 raise
             return []
 
-    return typing.cast(list[typing.Any], lst)
+    lst2: list[typing.Any] = lst
+    return lst2
 
 
 def ip_addrs_parse(jstr: str, *, strict_parsing: bool = False, ifname: Optional[str] = None) -> list[IPRouteAddressEntry]:
