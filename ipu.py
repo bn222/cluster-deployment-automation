@@ -310,12 +310,6 @@ systemctl restart redfish
         self._bootsource_override_cd()
         logger.info("triggering reboot")
         self._reboot()
-        logger.info("sleeping 5 minutes")
-        time.sleep(5 * 60)
-        logger.info("restarting Redfish")
-        self._restart_redfish()  # make sure redfish is started after IP has been assigned
-        logger.info("unsetting boot source override")
-        self._unset_bootsource_override()
 
     def _requests_get(self, url: str) -> dict[str, str]:
         try:
@@ -405,11 +399,6 @@ systemctl restart redfish
         url = f"https://{self.url}:8443/redfish/v1/Managers/1/Actions/Manager.Reset"
         data = {"ResetType": "ForceRestart"}
         self._requests_post(url, data)
-
-    def _unset_bootsource_override(self) -> None:
-        url = f"https://{self.url}:8443/redfish/v1/Systems/1"
-        data = {"Boot": {"BootSourceOverrideEnabled": "Disabled"}}
-        self._requests_patch(url, data)
 
     def stop(self) -> None:
         pass
