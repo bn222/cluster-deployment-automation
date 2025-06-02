@@ -19,7 +19,7 @@ import requests
 import re
 import hashlib
 import timer
-from datetime import datetime
+from time import localtime
 
 
 def is_http_url(url: str) -> bool:
@@ -189,7 +189,7 @@ class IPUBMC(BMC):
         now = datetime.datetime.now()
         script = f'''
 #!/bin/sh
-date -s "{now.strftime("%c")}"
+date -s "{time.asctime(localtime())}"
 cp /work/redfish/certs/server.key /etc/pki/ca-trust/source/anchors/
 cp /work/redfish/certs/server.crt /etc/pki/ca-trust/source/anchors/
 update-ca-trust &
