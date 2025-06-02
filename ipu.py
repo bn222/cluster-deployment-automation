@@ -21,6 +21,7 @@ import hashlib
 import timer
 from time import localtime
 
+
 def is_http_url(url: str) -> bool:
     try:
         result = urllib.parse.urlparse(url)
