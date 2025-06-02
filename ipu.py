@@ -186,7 +186,6 @@ class IPUBMC(BMC):
         time.sleep(10)
 
     def _prepare_imc(self, server_with_key: str) -> None:
-        now = datetime.datetime.now()
         script = f'''
 #!/bin/sh
 date -s "{time.asctime(localtime())}"
