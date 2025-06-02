@@ -219,8 +219,15 @@ systemctl restart redfish
         imc.run("cp /etc/imc-redfish-configuration.json /work/redfish/")
         imc.run(f"echo {self.password} | bash /usr/bin/ipu-redfish-generate-password-hash.sh")
 
-        logger.info("restarting Redfish")
-        self._restart_redfish()
+        # Start redfish the first time. This is handled by the script upon reboot.
+        logger.info("Starting Redfish")
+        imc.write("/etc/pki/ca-trust/source/anchors/server.crt", server.read_file("/root/.local-container-registry/domain.crt"))
+        imc.write("/etc/pki/ca-trust/source/anchors/server.key", server.read_file("/root/.local-container-registry/domain.key"))
+        imc.run("update-ca-trust")
+        imc.run("systemctl restart redfish")
+        time.sleep(2)
+
+        # Mark that BMC has been prepared
         imc.write("/work/cda_sha", sha)
 
     def current_file_sha(self) -> str:
