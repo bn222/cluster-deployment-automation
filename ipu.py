@@ -186,7 +186,6 @@ class IPUBMC(BMC):
         time.sleep(10)
 
     def _prepare_imc(self, server_with_key: str) -> None:
-        ## TODO: Not thrilled about a hardcoded time, but lets at least start with the time it was installed.
         now  = datetime.datetime.now()
         script = '''
 #!/bin/sh
@@ -215,28 +214,13 @@ systemctl restart redfish
         # https://issues.redhat.com/browse/IIC-485
         imc.run("/usr/bin/imc-scripts/cfg_boot_options \"init_app_acc_nboot_net_name\" \"enp0s1f0\"")
         imc.run("/usr/bin/imc-scripts/cfg_boot_options \"init_app_acc_nboot_stage\"  \"0\"")
-        # When developing / frequently re-deploying the ACC, we can update the watchdog timeout to avoid ending up in recovery mode
-        # https://issues.redhat.com/browse/IIC-369
-        ## TODO: Are we really seeing this anymore? I'd drop the next 6 lines.
-        if imc.exists("/mnt/imc/acc_variable/acc-config.json"):
-            acc_config = imc.read_file("/mnt/imc/acc_variable/acc-config.json")
-        else:
-            contents = {"acc_watchdog_timer": 9999, "kernel": {"boot_params": ""}}
-            acc_config = json.dumps(contents)
-        imc.write("/mnt/imc/acc_variable/acc-config.json", acc_config.replace("\"acc_watchdog_timer\": 60", "\"acc_watchdog_timer\": 9999"))
 
         imc.run("mkdir -m 0700 /work/redfish")
         imc.run("cp /etc/imc-redfish-configuration.json /work/redfish/")
         imc.run(f"echo {self.password} | bash /usr/bin/ipu-redfish-generate-password-hash.sh")
 
-        ## TODO: Aren't we only rebooting the imc because we're changing the watchdog timer?
-        logger.info("Rebooting IMC")
-        imc.run("reboot")
-        time.sleep(20)
-        imc.wait_ping()
-        imc.ssh_connect("root", password="", discover_auth=False)
-        logger.info("Reboot IMC finished")
-        ### TODO: If we scrap the reboot, we can self._restart_redfish() here and be ready to go
+        logger.info("restarting Redfish")
+        self._restart_redfish()
         imc.write("/work/cda_sha", sha)
 
     def current_file_sha(self) -> str:
@@ -275,9 +259,6 @@ systemctl restart redfish
         if expected_size is None:
             raise RuntimeError(f"failed to determine file size of URL {repr(iso_path)}")
         self._prepare_imc(extract_server(iso_path))
-        ## TODO: Next two lines should be redundant. Maybe replace with a couple attempts of _redfish_available() in case it was just now installed.
-        logger.info("restarting Redfish")
-        self._restart_redfish()
         imc = self._create_imc_rsh()
         imc_url_path = "/work/url"
 
