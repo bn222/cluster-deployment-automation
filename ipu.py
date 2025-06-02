@@ -19,6 +19,7 @@ import requests
 import re
 import hashlib
 import timer
+from time import localtime
 
 
 def is_http_url(url: str) -> bool:
@@ -185,27 +186,14 @@ class IPUBMC(BMC):
         time.sleep(10)
 
     def _prepare_imc(self, server_with_key: str) -> None:
-        script = """
+        script = f'''
 #!/bin/sh
-
-CURDIR=$(pwd)
-WORKDIR=`dirname $(realpath $0)`
-
-if [ -d "$WORKDIR" ]; then
-    cd $WORKDIR
-    if [ -e load_custom_pkg.sh ]; then
-        # Fix up the cp_init.cfg file
-        ./load_custom_pkg.sh
-    fi
-fi
-cd $CURDIR
-date -s "Thu Sep 19 08:18:22 AM EDT 2024"
+date -s "{time.asctime(localtime())}"
 cp /work/redfish/certs/server.key /etc/pki/ca-trust/source/anchors/
 cp /work/redfish/certs/server.crt /etc/pki/ca-trust/source/anchors/
-update-ca-trust
-sleep 10 # wait for ip address so that redfish starts with that in place
+update-ca-trust &
 systemctl restart redfish
-        """
+        '''
         sha = self.current_file_sha()
         server = host.RemoteHost(server_with_key)
         server.ssh_connect("root", "redhat")
@@ -220,30 +208,25 @@ systemctl restart redfish
         imc.write("/work/redfish/certs/server.crt", server.read_file("/root/.local-container-registry/domain.crt"))
         imc.write("/work/redfish/certs/server.key", server.read_file("/root/.local-container-registry/domain.key"))
 
-        imc.write("/work/scripts/pre_init_app.sh", script)
+        imc.write("/work/scripts/post_init_app.sh", script)
         # WA: use idpf for ACC to IMC. Remove when we've moved to icc-net:
         # https://issues.redhat.com/browse/IIC-485
         imc.run("/usr/bin/imc-scripts/cfg_boot_options \"init_app_acc_nboot_net_name\" \"enp0s1f0\"")
         imc.run("/usr/bin/imc-scripts/cfg_boot_options \"init_app_acc_nboot_stage\"  \"0\"")
-        # When developing / frequently re-deploying the ACC, we can update the watchdog timeout to avoid ending up in recovery mode
-        # https://issues.redhat.com/browse/IIC-369
-        if imc.exists("/mnt/imc/acc_variable/acc-config.json"):
-            acc_config = imc.read_file("/mnt/imc/acc_variable/acc-config.json")
-        else:
-            contents = {"acc_watchdog_timer": 9999, "kernel": {"boot_params": ""}}
-            acc_config = json.dumps(contents)
-        imc.write("/mnt/imc/acc_variable/acc-config.json", acc_config.replace("\"acc_watchdog_timer\": 60", "\"acc_watchdog_timer\": 9999"))
 
         imc.run("mkdir -m 0700 /work/redfish")
         imc.run("cp /etc/imc-redfish-configuration.json /work/redfish/")
         imc.run(f"echo {self.password} | bash /usr/bin/ipu-redfish-generate-password-hash.sh")
 
-        logger.info("Rebooting IMC")
-        imc.run("reboot")
-        time.sleep(20)
-        imc.wait_ping()
-        imc.ssh_connect("root", password="", discover_auth=False)
-        logger.info("Reboot IMC finished")
+        # Start redfish the first time. This is handled by the script upon reboot.
+        logger.info("Starting Redfish")
+        imc.write("/etc/pki/ca-trust/source/anchors/server.crt", server.read_file("/root/.local-container-registry/domain.crt"))
+        imc.write("/etc/pki/ca-trust/source/anchors/server.key", server.read_file("/root/.local-container-registry/domain.key"))
+        imc.run("update-ca-trust")
+        imc.run("systemctl restart redfish")
+        time.sleep(2)
+
+        # Mark that BMC has been prepared
         imc.write("/work/cda_sha", sha)
 
     def current_file_sha(self) -> str:
@@ -282,8 +265,6 @@ systemctl restart redfish
         if expected_size is None:
             raise RuntimeError(f"failed to determine file size of URL {repr(iso_path)}")
         self._prepare_imc(extract_server(iso_path))
-        logger.info("restarting Redfish")
-        self._restart_redfish()
         imc = self._create_imc_rsh()
         imc_url_path = "/work/url"
 
