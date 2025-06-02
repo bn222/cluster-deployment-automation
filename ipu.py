@@ -19,7 +19,7 @@ import requests
 import re
 import hashlib
 import timer
-
+from time import localtime
 
 def is_http_url(url: str) -> bool:
     try:
@@ -206,25 +206,12 @@ class IPUBMC(BMC):
         time.sleep(10)
 
     def _prepare_imc(self, server_with_key: str) -> None:
-        script = """
+        script = f"""
 #!/bin/sh
-
-CURDIR=$(pwd)
-WORKDIR=`dirname $(realpath $0)`
-
-if [ -d "$WORKDIR" ]; then
-    cd $WORKDIR
-    if [ -e load_custom_pkg.sh ]; then
-        # Fix up the cp_init.cfg file
-        ./load_custom_pkg.sh
-    fi
-fi
-cd $CURDIR
-date -s "Thu Sep 19 08:18:22 AM EDT 2024"
+date -s "{time.asctime(localtime())}"
 cp /work/redfish/certs/server.key /etc/pki/ca-trust/source/anchors/
 cp /work/redfish/certs/server.crt /etc/pki/ca-trust/source/anchors/
 update-ca-trust
-sleep 10 # wait for ip address so that redfish starts with that in place
 systemctl restart redfish
         """
         sha = self.current_file_sha()
@@ -241,7 +228,7 @@ systemctl restart redfish
         imc.write("/work/redfish/certs/server.crt", server.read_file("/root/.local-container-registry/domain.crt"))
         imc.write("/work/redfish/certs/server.key", server.read_file("/root/.local-container-registry/domain.key"))
 
-        imc.write("/work/scripts/pre_init_app.sh", script)
+        imc.write("/work/scripts/post_init_app.sh", script)
         # WA: use idpf for ACC to IMC. Remove when we've moved to icc-net:
         # https://issues.redhat.com/browse/IIC-485
         imc.run("/usr/bin/imc-scripts/cfg_boot_options \"init_app_acc_nboot_net_name\" \"enp0s1f0\"")
