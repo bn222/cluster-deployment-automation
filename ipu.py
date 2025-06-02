@@ -187,9 +187,9 @@ class IPUBMC(BMC):
 
     def _prepare_imc(self, server_with_key: str) -> None:
         now  = datetime.datetime.now()
-        script = '''
+        script = f'''
 #!/bin/sh
-date -s "''' + now.strftime("%c") + '''"
+date -s "{now.strftime("%c")}"
 cp /work/redfish/certs/server.key /etc/pki/ca-trust/source/anchors/
 cp /work/redfish/certs/server.crt /etc/pki/ca-trust/source/anchors/
 update-ca-trust &
