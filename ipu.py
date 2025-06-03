@@ -100,8 +100,17 @@ class IPUClusterNode(ClusterNode):
         ipu_bmc = IPUBMC(self.config.bmc)
         if ipu_bmc.version() != "1.8.0" and ipu_bmc.version() != "2.0.0":
             logger.error_and_exit(f"Unexpected version {ipu_bmc.version()}, should be 1.8.0 or 2.0.0")
+        if self.recovery_mode():
+            logger.error_and_exit("IPU is in recovery mode, exiting")
+
         self._boot_iso(iso_or_image_path)
         return True
+
+    def recovery_mode(self) -> bool:
+        assert self.config.bmc is not None
+        imc = host.RemoteHost(self.config.bmc.url)
+        imc.ssh_connect(self.config.bmc.user, self.config.bmc.password)
+        return "ipu-recovery" in imc.run("cat /etc/hostname").out
 
     def has_booted(self) -> bool:
         return True
