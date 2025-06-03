@@ -4,7 +4,7 @@ from logger import logger
 import sys
 from jinja2 import Template
 import os
-from typing import Optional
+from typing import Optional, Callable
 
 
 # uses jinja to generate a kickstart file
@@ -45,3 +45,22 @@ def build_image_mode_container(h: host.Host, push: bool, image_name: str, secret
     if push:
         h.run(f"sudo podman push -t {image_name}")
     logger.info("Successfully built Image Mode container")
+
+
+def ensure_image_is_built(h: host.Host, image_name: str, build_action: Callable[[], None]) -> None:
+    """
+    Checks if a Podman image exists. If not, it executes the provided build_action.
+
+    Args:
+        h: The host object to run commands on.
+        image_name: The full name (including registry/tag) of the image to check.
+        build_action: A callable (function or lambda) that performs the image build
+                      if the image does not exist. This function should handle
+                      its own logging for the build process itself.
+    """
+    if h.run(f"sudo podman image exists {image_name}").success():
+        logger.info(f"Image '{image_name}' already exists. Skipping build.")
+    else:
+        logger.info(f"Building '{image_name}'...")
+        build_action()  # Execute the provided build logic
+        logger.info(f"Successfully ensured image '{image_name}' is available.")
