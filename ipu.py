@@ -153,10 +153,10 @@ class IPUClusterNode(ClusterNode):
         logger.info("Waiting until ssh is up on ACC")
         cmd = 'ssh -o StrictHostKeyChecking=no -o PubkeyAuthentication=no -o PasswordAuthentication=no -o KbdInteractiveAuthentication=no -o ChallengeResponseAuthentication=no 192.168.0.2 2>&1 | grep "Permission denied"'
         timeout_timer = timer.Timer("25m")
-        for tries in itertools.count(0):
+        while True:
             ret = imc.run(cmd)
             if ret.returncode == 0:
-                logger.info(f"Connected to ACC through IMC after {tries} tries")
+                logger.info(f"Connected to ACC through IMC after {timeout_timer}")
                 break
             time.sleep(1)
             if timeout_timer.triggered():
