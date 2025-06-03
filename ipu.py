@@ -76,7 +76,7 @@ class IPUClusterNode(ClusterNode):
         t = timer.Timer("20m")
         while True:
             if acc.ping():
-                logger.info("ACC responded to ping, connecting")
+                logger.info(f"ACC responded to ping after {t}, connecting")
                 break
             if t.triggered():
                 logger.info("ACC has not responded in a reasonable amount of time")
