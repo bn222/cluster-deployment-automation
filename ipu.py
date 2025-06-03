@@ -73,8 +73,7 @@ class IPUClusterNode(ClusterNode):
         logger.info("Waiting for ACC to come up")
         failures = 0
         # Typically if the acc booted properly it will take < 20 minutes to come
-        # up (including the 10 min sleep we do during boot)
-        t = timer.Timer("10m")
+        t = timer.Timer("20m")
         while True:
             if acc.ping():
                 logger.info("ACC responded to ping, connecting")
