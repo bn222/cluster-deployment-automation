@@ -94,6 +94,9 @@ class IPUClusterNode(ClusterNode):
         acc.ssh_connect("root", "redhat")
         logger.info(acc.run("uname -a"))
         logger.info("Connected to ACC")
+        if acc.exists("/cda-install"):
+            logger.error_and_exit("Found /cda-install file from a previous installation (install failed)")
+        acc.write("/cda-install", f"{time.time()}")
 
     def start(self, iso_or_image_path: str) -> bool:
         assert self.config.bmc is not None
