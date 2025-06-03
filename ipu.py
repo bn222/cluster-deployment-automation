@@ -158,6 +158,8 @@ class IPUClusterNode(ClusterNode):
             if ret.returncode == 0:
                 logger.info(f"Connected to ACC through IMC after {timeout_timer}")
                 break
+            if self.recovery_mode():
+                logger.error_and_exit("IPU is in recovery mode while waiting for ACC to come up after {timeout_timer}")
             time.sleep(1)
             if timeout_timer.triggered():
                 logger.error_and_exit(f"Waited for {timeout_timer.elapsed()} but ACC wasn't reachable through IMC")
