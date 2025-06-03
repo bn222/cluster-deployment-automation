@@ -1,0 +1,40 @@
+rootpw redhat
+lang en_US.UTF-8
+timezone America/New_York --utc
+text
+eula --agreed
+skipx
+clearpart --all --initlabel
+autopart --type=lvm --noswap
+network --bootproto=dhcp --device=enp0s1f0d1
+{% if kargs %}
+bootloader --location=mbr --driveorder=sda --append="{{ kargs }}"
+{% endif %}
+ostreecontainer --url=/run/install/repo/container --transport=oci --no-signature-verification
+%post --log=/var/log/anaconda/post-install.log --erroronfail
+
+# Add the pull secret to CRI-O and set root user-only read/write permissions
+cat << EOF > /etc/crio/openshift-pull-secret
+{{ pull_secret }}
+EOF
+
+# Add the rhc credentials
+cat << EOF > /etc/rhc/.rhc_connect_credentials
+RHC_ACT_KEY={{ rhc_act_key }}
+RHC_ORG_ID={{ rhc_org_id }}
+EOF
+
+
+mkdir -p /home/redhat/.ssh
+cat << EOF > /home/redhat/.ssh/authorized_keys
+{{ ssh_key }}
+EOF
+chmod 600 /etc/crio/openshift-pull-secret
+
+# Configure the firewall with the mandatory rules for MicroShift
+firewall-offline-cmd --zone=trusted --add-source=10.42.0.0/16
+firewall-offline-cmd --zone=trusted --add-source=169.254.169.1
+{% if is_remote %}
+bootc switch --mutate-in-place --transport registry {{ image_ref }}
+{% endif %}
+%end

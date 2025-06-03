@@ -64,6 +64,17 @@ class ExtraConfigArgs:
 
     force_firmware_update: bool = False
 
+    # IsoBuilder information
+    final_iso_name: Optional[str] = None
+    image_mode_url: str = "localhost/rhel-image-mode-4-dpu"
+    iso_builder_url: str = "localhost/ipu-rhel-iso-builder"
+    iso_kargs: Optional[str] = None
+    input_iso: Optional[str] = None
+    kickstart: Optional[str] = None
+    remove_args: Optional[str] = None
+
+    registry: Optional[list[RegistryInfo]] = None
+
     # Custom OVN repo URL
     ovn_repo: Optional[str] = None
     # Custom OVN ref, it should be existing commit hash or branch

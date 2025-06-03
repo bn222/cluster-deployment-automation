@@ -1,5 +1,6 @@
 from extraConfigBFB import ExtraConfigBFB, ExtraConfigSwitchNicMode
 from extraConfigHostRegistry import ExtraConfigHostRegistry
+from extraConfigIsoBuilder import ExtraConfigIsoBuilder
 from extraConfigSriov import ExtraConfigSriov, ExtraConfigSriovSubscription, ExtraConfigSriovOvSHWOL, ExtraConfigSriovOvSHWOL_NewAPI
 from extraConfigDpuTenant import ExtraConfigDpuTenantMC, ExtraConfigDpuTenant, ExtraConfigDpuTenant_NewAPI
 from extraConfigDpuInfra import ExtraConfigDpuInfra, ExtraConfigDpuInfra_NewAPI
@@ -52,6 +53,7 @@ extra_config: dict[str, Callable[[ClustersConfig, ExtraConfigArgs, dict[str, Fut
     "dpu_operator_host": ExtraConfigDpuHost,
     "dpu_operator_dpu": ExtraConfigDpu,
     "dpu_firmware": ExtraConfigDpuFirmware,
+    "iso_builder": ExtraConfigIsoBuilder,
 }
 
 
