@@ -85,3 +85,6 @@ class Timer:
 
     def target_duration(self) -> str:
         return duration_to_str(self.d)
+
+    def __str__(self) -> str:
+        return self.elapsed()
