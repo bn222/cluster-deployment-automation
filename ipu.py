@@ -103,9 +103,15 @@ class IPUClusterNode(ClusterNode):
             logger.error_and_exit(f"Unexpected version {ipu_bmc.version()}, should be 1.8.0 or 2.0.0")
         if self.recovery_mode():
             logger.error_and_exit("IPU is in recovery mode, exiting")
+        if not self.redfish_up():
+            logger.error_and_exit("Redfish is in a failed state")
 
         self._boot_iso(iso_or_image_path)
         return True
+
+    def redfish_up(self) -> bool:
+        status = self.stored_imc().run("systemctl status redfish").out
+        return "Active: active (running)" in status.split("\n")[1]
 
     def recovery_mode(self) -> bool:
         return "ipu-recovery" in self.stored_imc().run("cat /etc/hostname").out
