@@ -17,7 +17,6 @@ from libvirt import Libvirt
 import tempfile
 import hashlib
 import copy
-import itertools
 import timer
 
 
