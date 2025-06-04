@@ -213,6 +213,7 @@ date -s "{time.asctime(localtime())}"
 cp /work/redfish/certs/server.key /etc/pki/ca-trust/source/anchors/
 cp /work/redfish/certs/server.crt /etc/pki/ca-trust/source/anchors/
 update-ca-trust
+for i in {1..10}; do ip a show dev eth0 | grep -q inet && break ; sleep 1 ; done
 systemctl restart redfish
         """
         sha = self.current_file_sha()
@@ -230,6 +231,7 @@ systemctl restart redfish
         imc.write("/work/redfish/certs/server.key", server.read_file("/root/.local-container-registry/domain.key"))
 
         imc.write("/work/scripts/post_init_app.sh", script)
+        imc.run("chmod 0755 /work/scripts/post_init_app.sh")
         # WA: use idpf for ACC to IMC. Remove when we've moved to icc-net:
         # https://issues.redhat.com/browse/IIC-485
         imc.run("/usr/bin/imc-scripts/cfg_boot_options \"init_app_acc_nboot_net_name\" \"enp0s1f0\"")
