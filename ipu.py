@@ -103,7 +103,11 @@ class IPUClusterNode(ClusterNode):
         if self.recovery_mode():
             logger.error_and_exit("IPU is in recovery mode, exiting")
         if not self.redfish_up():
-            logger.error_and_exit("Redfish is in a failed state")
+            # Next two lines are a workaround until this is fixed: https://issues.redhat.com/browse/IIC-677
+            self.stored_imc().run("systemctl restart redfish")
+            time.sleep(1)
+            if not self.redfish_up():
+                logger.error_and_exit("Redfish is in a failed state")
 
         self._boot_iso(iso_or_image_path)
         return True
