@@ -458,13 +458,15 @@ class AssistedInstallerService:
     def _wait_for_db(self) -> None:
         check_cmd = "podman exec assisted-installer-db psql -d installer -c \"SELECT * FROM release_images;\""
         lh = host.LocalHost()
-        s = timer.StopWatch()
-        for _ in itertools.count(0):
+        t = timer.Timer("20m")
+        while True:
             result = lh.run(check_cmd)
             if "multi" not in result.out:
-                time.sleep(1)
+                time.sleep(0.5)
+            elif t.triggered():
+                logger.error_and_exit(f"Failed to wait for DB aftger {t.target_duration()}")
             else:
-                logger.info(f"Took {s} for DB to get populated")
+                logger.info(f"Took {t.elapsed()} for DB to get populated")
                 break
 
     def _play_kube(self, pod: dict[str, Any], cm: dict[str, Any]) -> host.Result:

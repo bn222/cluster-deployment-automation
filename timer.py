@@ -37,7 +37,13 @@ class StopWatch:
     end_time: float
 
     def __init__(self) -> None:
-        self.start()
+        pass
+
+    @staticmethod
+    def started() -> 'StopWatch':
+        s = StopWatch()
+        s.start()
+        return s
 
     def start(self) -> None:
         self.start_time = time.time()
@@ -71,10 +77,10 @@ class Timer:
         self.start(target_duration)
 
     def reset(self) -> None:
-        self.stopwatch = StopWatch()
+        self.stopwatch = StopWatch.started()
 
     def start(self, target_duration: str) -> None:
-        self.stopwatch = StopWatch()
+        self.stopwatch = StopWatch.started()
         self.d = str_to_duration_float(target_duration)
 
     def triggered(self) -> bool:
