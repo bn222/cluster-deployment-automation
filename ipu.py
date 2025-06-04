@@ -78,9 +78,8 @@ class IPUClusterNode(ClusterNode):
         # configure_iso_network_port(self.network_api_port, self.config.ip)
 
     def _wait_for_acc_with_retry(self, acc: host.Host) -> None:
-        logger.info("Waiting for ACC to come up")
-        # Typically if the acc booted properly it will take < 20 minutes to come
         t = timer.Timer("20m")
+        logger.info(f"Waiting for {t.target_duration()} for ACC to come up")
         while True:
             if acc.ping():
                 logger.info(f"ACC responded to ping after {t}, connecting")
