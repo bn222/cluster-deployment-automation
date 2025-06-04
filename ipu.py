@@ -109,8 +109,7 @@ class IPUClusterNode(ClusterNode):
         return True
 
     def redfish_up(self) -> bool:
-        status = self.stored_imc().run("systemctl status redfish").out
-        return "Active: active (running)" in status.split("\n")[1]
+        return "active" == self.stored_imc().run("systemctl is-active redfish").out.strip()
 
     def recovery_mode(self) -> bool:
         return "ipu-recovery" in self.stored_imc().run("cat /etc/hostname").out
