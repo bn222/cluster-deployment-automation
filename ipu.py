@@ -54,6 +54,14 @@ class IPUClusterNode(ClusterNode):
         self.network_api_port = network_api_port
         self.config = config
         self.apply_work_around = True
+        self.imc: Optional[host.Host] = None
+
+    def stored_imc(self) -> host.Host:
+        assert self.config.bmc is not None
+        if self.imc is None:
+            self.imc = host.RemoteHost(self.config.bmc.url)
+            self.imc.ssh_connect(self.config.bmc.user, self.config.bmc.password)
+        return self.imc
 
     def _boot_iso(self, iso: str) -> None:
         assert self.config.ip
@@ -71,7 +79,6 @@ class IPUClusterNode(ClusterNode):
 
     def _wait_for_acc_with_retry(self, acc: host.Host) -> None:
         logger.info("Waiting for ACC to come up")
-        failures = 0
         # Typically if the acc booted properly it will take < 20 minutes to come
         t = timer.Timer("20m")
         while True:
@@ -79,16 +86,7 @@ class IPUClusterNode(ClusterNode):
                 logger.info(f"ACC responded to ping after {t}, connecting")
                 break
             if t.triggered():
-                logger.info("ACC has not responded in a reasonable amount of time")
-                failures += 1
-                if failures == 5:
-                    logger.error_and_exit(f"Too many failures {failures} trying to get ACC up")
-                else:
-                    assert self.config.bmc is not None
-                    imc = host.RemoteHost(self.config.bmc.url)
-                    imc.ssh_connect(self.config.bmc.user, self.config.bmc.password)
-                    imc.run("reboot")
-                    t.reset()
+                logger.error_and_exit(f"ACC has not responded after {t.target_duration()}")
             time.sleep(1)
 
         acc.ssh_connect("root", "redhat")
@@ -110,10 +108,7 @@ class IPUClusterNode(ClusterNode):
         return True
 
     def recovery_mode(self) -> bool:
-        assert self.config.bmc is not None
-        imc = host.RemoteHost(self.config.bmc.url)
-        imc.ssh_connect(self.config.bmc.user, self.config.bmc.password)
-        return "ipu-recovery" in imc.run("cat /etc/hostname").out
+        return "ipu-recovery" in self.stored_imc().run("cat /etc/hostname").out
 
     def has_booted(self) -> bool:
         return True
@@ -150,8 +145,7 @@ class IPUClusterNode(ClusterNode):
         assert self.config.bmc is not None
         logger.info("Applying workaround")
 
-        imc = host.RemoteHost(self.config.bmc.url)
-        imc.ssh_connect(self.config.bmc.user, self.config.bmc.password)
+        imc = self.stored_imc()
         imc.run("hostname")
         logger.info("Waiting until ssh is up on ACC")
         cmd = 'ssh -o StrictHostKeyChecking=no -o PubkeyAuthentication=no -o PasswordAuthentication=no -o KbdInteractiveAuthentication=no -o ChallengeResponseAuthentication=no 192.168.0.2 2>&1 | grep "Permission denied"'
