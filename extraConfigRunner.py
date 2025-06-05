@@ -1,4 +1,5 @@
 from extraConfigBFB import ExtraConfigBFB, ExtraConfigSwitchNicMode
+from extraConfigHostRegistry import ExtraConfigHostRegistry
 from extraConfigSriov import ExtraConfigSriov, ExtraConfigSriovSubscription, ExtraConfigSriovOvSHWOL, ExtraConfigSriovOvSHWOL_NewAPI
 from extraConfigDpuTenant import ExtraConfigDpuTenantMC, ExtraConfigDpuTenant, ExtraConfigDpuTenant_NewAPI
 from extraConfigDpuInfra import ExtraConfigDpuInfra, ExtraConfigDpuInfra_NewAPI
@@ -38,6 +39,7 @@ extra_config: dict[str, Callable[[ClustersConfig, ExtraConfigArgs, dict[str, Fut
     "dpu_tenant_new_api": ExtraConfigDpuTenant_NewAPI,
     "ovnk8s": ExtraConfigOvnK,
     "ovn_custom": ExtraConfigCustomOvn,
+    "host_registries": ExtraConfigHostRegistry,
     "image_registry": ExtraConfigImageRegistry,
     "cno": ExtraConfigCNO,
     "rt": ExtraConfigRT,
