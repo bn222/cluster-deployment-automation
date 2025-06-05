@@ -75,7 +75,7 @@ def main_deploy_iso(cc: ClustersConfig, args: argparse.Namespace) -> None:
 
 def main_deploy(args: argparse.Namespace, cc: ClustersConfig, conf: CdaConfig) -> None:
     if conf.token_user != "" and conf.token != "":
-        auth.prep_auth(conf.token_user, conf.token)
+        auth.RegistryInfo("registry.ci.openshift.org", conf.token_user, conf.token).inject_if_missing()
 
     check_and_cleanup_disk(10)
 
