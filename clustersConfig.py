@@ -63,6 +63,12 @@ class ExtraConfigArgs:
     mev_version: str = "2.0.0.11126"  # latest supported fw version
 
     force_firmware_update: bool = False
+    final_iso_name: Optional[str] = None
+    image_mode_url: str = "containers-storage:localhost/rhel-image-mode-4-dpu"
+    iso_builder_url: str = "containers-storage:localhost/ipu-rhel-iso-builder"
+    iso_kargs: Optional[str] = None
+
+    registry: Optional[list[RegistryInfo]] = None
 
     # Custom OVN repo URL
     ovn_repo: Optional[str] = None
