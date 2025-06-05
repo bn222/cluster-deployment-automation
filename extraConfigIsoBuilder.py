@@ -4,9 +4,56 @@ from logger import logger
 import sys
 from jinja2 import Template
 import os
-from typing import Optional, Callable
+from typing import Optional, Callable, cast
 import tempfile
 import shutil
+from concurrent.futures import Future
+from clustersConfig import ClustersConfig
+from clustersConfig import ExtraConfigArgs
+
+
+def ExtraConfigIsoBuilder(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, Future[Optional[host.Result]]]) -> None:
+    [f.result() for (_, f) in futures.items()]
+
+    lh = host.LocalHost()
+    logger.info("Running config step to build DPU iso")
+
+    #    All fields that bootc_iso_builder expects as non-None and we that don't have a default should be in this list.
+    required_params = [
+        (cfg.organization_id, "organization_id"),
+        (cfg.activation_key, "activation_key"),
+    ]
+
+    missing_fields = []
+    for value, name in required_params:
+        if value is None:
+            assert value is None
+            missing_fields.append(name)
+
+    if missing_fields:
+        logger.error_and_exit(f"Error: Missing required configuration for DPU ISO build: " f"{', '.join(missing_fields)}. " f"Please ensure these are specified in your configuration.")
+
+    final_iso_name: str = cfg.final_iso_name or cc.install_iso or "RHEL-9.6.0-20250416.8-aarch64-dvd1-w-kickstart.iso"
+
+    #    This is safe because the 'if missing_fields' block would have exited if any were None.
+    organization_id: str = cast(str, cfg.organization_id)
+    activation_key: str = cast(str, cfg.activation_key)
+
+    image_mode_url: str = cfg.image_mode_url
+    iso_builder_url: str = cfg.iso_builder_url
+
+    iso_kargs: Optional[str] = cfg.iso_kargs
+
+    bootc_iso_builder(
+        lh,
+        final_iso_name,
+        cc.secrets_path,
+        organization_id,
+        activation_key,
+        image_mode_url,
+        iso_builder_url,
+        kargs=iso_kargs,
+    )
 
 
 # uses jinja to generate a kickstart file
