@@ -7,7 +7,7 @@ from clustersConfig import ClustersConfig, NodeConfig
 from clustersConfig import ExtraConfigArgs
 import host
 from extraConfigMicroshift import masquarade
-import common
+import timer
 
 
 def ExtraConfigRhSubscription(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, Future[Optional[host.Result]]]) -> None:
@@ -38,7 +38,7 @@ def ExtraConfigRhSubscription(cc: ClustersConfig, cfg: ExtraConfigArgs, futures:
 
     def helper_with_timeout(node: NodeConfig) -> host.Result:
         x = []
-        common.with_timeout(1800, lambda: x.append(helper(node)))
+        timer.Timer("30m").run_with_timeout(lambda: x.append(helper(node)))
         return x[0]
 
     assert len(cc.all_nodes()) == 1

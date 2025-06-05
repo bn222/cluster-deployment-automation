@@ -10,7 +10,7 @@ from clustersConfig import ExtraConfigArgs
 import imageRegistry
 from common import git_repo_setup
 from dpuVendor import init_vendor_plugin
-import common
+import timer
 import re
 from dpuVendor import detect_dpu
 
@@ -64,7 +64,7 @@ class DpuOperator:
             h.run_or_die(f"make -C {self.repo_path} local-buildx")
             h.run_or_die(f"make -C {self.repo_path} local-pushx")
 
-        common.with_timeout(3600, build_and_push)
+        timer.Timer("1h").run_with_timeout(build_and_push)
 
     # The images in registry.ci.openshift.org do not always support multiarch.
     # As a result we will pin working images, and use these locally instead.

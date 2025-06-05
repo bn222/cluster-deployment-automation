@@ -1,5 +1,8 @@
 import time
 import re
+from typing import Callable, Optional
+import types
+import signal
 
 
 def duration_to_str(duration: float) -> str:
@@ -94,3 +97,18 @@ class Timer:
 
     def __str__(self) -> str:
         return self.elapsed()
+
+    def run_with_timeout(self, func: Callable[[], None]) -> None:
+        def handler(signum: int, frame: Optional[types.FrameType]) -> None:
+            signum = signum
+            frame = frame
+            raise TimeoutError(f"Timed out after {self.target_duration()}")
+
+        signal.signal(signal.SIGALRM, handler)
+        signal.alarm(int(self.d))
+        try:
+            return func()
+        except TimeoutError as e:
+            raise e
+        finally:
+            signal.alarm(0)
