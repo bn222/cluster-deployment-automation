@@ -6,7 +6,6 @@ import marvell
 import ipu
 from baseDeployer import BaseDeployer
 from clustersConfig import ClustersConfig
-from concurrent.futures import ThreadPoolExecutor
 from dpuVendor import detect_dpu
 import sys
 import dhcpConfig
