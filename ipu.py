@@ -246,6 +246,9 @@ systemctl restart redfish
         # https://issues.redhat.com/browse/IIC-485
         imc.run("/usr/bin/imc-scripts/cfg_boot_options \"init_app_acc_nboot_net_name\" \"enp0s1f0\"")
         imc.run("/usr/bin/imc-scripts/cfg_boot_options \"init_app_acc_nboot_stage\"  \"0\"")
+        # WA: redfish was not properly booting from iso beyond the initial time. This fixes that.
+        imc.run("/usr/bin/scripts/set_acc_kernel_cmdline.sh \"-a\" \"-b\" \"custom\"")
+        imc.run("/usr/bin/scripts/set_acc_kernel_cmdline.sh \"-b\" \"ramdisk\"")
         # When developing / frequently re-deploying the ACC, we can update the watchdog timeout to avoid ending up in recovery mode
         # https://issues.redhat.com/browse/IIC-369
         if imc.exists("/mnt/imc/acc_variable/acc-config.json"):
