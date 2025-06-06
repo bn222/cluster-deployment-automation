@@ -1,0 +1,184 @@
+FROM registry.redhat.io/rhel9/rhel-bootc:9.6
+
+# Adding beaker is a workaround to target aarch64 on x86 RHEL because of RHSM
+RUN cat <<EOF >> /etc/yum.repos.d/microshift.repo
+[beaker-AppStream]
+name=beaker-AppStream
+baseurl=http://download.eng.rdu.redhat.com/released/rhel-9/RHEL-9/9.6.0/AppStream/$(uname -m)/os
+enabled=1
+gpgcheck=0
+skip_if_unavailable=1
+
+[beaker-BaseOS]
+name=beaker-BaseOS
+baseurl=http://download.eng.rdu.redhat.com/released/rhel-9/RHEL-9/9.6.0/BaseOS/$(uname -m)/os
+enabled=1
+gpgcheck=0
+skip_if_unavailable=1
+
+
+[rhocp]
+name=rhocp
+baseurl=https://rhsm-pulp.corp.redhat.com/content/dist/layered/rhel9/$(uname -m)/rhocp/4.18/os/
+enabled=1
+gpgcheck=1
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-redhat-release
+
+[fast-datapath]
+name=fast-datapath
+baseurl=https://rhsm-pulp.corp.redhat.com/content/dist/layered/rhel9/$(uname -m)/fast-datapath/os/
+enabled=1
+gpgcheck=1
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-redhat-release
+
+[microshift-4.19.0]
+name=MicroShift 4.19.0 EarlyAccess rc.9 RPMs
+baseurl=https://mirror.openshift.com/pub/openshift-v4/$(uname -m)/microshift/ocp/4.19.0-rc.0/el9/os/
+enabled=1
+gpgcheck=0
+skip_if_unavailable=0
+
+[microshift-latest-4.19-dependencies]
+name=OpenShift Dependencies
+baseurl=https://mirror.openshift.com/pub/openshift-v4/$(uname -m)/dependencies/rpms/4.19-el9-beta/
+enabled=1
+gpgcheck=0
+skip_if_unavailable=0
+
+EOF
+
+# Create the directory for kernel arguments
+RUN mkdir -p /usr/lib/bootc/kargs.d 
+# Add the IP and network-related kernel arguments
+RUN cat <<EOF >> /usr/lib/bootc/kargs.d/00-network.toml
+kargs = ["ip=192.168.0.2:::255.255.255.0::enp0s1f0:off", "netroot=iscsi:192.168.0.1::::iqn.e2000:acc", "acpi=force"]
+EOF
+
+# If you want the system to auto register to insights on first boot, uncomment
+# the next three statements and populate the .rhc_connect_credentials file
+# with an activation key and organization id.
+# See https://console.redhat.com/insights/connector/activation-keys
+RUN dnf install -y rhc \
+rhc-worker-playbook \
+&& dnf clean all 
+
+
+RUN cat <<EOF >> /usr/lib/systemd/system/rhc-connect.service
+[Unit]
+Description=Run rhc connect at boot
+After=network-online.target
+ConditionPathExists=/etc/rhc/.run_rhc_connect_next_boot
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/rhc/.rhc_connect_credentials
+ExecStart=/usr/bin/rhc connect --activation-key ${RHC_ACT_KEY} --organization ${RHC_ORG_ID}
+Restart=no
+WatchdogSec=900
+CPUQuota=30%
+MemoryHigh=1G
+MemoryMax=2G
+TasksMax=300
+BlockIOWeight=100
+ExecStartPre=/bin/rm -f /etc/rhc/.run_rhc_connect_next_boot
+ExecStop=/bin/rm -f /etc/rhc/.rhc_connect_credentials
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+RUN systemctl enable rhc-connect && touch /etc/rhc/.run_rhc_connect_next_boot 
+
+RUN dnf install -y NetworkManager \
+git \
+dnf \
+openssh-server \
+openssh-clients \
+dhcp-client \
+iscsi-initiator-utils\
+&& dnf clean all 
+
+
+# Install Go 1.22.6 for aarch64
+RUN curl -LO https://go.dev/dl/go1.22.6.linux-arm64.tar.gz && \
+    tar -C /usr/local -xzf go1.22.6.linux-arm64.tar.gz && \
+    rm go1.22.6.linux-arm64.tar.gz && \
+    echo "export PATH=\$PATH:/usr/local/go/bin" >> /etc/profile 
+
+# Install MicroShift and necessary dependencies
+
+RUN dnf install --nobest -y \
+microshift \
+microshift-multus \
+&& dnf clean all \
+&& systemctl enable microshift 
+
+RUN mkdir -p /etc/crio 
+RUN mkdir -p /etc/systemd/system/microshift.service.d/ 
+RUN cat > /etc/systemd/system/microshift.service.d/override.conf <<'EOF'
+[Service]
+TimeoutStartSec=15m
+EOF
+
+RUN cat > /etc/systemd/system/microshift-make-rshared.service <<'EOF'
+[Unit]
+Description=Make root filesystem shared
+Before=microshift.service
+ConditionVirtualization=container
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/mount --make-rshared /
+[Install]
+WantedBy=multi-user.target
+EOF
+
+RUN systemctl enable microshift-make-rshared.service
+
+RUN dnf install -y \
+  make \
+  firewalld \
+  jq \
+  gcc \
+  glibc-devel \
+  && dnf clean all 
+
+
+# Install systemd configuration drop-ins to fix potential permission problems
+# when upgrading from older rpm-ostree commits to Image Mode container layers
+RUN mkdir -p /usr/lib/systemd/system/ovsdb-server.service.d && \
+    cat > /usr/lib/systemd/system/ovsdb-server.service.d/microshift-ovsdb-ownership.conf <<'EOF'
+# The openvswitch database files must be owned by the appropriate user and its
+# primary group. Note that the user and its group may be overwritten too, so
+# they need to be recreated in this case.
+[Service]
+ExecStartPre=/bin/sh -c '/bin/getent passwd openvswitch >/dev/null || useradd -r openvswitch'
+ExecStartPre=/bin/sh -c '/bin/getent group hugetlbfs >/dev/null || groupadd -r hugetlbfs'
+ExecStartPre=/sbin/usermod -a -G hugetlbfs openvswitch
+ExecStartPre=/bin/chown -Rhv openvswitch. /etc/openvswitch
+EOF
+
+
+RUN echo 'PermitRootLogin yes' >> /etc/ssh/sshd_config 
+RUN cat <<EOF >> /usr/lib/dracut/dracut.conf.d/50-custom-added-modules.conf
+dracutmodules+=" iscsi network "
+EOF
+RUN set -x; kver=$(cd /usr/lib/modules && echo *); dracut -vf /usr/lib/modules/$kver/initramfs.img $kver 
+
+# Mandatory firewall configuration
+RUN firewall-offline-cmd --zone=public --add-port=22/tcp && \
+    firewall-offline-cmd --zone=trusted --add-source=10.42.0.0/16 && \
+    firewall-offline-cmd --zone=trusted --add-source=169.254.169.1 && \
+    firewall-offline-cmd --zone=trusted --add-source=fd01::/48 
+
+# Application-specific firewall configuration 
+RUN firewall-offline-cmd --zone=public --add-port=80/tcp && \
+    firewall-offline-cmd --zone=public --add-port=443/tcp && \
+    firewall-offline-cmd --zone=public --add-port=30000-32767/tcp && \
+    firewall-offline-cmd --zone=public --add-port=30000-32767/udp 
+
+
+RUN useradd -m -p '$6$DYgjv/BVpdq/0EVt$2fd9RPHleTgsFWzTLL/I.znl9vbKgt00eXQ0LNbkc7wBF67fSYBsZd6LutDZHI0YZNg3SKB04SdpLOkuWRzni.' -G wheel redhat && \
+echo -e 'redhat\tALL=(ALL)\tNOPASSWD: ALL' >> /etc/sudoers && \
+# Make sure redhat user directory contents ownership is correct
+chown -R redhat:redhat /home/redhat/
+

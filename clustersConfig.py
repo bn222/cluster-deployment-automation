@@ -8,6 +8,7 @@ from typing import Optional, Union
 import xml.etree.ElementTree as et
 import jinja2
 from yaml import safe_load
+from auth import RegistryInfo
 import host
 from logger import logger
 import common
@@ -62,11 +63,27 @@ class ExtraConfigArgs:
     mev_version: str = "2.0.0.11126"  # latest supported fw version
 
     force_firmware_update: bool = False
+    final_iso_name: Optional[str] = None
+    image_mode_url: str = "containers-storage:localhost/rhel-image-mode-4-dpu"
+    iso_builder_url: str = "containers-storage:localhost/ipu-rhel-iso-builder"
+    iso_kargs: Optional[str] = None
+
+    registry: Optional[list[RegistryInfo]] = None
 
     # Custom OVN repo URL
     ovn_repo: Optional[str] = None
     # Custom OVN ref, it should be existing commit hash or branch
     ovn_ref: Optional[str] = None
+
+    registries: Optional[list[RegistryInfo]] = None
+    import_pull_secret: bool = False
+
+    def __post_init__(self) -> None:
+        if self.registries is not None:
+            registry_dict = self.registries
+            self.registries = []
+            for r in registry_dict:
+                self.registries.append(RegistryInfo(**r))  # type: ignore
 
     def pre_check(self) -> None:
         if self.sriov_network_operator_local:
