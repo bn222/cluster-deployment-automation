@@ -213,7 +213,8 @@ date -s "{time.asctime(localtime())}"
 cp /work/redfish/certs/server.key /etc/pki/ca-trust/source/anchors/
 cp /work/redfish/certs/server.crt /etc/pki/ca-trust/source/anchors/
 update-ca-trust
-for i in $(seq 1 10); do ip a show dev eth0 | grep -q "inet " && break ; sleep 1 ; done
+sleep 10 # wait for ip address so that redfish starts with that in place
+#for i in $(seq 1 10); do ip a show dev eth0 | grep -q "inet " && break ; sleep 1 ; done
 systemctl restart redfish
         """
         sha = self.current_file_sha()
