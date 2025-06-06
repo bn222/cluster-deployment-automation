@@ -412,11 +412,6 @@ systemctl restart redfish
         self._wait_iso_downloaded(iso_path, expected_size=expected_size)
 
     def _bootsource_override_cd(self) -> None:
-        # WA: redfish was not properly booting from iso beyond the initial time. This fixes that.
-        imc = self._create_imc_rsh()
-        imc.run("/usr/bin/scripts/set_acc_kernel_cmdline.sh \"-a\" \"-b\" \"custom\"")
-        imc.run("/usr/bin/scripts/set_acc_kernel_cmdline.sh \"-b\" \"ramdisk\"")
-        # regular redfish restart
         url = f"https://{self.url}:8443/redfish/v1/Systems/1"
         data = {"Boot": {"BootSourceOverrideEnabled": "Once", "BootSourceOverrideTarget": "Cd"}}
         self._requests_patch(url, data)
