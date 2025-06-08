@@ -102,7 +102,7 @@ class IPUClusterNode(ClusterNode):
             logger.error_and_exit(f"Unexpected version {ipu_bmc.version()}, should be 1.8.0 or 2.0.0")
         if self.recovery_mode():
             logger.error_and_exit("IPU is in recovery mode, exiting")
-        if not self.redfish_up():
+        if not self.redfish_up() and ipu_bmc.prepared(self.stored_imc()):
             # Next two lines are a workaround until this is fixed: https://issues.redhat.com/browse/IIC-677
             self.stored_imc().run("systemctl restart redfish")
             time.sleep(1)
@@ -205,6 +205,9 @@ class IPUBMC(BMC):
         # it takes some time before the server is ready to accept incoming connections
         time.sleep(10)
 
+    def prepared(self, imc: host.Host) -> bool:
+        return imc.exists("/work/cda_sha") and imc.read_file("/work/cda_sha") == self.current_file_()
+
     def _prepare_imc(self, server_with_key: str) -> None:
         script = """
 #!/bin/sh
@@ -231,7 +234,7 @@ systemctl restart redfish
         server = host.RemoteHost(server_with_key)
         server.ssh_connect("root", "redhat")
         imc = self._create_imc_rsh()
-        if imc.exists("/work/cda_sha") and imc.read_file("/work/cda_sha") == sha:
+        if self.prepared(imc):
             logger.info("Skipping preparing IMC")
             return
 
