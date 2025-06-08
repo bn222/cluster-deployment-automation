@@ -206,7 +206,7 @@ class IPUBMC(BMC):
         time.sleep(10)
 
     def prepared(self, imc: host.Host) -> bool:
-        return imc.exists("/work/cda_sha") and imc.read_file("/work/cda_sha") == self.current_file_()
+        return imc.exists("/work/cda_sha") and imc.read_file("/work/cda_sha") == self.current_file_sha()
 
     def _prepare_imc(self, server_with_key: str) -> None:
         script = """
