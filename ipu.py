@@ -249,6 +249,8 @@ systemctl restart redfish
         # https://issues.redhat.com/browse/IIC-485
         imc.run("/usr/bin/imc-scripts/cfg_boot_options \"init_app_acc_nboot_net_name\" \"enp0s1f0\"")
         imc.run("/usr/bin/imc-scripts/cfg_boot_options \"init_app_acc_nboot_stage\"  \"0\"")
+        ## Check file
+        imc.run("cat \"/mnt/imc/acc_variable/acc-boot-option.json\"")
         # WA: redfish was not properly booting from iso beyond the initial time. This fixes that.
         imc.run("/usr/bin/scripts/set_acc_kernel_cmdline.sh \"-a\" \"-b\" \"custom\"")
         imc.run("/usr/bin/scripts/set_acc_kernel_cmdline.sh \"-b\" \"ramdisk\"")
@@ -272,6 +274,8 @@ systemctl restart redfish
         imc.ssh_connect("root", password="", discover_auth=False)
         logger.info("Reboot IMC finished")
         imc.write("/work/cda_sha", sha)
+        ## Check file
+        imc.run("cat \"/mnt/imc/acc_variable/acc-boot-option.json\"")
 
     def current_file_sha(self) -> str:
         def sha(input: str) -> str:
@@ -335,6 +339,8 @@ systemctl restart redfish
         imc.write(imc_url_path, iso_path)
         logger.info("setting boot source override")
         self._bootsource_override_cd()
+        ## Check file
+        imc.run("cat \"/mnt/imc/acc_variable/acc-boot-option.json\"")
         logger.info("triggering reboot")
         self._reboot()
 
