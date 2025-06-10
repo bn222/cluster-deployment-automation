@@ -377,11 +377,13 @@ class IPUBMC(BMC):
 
     def _bootsource_override_cd(self) -> None:
         imc = self._create_imc_rsh()
-        imc.run("cat /mnt/imc/acc_variable/acc-boot-option.json")
+        contents = imc.read_file("/mnt/imc/acc_variable/acc-boot-option.json")
+        logger.info(contents)
         url = f"https://{self.url}:8443/redfish/v1/Systems/1"
         data = {"Boot": {"BootSourceOverrideEnabled": "Once", "BootSourceOverrideTarget": "Cd"}}
         self._requests_patch(url, data)
-        imc.run("cat /mnt/imc/acc_variable/acc-boot-option.json")
+        contents = imc.read_file("/mnt/imc/acc_variable/acc-boot-option.json")
+        logger.info(contents)
 
     def _reboot(self) -> None:
         url = f"https://{self.url}:8443/redfish/v1/Managers/1/Actions/Manager.Reset"
