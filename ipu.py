@@ -186,7 +186,7 @@ class IPUClusterNode(ClusterNode):
         ipu_host.run("sudo rmmod idpf")
         time.sleep(10)
         ipu_host.run("sudo modprobe idpf")
-        logger.info("Reload of idpf on host sode complete")
+        logger.info("Reload of idpf on host side complete")
 
 
 class IPUBMC(BMC):
@@ -210,6 +210,7 @@ class IPUBMC(BMC):
             logger.info("Skipping preparing IMC")
             return
 
+        logger.info("Setting time on IMC")
         imc.run(f"date -s \"{time.asctime(localtime())}\"")
         imc.run("mkdir -pm 0700 /work/redfish/certs")
         imc.run("chmod 0700 /work/redfish")
@@ -227,8 +228,9 @@ class IPUBMC(BMC):
 
         imc.run("cp /etc/imc-redfish-configuration.json /work/redfish/")
         imc.run(f"echo {self.password} | bash /usr/bin/ipu-redfish-generate-password-hash.sh")
+        logger.info("Starting redfish on IMC")
         imc.run("systemctl restart redfish")
-        # Redfish takes a few seconds to start, but we are removing a whole reboot cycle though, so this is fine.
+        # Redfish takes a few seconds to start, but this is much shorter than a full reboot.
         time.sleep(5)
 
         imc.write("/work/cda_sha", sha)
@@ -384,8 +386,6 @@ class IPUBMC(BMC):
         self._requests_patch(url, data)
         imc.run("/usr/bin/scripts/set_acc_kernel_cmdline.sh \"-a\" \"-b\" \"custom\"")
         imc.run("/usr/bin/scripts/set_acc_kernel_cmdline.sh \"-b\" \"ramdisk\"")
-        contents = imc.read_file("/mnt/imc/acc_variable/acc-boot-option.json")
-        logger.info(contents)
 
     def _reboot(self) -> None:
         url = f"https://{self.url}:8443/redfish/v1/Managers/1/Actions/Manager.Reset"
