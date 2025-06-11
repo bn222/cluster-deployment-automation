@@ -145,6 +145,8 @@ class IPUClusterNode(ClusterNode):
             with common.HttpServerManager(serve_path, 8000) as http_server:
                 iso_address = f"http://{lh_ip}:{str(http_server.port)}/{iso_name}"
                 logger.info(helper(node, iso_address))
+        logger.info("Give reboot a chance to start before proceeding")
+        time.sleep(7)
 
     def post_boot(self, *, desired_ip_range: Optional[tuple[str, str]] = None) -> bool:
         return True
