@@ -236,7 +236,10 @@ class Host:
 
     def _copy(self, src_file: str, dst_file: str, to: bool) -> None:
         if self.is_localhost():
-            shutil.copy(src_file, dst_file)
+            try:
+                shutil.copy(src_file, dst_file)
+            except shutil.SameFileError:
+                pass
         else:
             while True:
                 try:

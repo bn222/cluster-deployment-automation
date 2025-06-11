@@ -13,7 +13,7 @@ import logging
 from assistedInstaller import AssistedClientAutomation
 import host
 from clusterNode import ClusterNode
-from clustersConfig import ClustersConfig
+from clustersConfig import ClustersConfig, base_iso_path
 from common import wait_futures
 from k8sClient import K8sClient
 import common
@@ -127,7 +127,7 @@ class ClusterDeployer(BaseDeployer):
         self._ai.ensure_infraenv_deleted(f"{cluster_name}-x86_64")
         self._ai.ensure_infraenv_deleted(f"{cluster_name}-arm64")
 
-        self._local_host.bridge.remove_dhcp_entries(self._cc.master_vms())
+        self._local_host.remove_dhcp_entries(self._cc.masters)
 
         image_paths = {os.path.dirname(n.image_path) for n in self._cc.local_vms()}
         for image_path in image_paths:
@@ -156,7 +156,7 @@ class ClusterDeployer(BaseDeployer):
         for h in self._all_hosts_with_workers():
             h.teardown_nodes(h.k8s_worker_nodes)
 
-        self._local_host.remove_dhcp_entries(self._cc.worker_vms())
+        self._local_host.remove_dhcp_entries(self._cc.workers)
 
         # Find whether the host will still hosts some vms after tearing down what's configured.
         for h in self._all_hosts_with_only_workers():
@@ -337,13 +337,13 @@ class ClusterDeployer(BaseDeployer):
         for h in hosts_with_masters:
             h.configure_bridge()
 
-        self._local_host.bridge.setup_dhcp_entries(self._cc.master_vms())
+        self._local_host.setup_dhcp_entries(self._cc.masters)
         for h in hosts_with_masters:
             h.ensure_linked_to_network(self._local_host.bridge)
 
         # Start all masters on all hosts.
         executor = ThreadPoolExecutor(max_workers=len(self._cc.masters))
-        iso_path = os.getcwd()
+        iso_path = base_iso_path(cluster_name)
         iso_file = os.path.join(iso_path, f"{infra_env}.iso")
         self._ai.download_iso_with_retry(infra_env, iso_path)
 
@@ -366,12 +366,6 @@ class ClusterDeployer(BaseDeployer):
 
         logger.info('updating /etc/hosts')
         self.update_etc_hosts()
-
-        # Connect the masters to the physical network.
-        # NOTE: this must happen after the masters are installed by AI
-        # to ensure AI doesn't detect other nodes on the network.
-        for h in hosts_with_masters:
-            h.ensure_linked_to_network(self._local_host.bridge)
 
         logger.info("Setting password to for root to redhat")
         for master in master_nodes:
@@ -412,7 +406,7 @@ class ClusterDeployer(BaseDeployer):
         for h in hosts_with_workers:
             h.configure_bridge()
 
-        self._local_host.setup_dhcp_entries(self._cc.worker_vms())
+        self._local_host.setup_dhcp_entries(self._cc.workers)
         for h in hosts_with_workers:
             h.ensure_linked_to_network(self._local_host.bridge)
 
@@ -425,7 +419,7 @@ class ClusterDeployer(BaseDeployer):
 
         # Start all workers on all hosts.
         if not self.is_bf:
-            iso_path = os.getcwd()
+            iso_path = base_iso_path(cluster_name)
         else:
             # BF images are NFS mounted from _BF_ISO_PATH.
             iso_path = _BF_ISO_PATH
