@@ -382,6 +382,8 @@ class IPUBMC(BMC):
         url = f"https://{self.url}:8443/redfish/v1/Systems/1"
         data = {"Boot": {"BootSourceOverrideEnabled": "Once", "BootSourceOverrideTarget": "Cd"}}
         self._requests_patch(url, data)
+        imc.run("/usr/bin/scripts/set_acc_kernel_cmdline.sh \"-a\" \"-b\" \"custom\"")
+        imc.run("/usr/bin/scripts/set_acc_kernel_cmdline.sh \"-b\" \"ramdisk\"")
         contents = imc.read_file("/mnt/imc/acc_variable/acc-boot-option.json")
         logger.info(contents)
 
