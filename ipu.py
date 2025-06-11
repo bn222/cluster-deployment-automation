@@ -204,10 +204,28 @@ class IPUBMC(BMC):
         return imc.exists("/work/cda_sha") and imc.read_file("/work/cda_sha") == self.current_file_sha()
 
     def _prepare_imc(self, server_with_key: str) -> None:
+        script = """
+#!/bin/sh
+
+CURDIR=$(pwd)
+WORKDIR=`dirname $(realpath $0)`
+
+if [ -d "$WORKDIR" ]; then
+    cd $WORKDIR
+    if [ -e load_custom_pkg.sh ]; then
+        # Fix up the cp_init.cfg file
+        ./load_custom_pkg.sh
+    fi
+fi
+cd $CURDIR
+        """
         sha = self.current_file_sha()
         server = host.RemoteHost(server_with_key)
         server.ssh_connect("root", "redhat")
         imc = self._create_imc_rsh()
+
+        # For now, forcibly set pre_init script to baseline condition.
+        imc.write("/work/scripts/pre_init_app.sh", script)
 
         logger.info("Setting time on IMC")
         imc.run(f"date -s \"{time.asctime(localtime())}\"")
