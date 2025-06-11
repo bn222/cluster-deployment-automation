@@ -208,9 +208,6 @@ class IPUBMC(BMC):
         server = host.RemoteHost(server_with_key)
         server.ssh_connect("root", "redhat")
         imc = self._create_imc_rsh()
-        if self.prepared(imc):
-            logger.info("Skipping preparing IMC")
-            return
 
         logger.info("Setting time on IMC")
         imc.run(f"date -s \"{time.asctime(localtime())}\"")
