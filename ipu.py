@@ -204,6 +204,8 @@ class IPUBMC(BMC):
         return imc.exists("/work/cda_sha") and imc.read_file("/work/cda_sha") == self.current_file_sha()
 
     def _prepare_imc(self, server_with_key: str) -> None:
+        # TODO: script here is the stock configuration of this file.
+        # This is only for clearing out CI systems. Remove soon.
         script = """
 #!/bin/sh
 
@@ -218,15 +220,31 @@ if [ -d "$WORKDIR" ]; then
     fi
 fi
 cd $CURDIR
-        """
+"""
+        # This script will restart redfish upon reboot of the IMC.
+        # Our post_init_app.sh script installed from ipu-opi-operator
+        # checks for and executes this if it exists.
+        start_redfish = """
+#!/bin/sh
+logger "Activating redfish"
+cp /work/redfish/certs/server.key /etc/pki/ca-trust/source/anchors/
+cp /work/redfish/certs/server.crt /etc/pki/ca-trust/source/anchors/
+update-ca-trust &
+systemctl start redfish
+"""
         sha = self.current_file_sha()
         server = host.RemoteHost(server_with_key)
         server.ssh_connect("root", "redhat")
         imc = self._create_imc_rsh()
 
-        # For now, forcibly set pre_init script to baseline condition.
+        # TODO: For now, forcibly set pre_init script to baseline condition.
+        # This is only for resetting the CI systems. Remove soon.
         imc.write("/work/scripts/pre_init_app.sh", script)
+        # Add script to start redfish for future reboots of the IMC.
+        imc.write("/work/scripts/start-redfish.sh", start_redfish)
+        imc.run("chmod 0755 /work/scripts/start-redfish.sh")
 
+        # Install the certificates and config file required for redfish.
         logger.info("Setting time on IMC")
         imc.run(f"date -s \"{time.asctime(localtime())}\"")
         imc.run("mkdir -pm 0700 /work/redfish/certs")
@@ -237,17 +255,17 @@ cd $CURDIR
         imc.run("cp /work/redfish/certs/server.key /etc/pki/ca-trust/source/anchors/")
         imc.run("cp /work/redfish/certs/server.crt /etc/pki/ca-trust/source/anchors/")
         imc.run("update-ca-trust")
+        imc.run("cp /etc/imc-redfish-configuration.json /work/redfish/")
+        imc.run(f"echo {self.password} | bash /usr/bin/ipu-redfish-generate-password-hash.sh")
 
         # WA: use idpf for ACC to IMC. Remove when we've moved to icc-net:
         # https://issues.redhat.com/browse/IIC-485
         imc.run("/usr/bin/imc-scripts/cfg_boot_options \"init_app_acc_nboot_net_name\" \"enp0s1f0\"")
         imc.run("/usr/bin/imc-scripts/cfg_boot_options \"init_app_acc_nboot_stage\"  \"0\"")
 
-        imc.run("cp /etc/imc-redfish-configuration.json /work/redfish/")
-        imc.run(f"echo {self.password} | bash /usr/bin/ipu-redfish-generate-password-hash.sh")
+        # Start redfish and wait. It takes a few seconds to initialize and the next steps need it to already be running.
         logger.info("Starting redfish on IMC")
         imc.run("systemctl restart redfish")
-        # Redfish takes a few seconds to start, but this is much shorter than a full reboot.
         time.sleep(5)
 
         imc.write("/work/cda_sha", sha)
