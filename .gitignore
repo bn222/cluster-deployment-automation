@@ -9,3 +9,5 @@ __pycache__
 credentials.json
 bin
 build
+iso-surgeon/workdir/*
+
