@@ -25,16 +25,10 @@ class BMC:
         return BMC.from_bmc(bmc_config.url, bmc_config.user, bmc_config.password)
 
     @staticmethod
-    def from_url(url: str, user: str = "root", password: str = "calvin") -> 'BMC':
-        url = f"{url}/redfish/v1/Systems/System.Embedded.1"
-        return BMC(url, user, password)
-
-    @staticmethod
     def from_bmc(ip_or_hostname: str, user: str = "root", password: str = "calvin") -> 'BMC':
         if ip_or_hostname == "":
             raise ValueError("BMC not defined")
-        url = f"https://{ip_or_hostname}/redfish/v1/Systems/System.Embedded.1"
-        return BMC(url, user, password)
+        return BMC(ip_or_hostname, user, password)
 
     """
     Red Fish is used to boot ISO images with virtual media.
@@ -130,7 +124,7 @@ class BMC:
         logger.error_and_exit(f"Redfish didn't come up after {t} time")
 
     def _redfish(self) -> Redfish:
-        return Redfish(self.url, self.user, self.password, model='dell', debug=False)
+        return Redfish(self.url, self.user, self.password, debug=False)
 
     def stop(self) -> None:
         self._redfish().stop()
