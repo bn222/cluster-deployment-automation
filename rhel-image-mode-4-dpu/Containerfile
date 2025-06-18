@@ -1,0 +1,144 @@
+ARG DPU_FLAVOR="${DPU_FLAVOR:-agnostic}"
+ARG RHC_ACT_KEY="${RHC_ACT_KEY}"
+ARG RHC_ORG_ID="${RHC_ORG_ID}"
+ARG MAJOR_VERSION="${MAJOR_VERSION:-9}"
+ARG MINOR_VERSION="${MINOR_VERSION:-6}"
+
+FROM registry.redhat.io/rhel${MAJOR_VERSION}/rhel-bootc:${MAJOR_VERSION}.${MINOR_VERSION}
+# 1. Add all extra repos in one g# Will mount redhat.repo from a secret instead
+
+RUN distro=$(sed -n 's/^distroverpkg=//p' /etc/yum.conf) && \
+    source /etc/os-release && \
+    releasever="$VERSION_ID" && \
+    basearch=$(rpm --eval '%{_arch}') && \
+    echo "Release: $releasever, Arch: $basearch" && \
+    cat <<EOF >> /etc/yum.repos.d/microshift.repo
+[rhocp]
+name=rhocp
+baseurl=https://rhsm-pulp.corp.redhat.com/content/dist/layered/rhel9/$(uname -m)/rhocp/4.18/os/
+enabled=1
+gpgcheck=1
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-redhat-release
+
+[fast-datapath]
+name=fast-datapath
+baseurl=https://rhsm-pulp.corp.redhat.com/content/dist/layered/rhel9/$(uname -m)/fast-datapath/os/
+enabled=1
+gpgcheck=1
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-redhat-release
+
+[microshift-4.19.0]
+name=MicroShift 4.19.0 EarlyAccess rc.9 RPMs
+baseurl=https://mirror.openshift.com/pub/openshift-v4/$(uname -m)/microshift/ocp/4.19.0-rc.0/el9/os/
+enabled=1
+gpgcheck=0
+skip_if_unavailable=0
+
+[microshift-latest-4.19-dependencies]
+name=OpenShift Dependencies
+baseurl=https://mirror.openshift.com/pub/openshift-v4/$(uname -m)/dependencies/rpms/4.19-el9-beta/
+enabled=1
+gpgcheck=0
+skip_if_unavailable=0
+
+EOF
+
+RUN --mount=type=secret,id=redhat-repo \
+    mkdir -p /etc/yum.repos.d && \
+    sed -e "s|x86_64|aarch64|g" \
+        -e "s|gpgcheck=.*|gpgcheck=0|" \
+        -e "s|sslcacert *=.*|sslcacert=/run/secrets/rhsm-ca|" \
+        -e "s|sslclientcert *=.*|sslclientcert=/run/secrets/entitlement-cert|" \
+        -e "s|sslclientkey *=.*|sslclientkey=/run/secrets/entitlement-key|" \
+        /run/secrets/redhat-repo > /etc/yum.repos.d/redhat.repo 
+
+# 2. Consolidated all package installs into one layer,
+#    with conditional bits for IPU flavor.
+RUN --mount=type=secret,id=entitlement-cert \
+    --mount=type=secret,id=entitlement-key \
+    --mount=type=secret,id=rhsm-ca \
+    dnf install -y --allowerasing \
+      rhc rhc-worker-playbook \
+      git \
+      dhcp-client \
+      microshift microshift-multus \
+      make firewalld jq gcc glibc-devel \
+      && if [ "$DPU_FLAVOR" = "ipu" ]; then \
+           dnf install -y iscsi-initiator-utils && \
+           mkdir -p /usr/lib/bootc/kargs.d && \
+           printf 'kargs = ["ip=192.168.0.2:::255.255.255.0::enp0s1f0:off","netroot=iscsi:192.168.0.1::::iqn.e2000:acc","acpi=force"]\n' \
+             > /usr/lib/bootc/kargs.d/00-network.toml && \
+           printf 'dracutmodules+=" iscsi network "' \
+             >> /usr/lib/dracut/dracut.conf.d/50-custom-added-modules.conf && \
+           kver=$(cd /usr/lib/modules && echo *) && \
+           dracut -vf "/usr/lib/modules/$kver/initramfs.img" "$kver"; \
+        fi \
+      && dnf clean all && \
+      rm -rf /etc/yum.repos.d/redhat.repo
+
+
+# 3. Enable services in one go
+RUN cat > /usr/lib/systemd/system/rhc-connect.service <<'EOF'
+[Unit]
+Description=Run rhc connect at boot
+After=network-online.target
+ConditionPathExists=/etc/rhc/.run_rhc_connect_next_boot
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/rhc/.rhc_connect_credentials
+ExecStart=/usr/bin/rhc connect --activation-key ${RHC_ACT_KEY} --organization ${RHC_ORG_ID}
+Restart=no
+WatchdogSec=900
+CPUQuota=30%
+MemoryHigh=1G
+MemoryMax=2G
+TasksMax=300
+BlockIOWeight=100
+ExecStartPre=/bin/rm -f /etc/rhc/.run_rhc_connect_next_boot
+ExecStop=/bin/rm -f /etc/rhc/.rhc_connect_credentials
+
+[Install]
+WantedBy=multi-user.target
+EOF
+# 4. Tweak MicroShift service and OVS drop-in
+RUN mkdir -p /etc/systemd/system/microshift.service.d && \
+    cat > /etc/systemd/system/microshift.service.d/override.conf <<EOF
+[Service]
+TimeoutStartSec=15m
+EOF
+RUN cat > /etc/systemd/system/microshift-make-rshared.service <<EOF
+[Unit]
+Description=Make root filesystem shared
+Before=microshift.service
+ConditionVirtualization=container
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/mount --make-rshared /
+[Install]
+WantedBy=multi-user.target
+EOF
+
+RUN mkdir -p /usr/lib/systemd/system/ovsdb-server.service.d && \
+    cat > /usr/lib/systemd/system/ovsdb-server.service.d/microshift-ovsdb-ownership.conf <<EOF
+[Service]
+ExecStartPre=/bin/sh -c '/bin/getent passwd openvswitch >/dev/null || useradd -r openvswitch'
+ExecStartPre=/bin/sh -c '/bin/getent group hugetlbfs >/dev/null || groupadd -r hugetlbfs'
+ExecStartPre=/sbin/usermod -a -G hugetlbfs openvswitch
+ExecStartPre=/bin/chown -Rhv openvswitch. /etc/openvswitch
+EOF
+RUN systemctl enable rhc-connect microshift microshift-make-rshared.service
+
+
+# 5. Install Go and user setup in one layer
+RUN curl -LO https://go.dev/dl/go1.22.6.linux-arm64.tar.gz && \
+    tar -C /usr/local -xzf go1.22.6.linux-arm64.tar.gz && \
+    rm go1.22.6.linux-arm64.tar.gz && \
+    echo "export PATH=\$PATH:/usr/local/go/bin" >> /etc/profile 
+
+RUN useradd -m -p '$6$DYgjv/BVpdq/0EVt$2fd9RPHleTgsFWzTLL/I.znl9vbKgt00eXQ0LNbkc7wBF67fSYBsZd6LutDZHI0YZNg3SKB04SdpLOkuWRzni.' -G wheel redhat && \
+    echo -e 'redhat\tALL=(ALL)\tNOPASSWD: ALL' >> /etc/sudoers && \
+    chown -R redhat:redhat /home/redhat/ && \
+    echo 'u redhat 1000 "Red Hat User" /home/redhat /bin/bash' > /usr/lib/sysusers.d/redhat.conf && \
+    echo 'g redhat 1000' >> /usr/lib/sysusers.d/redhat.conf && \
+    echo 'g hugetlbfs 999' > /usr/lib/sysusers.d/hugetlbfs.conf
