@@ -7,12 +7,13 @@ import ipu
 from baseDeployer import BaseDeployer
 from clustersConfig import ClustersConfig
 from dpuVendor import detect_dpu
+from state_file import StateFile
 import sys
 import dhcpConfig
 
 
 class IsoDeployer(BaseDeployer):
-    def __init__(self, cc: ClustersConfig, steps: list[str]):
+    def __init__(self, cc: ClustersConfig, steps: list[str], state_file: StateFile, should_resume: bool):
         super().__init__(cc, steps)
 
         if len(self._cc.masters) != 1:
@@ -21,6 +22,10 @@ class IsoDeployer(BaseDeployer):
         self._master = self._cc.masters[0]
         self._futures[self._master.name] = common.empty_future(host.Result)
         self._validate()
+        self.state = state_file
+        if not should_resume:
+            logger.info(f"Resetting state file at {self.state.path}")
+            self.state.clear_state()
 
     def _validate(self) -> None:
         if self._master.mac is None:
@@ -35,24 +40,27 @@ class IsoDeployer(BaseDeployer):
     def deploy(self) -> None:
         duration = self._empty_timers()
         if self._cc.masters:
-            if PRE_STEP in self.steps:
+            if PRE_STEP in self.steps and not self.state.deployed("pre-step"):
                 duration[PRE_STEP].start()
                 self._preconfig()
                 duration[PRE_STEP].stop()
+                self.state["pre-step"] = "deployed"
             else:
                 logger.info("Skipping pre configuration.")
 
-            if MASTERS_STEP in self.steps:
+            if MASTERS_STEP in self.steps and not self.state.deployed("masters"):
                 duration[MASTERS_STEP].start()
                 self._deploy_master()
                 duration[MASTERS_STEP].stop()
+                self.state["masters"] = "deployed"
             else:
                 logger.info("Skipping master creation.")
 
-        if POST_STEP in self.steps:
+        if POST_STEP in self.steps and not self.state.deployed("post-step"):
             duration[POST_STEP].start()
             self._postconfig()
             duration[POST_STEP].stop()
+            self.state["post-step"] = "deployed"
         else:
             logger.info("Skipping post configuration.")
         for k, v in duration.items():

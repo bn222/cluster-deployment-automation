@@ -27,7 +27,7 @@ def check_and_cleanup_disk(threshold_gb: int = 10) -> None:
         h.run("podman image prune -a -f")
 
 
-def main_deploy_openshift(cc: ClustersConfig, args: argparse.Namespace, state_file_path: str) -> None:
+def main_deploy_openshift(cc: ClustersConfig, args: argparse.Namespace, state_file: StateFile) -> None:
     # Make sure the local virtual bridge base configuration is correct.
     local_bridge = VirBridge(host.LocalHost(), cc.local_bridge_config)
     local_bridge.configure(api_port=None)
@@ -41,7 +41,6 @@ def main_deploy_openshift(cc: ClustersConfig, args: argparse.Namespace, state_fi
         logger.info(f"Will use Assisted Installer running at {args.url}")
         ais = None
 
-    sf = StateFile(cc.name, state_file_path)
     """
     Here we will use the AssistedClient from the aicli package from:
         https://github.com/karmab/aicli
@@ -49,7 +48,7 @@ def main_deploy_openshift(cc: ClustersConfig, args: argparse.Namespace, state_fi
         https://aicli.readthedocs.io/en/latest/
     """
     ai = AssistedClientAutomation(f"{args.url}:8090", ais)
-    cd = ClusterDeployer(cc, ai, args.steps, args.secrets_path, sf, args.resume)
+    cd = ClusterDeployer(cc, ai, args.steps, args.secrets_path, state_file, args.resume)
 
     if args.additional_post_config:
         logger.info(f"Running additional post config: {args.additional_post_config}")
@@ -60,7 +59,7 @@ def main_deploy_openshift(cc: ClustersConfig, args: argparse.Namespace, state_fi
     if args.teardown or args.teardown_full:
         cd.teardown_workers()
         cd.teardown_masters()
-        sf.clear_state()
+        state_file.clear_state()
     else:
         cd.deploy()
 
@@ -68,24 +67,24 @@ def main_deploy_openshift(cc: ClustersConfig, args: argparse.Namespace, state_fi
         ais.stop()
 
 
-def main_deploy_iso(cc: ClustersConfig, args: argparse.Namespace) -> None:
-    id = IsoDeployer(cc, args.steps)
+def main_deploy_iso(cc: ClustersConfig, args: argparse.Namespace, state_file: StateFile) -> None:
+    id = IsoDeployer(cc, args.steps, state_file, args.resume)
     id.deploy()
 
 
-def main_deploy(args: argparse.Namespace, cc: ClustersConfig, conf: CdaConfig) -> None:
+def main_deploy(args: argparse.Namespace, cc: ClustersConfig, conf: CdaConfig, state_file: StateFile) -> None:
     if conf.token_user != "" and conf.token != "":
         auth.RegistryInfo("registry.ci.openshift.org", conf.token_user, conf.token).inject_if_missing()
 
     check_and_cleanup_disk(10)
 
     if cc.kind == "openshift":
-        main_deploy_openshift(cc, args, conf.state_file_path)
+        main_deploy_openshift(cc, args, state_file)
     else:
-        main_deploy_iso(cc, args)
+        main_deploy_iso(cc, args, state_file)
 
 
-def main_snapshot(args: argparse.Namespace, cc: ClustersConfig, state_path: str) -> None:
+def main_snapshot(args: argparse.Namespace, cc: ClustersConfig, state_file: StateFile) -> None:
     args = parse_args()
 
     ais = AssistedInstallerService(cc.version, args.url)
@@ -93,10 +92,9 @@ def main_snapshot(args: argparse.Namespace, cc: ClustersConfig, state_path: str)
 
     name = cc.name if args.name is None else args.name
     cs = ClusterSnapshotter(cc, ais, ai, name)
-    sf = StateFile(cc.name, state_path)
 
     if args.loadsave == "load":
-        cs.import_cluster(sf)
+        cs.import_cluster(state_file)
     elif args.loadsave == "save":
         cs.export_cluster()
     else:
@@ -132,10 +130,12 @@ def main() -> None:
         worker_range=args.worker_range,
     )
 
+    sf = StateFile(cc.name, conf.state_file_path)
+
     if args.subcommand == "deploy":
-        main_deploy(args, cc, conf)
+        main_deploy(args, cc, conf, sf)
     elif args.subcommand == "snapshot":
-        main_snapshot(args, cc, conf.state_file_path)
+        main_snapshot(args, cc, sf)
 
 
 if __name__ == "__main__":

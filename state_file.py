@@ -1,5 +1,6 @@
 import os
 import json
+import fcntl
 
 
 class StateFile:
@@ -17,14 +18,21 @@ class StateFile:
     def _load_state(self) -> dict[str, dict[str, str]]:
         if os.path.exists(self.path):
             with open(self.path, 'r') as f:
-                return dict[str, dict[str, str]](json.load(f))
+                fcntl.flock(f, fcntl.LOCK_EX)
+                ret = dict[str, dict[str, str]](json.load(f))
+                fcntl.flock(f, fcntl.LOCK_UN)
+                return ret
         else:
             return {}
 
     def _save_state(self, state: dict[str, dict[str, str]]) -> None:
         os.makedirs(os.path.dirname(self.path), exist_ok=True)
         with open(self.path, 'w') as f:
+            fcntl.flock(f, fcntl.LOCK_EX)
             f.write(json.dumps(state))
+            f.flush()
+            os.fsync(f.fileno())
+            fcntl.flock(f, fcntl.LOCK_UN)
 
     def deployed(self, name: str) -> bool:
         state = self._load_state()
