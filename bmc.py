@@ -25,16 +25,10 @@ class BMC:
         return BMC.from_bmc(bmc_config.url, bmc_config.user, bmc_config.password)
 
     @staticmethod
-    def from_url(url: str, user: str = "root", password: str = "calvin") -> 'BMC':
-        url = f"{url}/redfish/v1/Systems/System.Embedded.1"
-        return BMC(url, user, password)
-
-    @staticmethod
     def from_bmc(ip_or_hostname: str, user: str = "root", password: str = "calvin") -> 'BMC':
         if ip_or_hostname == "":
             raise ValueError("BMC not defined")
-        url = f"https://{ip_or_hostname}/redfish/v1/Systems/System.Embedded.1"
-        return BMC(url, user, password)
+        return BMC(ip_or_hostname, user, password)
 
     """
     Red Fish is used to boot ISO images with virtual media.
@@ -105,32 +99,35 @@ class BMC:
                 time.sleep(retry_delay)
 
     def restart_redfish(self) -> None:
-        for _ in range(10):
-            headers = {"Content-Type": "application/json"}
-            payload = {"ResetType": "GracefulRestart"}
-            full_url = f"{self.url}/redfish/v1/Managers/iDRAC.Embedded.1/Actions/Manager.Reset"
-            response = requests.post(full_url, auth=(self.user, self.password), headers=headers, json=payload, verify=False)
-            if 200 <= response.status_code < 300:
-                logger.info("Command to reset redfish sent successfully")
-                break
-            else:
-                logger.error(f"Failed to reset redfish with status {response.status_code} while sending request to {full_url}")
-                time.sleep(5)
+        red = self._redfish()
+        # Only Dell servers thus far would have BMCs that need to be restarted.
+        if red.model == 'dell':
+            for _ in range(10):
+                headers = {"Content-Type": "application/json"}
+                payload = {"ResetType": "GracefulRestart"}
+                full_url = f"{self.url}/redfish/v1/Managers/iDRAC.Embedded.1/Actions/Manager.Reset"
+                response = requests.post(full_url, auth=(self.user, self.password), headers=headers, json=payload, verify=False)
+                if 200 <= response.status_code < 300:
+                    logger.info("Command to reset redfish sent successfully")
+                    break
+                else:
+                    logger.error(f"Failed to reset redfish with status {response.status_code} while sending request to {full_url}")
+                    time.sleep(5)
 
-        t = timer.Timer("10m")
+            t = timer.Timer("10m")
 
-        while not t.triggered():
-            response = requests.get(self.url, auth=(self.user, self.password), verify=False, timeout=5)
-            if response.status_code == 200:
-                logger.info("Redfish reset completed")
-                return
-            else:
-                logger.info("Waiting for redfish reset to complete")
-                time.sleep(1)
-        logger.error_and_exit(f"Redfish didn't come up after {t} time")
+            while not t.triggered():
+                response = requests.get(self.url, auth=(self.user, self.password), verify=False, timeout=5)
+                if response.status_code == 200:
+                    logger.info("Redfish reset completed")
+                    return
+                else:
+                    logger.info("Waiting for redfish reset to complete")
+                    time.sleep(1)
+            logger.error_and_exit(f"Redfish didn't come up after {t} time")
 
     def _redfish(self) -> Redfish:
-        return Redfish(self.url, self.user, self.password, model='dell', debug=False)
+        return Redfish(self.url, self.user, self.password, debug=False)
 
     def stop(self) -> None:
         self._redfish().stop()
