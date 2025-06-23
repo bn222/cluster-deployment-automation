@@ -9,20 +9,25 @@ clusters:
       kind: "vm"
       node: "localhost"
       ip: "192.168.122.141"
+      disk_size: 32
     - name: "vm-master-2"
       kind: "vm"
       node: "localhost"
       ip: "192.168.122.142"
+      disk_size: 32
     - name: "vm-master-3"
       kind: "vm"
       node: "localhost"
       ip: "192.168.122.143"
+      disk_size: 32
     workers:
     - name: "vm-worker-1"
       kind: "vm"
       node: "localhost"
       ip: "192.168.122.144"
+      disk_size: 32
     - name: "vm-worker-2"
       kind: "vm"
       node: "localhost"
       ip: "192.168.122.145"
+      disk_size: 32
