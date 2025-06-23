@@ -104,6 +104,7 @@ class AssistedClientAutomation(AssistedClient):  # type: ignore
         logger.info(self.info_iso(infra_env, {}))
         t = timer.Timer("15m")
         logger.info(f"Download iso from {infra_env} to {path}, retrying for {t.target_duration()}")
+        os.makedirs(os.path.dirname(path), exist_ok=True)
         while not t.triggered():
             try:
                 self.download_iso(infra_env, path)
