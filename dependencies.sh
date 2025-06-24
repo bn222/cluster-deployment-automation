@@ -41,3 +41,7 @@ cat requirements.txt  | xargs -n1 $PYTHON_CMD -m pip install
 
 export PYTHON_CMD_FULL=$(which $PYTHON_CMD)
 sudo -E $PYTHON_CMD_FULL $(which activate-global-python-argcomplete)
+
+oc_url="https://mirror.openshift.com/pub/openshift-v4/$(uname -m)/clients/ocp/stable/openshift-client-linux.tar.gz"
+curl -L "$oc_url" -o /tmp/openshift-client-linux.tar.gz
+sudo tar -U -C /usr/local/bin -xzf /tmp/openshift-client-linux.tar.gz
