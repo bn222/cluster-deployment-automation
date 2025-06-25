@@ -212,9 +212,9 @@ class IPUBMC(BMC):
 logger "Activating redfish"
 cp /work/redfish/certs/server.key /etc/pki/ca-trust/source/anchors/
 cp /work/redfish/certs/server.crt /etc/pki/ca-trust/source/anchors/
-/usr/bin/scripts/set_acc_kernel_cmdline.sh -a -b iscsi
-update-ca-trust &
-systemctl start redfish
+/usr/bin/scripts/set_acc_kernel_cmdline.sh -a -b custom
+update-ca-trust
+systemctl restart redfish
 """
         sha = self.current_file_sha()
         server = host.RemoteHost(server_with_key)
@@ -236,9 +236,6 @@ systemctl start redfish
         imc.run("chmod 0700 /work/redfish/certs")
         imc.write("/work/redfish/certs/server.crt", server.read_file("/root/.local-container-registry/domain.crt"))
         imc.write("/work/redfish/certs/server.key", server.read_file("/root/.local-container-registry/domain.key"))
-        imc.run("cp /work/redfish/certs/server.key /etc/pki/ca-trust/source/anchors/")
-        imc.run("cp /work/redfish/certs/server.crt /etc/pki/ca-trust/source/anchors/")
-        imc.run("update-ca-trust")
         imc.run("cp /etc/imc-redfish-configuration.json /work/redfish/")
         imc.run(f"echo {self.password} | bash /usr/bin/ipu-redfish-generate-password-hash.sh")
 
@@ -247,9 +244,9 @@ systemctl start redfish
         imc.run("/usr/bin/imc-scripts/cfg_boot_options \"init_app_acc_nboot_net_name\" \"enp0s1f0\"")
         imc.run("/usr/bin/imc-scripts/cfg_boot_options \"init_app_acc_nboot_stage\"  \"0\"")
 
-        # Start redfish and wait. It takes a few seconds to initialize and the next steps need it to already be running.
+        # Start redfish and wait. It takes a few seconds to initialize and the next function needs it to already be running.
         logger.info("Starting redfish on IMC")
-        imc.run("systemctl restart redfish")
+        imc.run("/work/scripts/start-redfish.sh")
         time.sleep(5)
 
         imc.write("/work/cda_sha", sha)
