@@ -701,3 +701,120 @@ def wait_futures(msg: str, futures: list[tuple[str, Future[bool]]], cb: Callable
 
     if any(not future.result() for (_, future) in futures):
         logger.error_and_exit(f"Failed to {msg}: {state}")
+
+
+def capture_assisted_installer_logs(logs_dir: Optional[str] = None, context: str = "failure") -> None:
+    """Capture assisted installer service logs from all related podman containers"""
+    logger.error("Capturing assisted installer service logs")
+    lh = host.LocalHost()
+
+    try:
+        # Create unique logs directory if not specified
+        if logs_dir is None:
+            timestamp = time.strftime("%Y%m%d_%H%M%S")
+            logs_dir = f"./assisted_installer_logs/{context}_{timestamp}"
+
+        # Ensure logs directory exists
+        os.makedirs(logs_dir, exist_ok=True)
+        logger.info(f"Created/verified logs directory: {logs_dir}")
+
+        # Get all containers related to assisted-installer
+        assisted_containers = _get_assisted_installer_containers(lh)
+
+        if not assisted_containers:
+            logger.error("No assisted-installer containers found")
+            return
+
+        logger.info(f"Found {len(assisted_containers)} assisted-installer containers: {assisted_containers}")
+
+        # Iterate through each container and capture logs
+        for container_name in assisted_containers:
+            _capture_container_logs(lh, logs_dir, container_name)
+
+        logger.info(f"All assisted installer logs saved to directory: {logs_dir}")
+
+    except Exception as e:
+        logger.error(f"Failed to capture assisted installer logs: {e}")
+        # Log the full exception details
+        logger.error(f"Exception details: {str(e)}")
+
+
+def _get_assisted_installer_containers(lh: host.Host) -> list[str]:
+    """Get all containers related to assisted-installer"""
+    fallback_containers = ["assisted-installer-service", "assisted-installer-db", "assisted-installer-ui", "assisted-installer-image-service"]
+
+    try:
+        pod_result = lh.run("podman pod ps --format json")
+        if not pod_result.success():
+            logger.error("Failed to get pod information")
+            return fallback_containers
+
+        pods_data = json.loads(pod_result.out)
+
+        # Find the assisted-installer pod and extract container names
+        for pod in pods_data:
+            if pod.get("Name") == "assisted-installer":
+                container_names: list[str] = []
+                for container in pod.get("Containers", []):
+                    name = container.get("Names")
+                    if name:
+                        container_names.append(name)
+
+                if container_names:
+                    return sorted(set(container_names))
+                break
+
+        logger.error("No assisted-installer pod found")
+        return fallback_containers
+
+    except (json.JSONDecodeError, KeyError, AttributeError) as e:
+        logger.error(f"Error parsing pod information: {e}")
+        return fallback_containers
+    except Exception as e:
+        logger.error(f"Unexpected error getting containers: {e}")
+        return fallback_containers
+
+
+def _capture_container_logs(lh: host.Host, logs_dir: str, container_name: str) -> None:
+    """Capture logs from a specific container"""
+    logger.info(f"=== Capturing logs for container: {container_name} ===")
+    try:
+        # Try multiple approaches to get container logs
+        log_content = ""
+
+        result = lh.run(f"podman logs --events-backend=file {container_name}")
+        if result.success():
+            log_content = result.out or result.err
+
+        if log_content.strip():
+            # Save logs to file
+            log_filename = os.path.join(logs_dir, f"{container_name}.log")
+            full_log_content = f"=== Logs for container: {container_name} ===\n" f"Captured at: {time.strftime('%Y-%m-%d %H:%M:%S')}\n" f"{'=' * 80}\n" f"{log_content}"
+            lh.write(log_filename, full_log_content)
+
+            logger.info(f"Container {container_name} logs saved to: {log_filename}")
+            logger.info(f"Log file size: {len(log_content)} characters")
+        else:
+            # Save info about no logs found
+            no_logs_filename = os.path.join(logs_dir, f"{container_name}_no_logs.log")
+            no_logs_content = (
+                f"=== No logs found for container: {container_name} ===\n"
+                f"Captured at: {time.strftime('%Y-%m-%d %H:%M:%S')}\n"
+                f"{'=' * 80}\n"
+                f"Command attempted: podman logs {container_name}\n"
+                f"Exit code: {result.returncode}\n"
+                f"Stdout: {result.out}\n"
+                f"Stderr: {result.err}\n"
+            )
+            lh.write(no_logs_filename, no_logs_content)
+
+            logger.error(f"No logs found for {container_name}, details saved to: {no_logs_filename}")
+
+    except Exception as e:
+        # Save exception info to file
+        exception_filename = os.path.join(logs_dir, f"{container_name}_exception.log")
+        exception_content = f"=== Exception capturing logs for container: {container_name} ===\n" f"Captured at: {time.strftime('%Y-%m-%d %H:%M:%S')}\n" f"{'=' * 80}\n" f"Exception: {str(e)}\n"
+        lh.write(exception_filename, exception_content)
+
+        logger.error(f"Exception capturing logs for {container_name}: {e}")
+        logger.error(f"Exception details saved to: {exception_filename}")
