@@ -207,10 +207,9 @@ class IPUBMC(BMC):
         # This script will restart redfish upon reboot of the IMC.
         # Our post_init_app.sh script installed from ipu-opi-operator
         # checks for and executes this if it exists.
-        start_redfish = f"""
+        start_redfish = """
 #!/bin/sh
 logger "Activating redfish"
-date -s "{time.asctime(localtime())}"
 cp /work/redfish/certs/server.key /etc/pki/ca-trust/source/anchors/
 cp /work/redfish/certs/server.crt /etc/pki/ca-trust/source/anchors/
 /usr/bin/scripts/set_acc_kernel_cmdline.sh -a -b iscsi
