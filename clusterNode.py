@@ -180,12 +180,26 @@ class VmClusterNode(ClusterNode):
             return running == h.vm_is_running(node_name)
 
         name = self.config.name
+
+        # Wait for VM to go from running to not-running (reboot starts)
         common.wait_true(f"reboot of {name} to occur", 0, vm_state, h=self.hostconn, node_name=name, running=False)
 
-        r = self.hostconn.run(f"virsh start {name}")
-        if not r.success():
-            return False
+        # Check if VM is already running (auto-restart due to --events on_reboot=restart)
+        if not self.hostconn.vm_is_running(name):
+            # VM is not running, so we need to start it manually
+            logger.info(f"VM {name} is not running after reboot, starting it manually")
+            r = self.hostconn.run(f"virsh start {name}")
+            if not r.success():
+                # Check if it failed because domain is already active (race condition)
+                if "Domain is already active" in r.err:
+                    logger.info(f"VM {name} is already active (race condition resolved)")
+                else:
+                    logger.error(f"Failed to start VM {name}: {r.err}")
+                    return False
+        else:
+            logger.info(f"VM {name} is already running after reboot (auto-restarted)")
 
+        # Wait for VM to be fully running
         common.wait_true(f"reboot of {name} to finish", 0, vm_state, h=self.hostconn, node_name=name, running=True)
 
         return True
