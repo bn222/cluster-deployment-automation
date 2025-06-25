@@ -28,6 +28,7 @@ from libvirt import Libvirt
 from baseDeployer import BaseDeployer
 from state_file import StateFile
 from imageRegistry import InClusterRegistry
+from clusterStorage import ClusterStorage
 
 
 def match_to_proper_version_format(version_cluster_config: str) -> str:
@@ -447,8 +448,19 @@ class ClusterDeployer(BaseDeployer):
             for worker in h.k8s_worker_nodes:
                 worker.set_password()
 
-        logger.info("Deploying In-Cluster Registry")
-        icr = InClusterRegistry(self._cc.kubeconfig)
+        logger.info("Deploying storage for applications")
+
+        # Deploy generic storage that applications can use
+        storage = ClusterStorage(self._cc.kubeconfig)
+        storage.deploy_storage()
+
+        # Get storage class for applications
+        storage_class_name = storage.get_storage_class_name()
+
+        logger.info("Deploying In-Cluster Registry with persistent storage")
+        # Default to 10Gi if no registry storage size is configured
+        registry_storage_size = getattr(self._cc, 'registry_storage_size', '10Gi')
+        icr = InClusterRegistry(self._cc.kubeconfig, storage_class=storage_class_name, storage_size=registry_storage_size)
         icr.deploy()
 
     def _wait_master_reboot(self, infra_env: str, node: ClusterNode) -> bool:

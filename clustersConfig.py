@@ -16,6 +16,7 @@ import clusterInfo
 from clusterInfo import ClusterInfo
 from dataclasses import dataclass, field
 from bmc import BmcConfig
+from imageRegistry import RegistryType
 
 
 def base_iso_path(cluster_name: str) -> str:
@@ -86,6 +87,7 @@ class ExtraConfigArgs:
 
     registries: Optional[list[RegistryInfo]] = None
     import_pull_secret: bool = False
+    registry_type: str = RegistryType.IN_CLUSTER.value
 
     def __post_init__(self) -> None:
         if self.registries is not None:
@@ -205,6 +207,7 @@ class ClustersConfig:
     base_dns_domain: str
     install_iso: str
     secrets_path: str
+    in_cluster_registry_storage_size: str
 
     def __init__(
         self,
@@ -229,6 +232,7 @@ class ClustersConfig:
         self.ntp_source = "clock.redhat.com"
         self.base_dns_domain = "redhat.com"
         self.install_iso = ""
+        self.in_cluster_registry_storage_size = "10Gi"
 
         self._cluster_info: Optional[ClusterInfo] = None
         self._load_full_config(yaml_path)

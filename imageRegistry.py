@@ -14,7 +14,7 @@ import urllib.request
 import urllib.error
 import ssl
 import timer
-
+from clusterStorage import ClusterStorage
 
 CONTAINER_NAME = "local-container-registry"
 
@@ -30,6 +30,16 @@ class OCPSystemRole(str, Enum):
 
     AUTHENTICATED = "system:authenticated"
     """Represents any authenticated user or service account in the cluster."""
+
+
+class RegistryType(str, Enum):
+    """Type of registry to deploy."""
+
+    IN_CLUSTER = "in-cluster"
+    """Deploy the registry in the cluster."""
+
+    LOCAL = "local"
+    """Deploy the registry on the local host."""
 
 
 class BaseRegistry(ABC):
@@ -214,15 +224,19 @@ class InClusterRegistry(BaseRegistry):
     def __init__(
         self,
         kubeconfig: str,
+        storage_class: str,
         allow_external_access: bool = True,
         namespace: str = "in-cluster-registry",
         sa: str = "pusher",
+        storage_size: str = "10Gi",
     ) -> None:
         super().__init__(host.LocalHost())
         self.kubeconfig = kubeconfig
         self.allow_external = allow_external_access
         self.namespace = namespace
         self.sa = sa
+        self.storage_class = storage_class
+        self.storage_size = storage_size
         self.client = k8sClient.K8sClient(self.kubeconfig, self.host)
 
     def deploy(self) -> None:
@@ -231,6 +245,16 @@ class InClusterRegistry(BaseRegistry):
         self._ensure_project_and_sa()
         self._grant_roles()
         self.podman_authenticate()
+
+    def undeploy(self) -> None:
+        """Undeploy the in-cluster registry, restoring to OpenShift defaults"""
+        logger.info("Undeploying in-cluster registry and restoring to OpenShift defaults")
+
+        self._podman_logout()
+        self._remove_project_and_sa()
+        self._restore_ocp_registry_defaults()
+
+        logger.info("In-cluster registry undeployment completed successfully")
 
     def trust(self, target: host.Host | None = None) -> None:
         # https://docs.redhat.com/en/documentation/openshift_container_platform/4.18/html/registry/securing-exposing-registry#registry-exposing-default-registry-manually_securing-exposing-registry
@@ -298,10 +322,21 @@ class InClusterRegistry(BaseRegistry):
         self.client.oc_run_or_die("patch configs.imageregistry.operator.openshift.io cluster --type=merge --patch '{\"spec\":{\"managementState\":\"Managed\"}}'")
         self.client.oc_run_or_die("wait --for=jsonpath='{.spec.managementState}'=Managed configs.imageregistry.operator.openshift.io/cluster --timeout=5m")
 
-        # Configure storage with emptyDir and wait for it to be applied
-        logger.info("Configuring registry storage with emptyDir")
-        self.client.oc_run_or_die("patch configs.imageregistry.operator.openshift.io cluster --type=merge --patch '{\"spec\":{\"storage\":{\"emptyDir\":{}}}}'")
-        self.client.oc_run_or_die("wait --for=jsonpath='{.spec.storage.emptyDir}' configs.imageregistry.operator.openshift.io/cluster --timeout=5m")
+        # Create registry-specific storage using the generic ClusterStorage methods
+        logger.info(f"Creating registry storage with storage class: {self.storage_class}")
+        storage = ClusterStorage(self.kubeconfig)
+
+        # Create PV and PVC for registry
+        storage.create_pv_with_node_affinity("registry-pv", self.storage_size, "/var/lib/registry-storage")
+        storage.create_pvc("registry-storage", "openshift-image-registry", self.storage_size)
+
+        # Configure the registry to use this PVC
+        storage_patch = '{"spec":{"storage":{"pvc":{"claim":"registry-storage"}}}}'
+        self.client.oc_run_or_die(f"patch configs.imageregistry.operator.openshift.io cluster --type=merge --patch '{storage_patch}'")
+        self.client.oc_run_or_die("wait --for=jsonpath='{.spec.storage.pvc}' configs.imageregistry.operator.openshift.io/cluster --timeout=5m")
+
+        # Wait for PVC binding after registry configuration
+        self._ensure_pvc_binding_after_registry_config()
 
         # Configure default route if external access is allowed
         if self.allow_external:
@@ -319,7 +354,32 @@ class InClusterRegistry(BaseRegistry):
 
         # Wait for the registry to be ready
         logger.info("Waiting for registry to be ready")
-        self.client.oc_run_or_die("wait --for=jsonpath='{.status.readyReplicas}'=1 configs.imageregistry.operator.openshift.io/cluster --timeout=15m")
+        self.client.oc_run_or_die("wait --for=jsonpath='{.status.readyReplicas}'=1 configs.imageregistry.operator.openshift.io/cluster --timeout=5m")
+
+    def _ensure_pvc_binding_after_registry_config(self) -> None:
+        """Ensure PVC binding occurs after registry is configured to use it"""
+        logger.info("Ensuring PVC binding after registry configuration...")
+
+        logger.info("Waiting for registry to be configured with PVC...")
+        self.client.oc_run_or_die("wait --for=jsonpath='{.spec.storage.pvc.claim}'=registry-storage configs.imageregistry.operator.openshift.io/cluster --timeout=5m")
+
+        # Check PVC binding status
+        pvc_status_result = self.client.oc("get pvc registry-storage -n openshift-image-registry -o jsonpath='{.status.phase}'")
+        if pvc_status_result.success():
+            pvc_status = pvc_status_result.out.strip()
+            logger.info(f"Current PVC status: {pvc_status}")
+
+            if pvc_status == "Bound":
+                logger.info("PVC is already bound")
+                return
+            elif pvc_status == "Pending":
+                logger.info("PVC is pending - this is expected for WaitForFirstConsumer binding mode")
+                logger.info("The PVC will bind when the registry pod is scheduled")
+                return
+            else:
+                logger.error_and_exit(f"PVC is in unexpected state: {pvc_status}")
+        else:
+            logger.error_and_exit("Failed to check PVC status")
 
     def _ensure_project_and_sa(self) -> None:
         # We want to create an orginization (similar to quay.io) and credentials to push and pull from externally
@@ -411,6 +471,8 @@ class InClusterRegistry(BaseRegistry):
 
         # Clean up registry storage using comprehensive cleanup
         logger.info("Cleaning up registry storage resources...")
+        storage = ClusterStorage(self.kubeconfig)
+        storage.cleanup_storage_resources("registry-storage", "openshift-image-registry", "registry-pv")
 
         # Reset registry to OpenShift defaults
         logger.info("Resetting registry management state to Removed (OpenShift default)...")
@@ -419,8 +481,8 @@ class InClusterRegistry(BaseRegistry):
 
         # Remove any storage configuration completely (restore to no storage config)
         logger.info("Removing all storage configuration (restore to OpenShift default)...")
-        self.client.oc_run_or_die("patch configs.imageregistry.operator.openshift.io cluster --type=json -p '[{\"op\": \"remove\", \"path\": \"/spec/storage\"}]' ")
-        self.client.oc_run_or_die("wait --for=jsonpath='{.spec.storage}'=null configs.imageregistry.operator.openshift.io/cluster --timeout=5m")
+        if self.client.oc("get configs.imageregistry.operator.openshift.io cluster -o jsonpath='{.spec.storage}'").out.strip() != "":
+            self.client.oc_run_or_die("patch configs.imageregistry.operator.openshift.io cluster --type=json -p '[{\"op\": \"remove\", \"path\": \"/spec/storage\"}]' ")
 
         # Disable default route (restore to OpenShift default)
         logger.info("Disabling default route (restore to OpenShift default)...")

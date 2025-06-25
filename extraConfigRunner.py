@@ -7,6 +7,7 @@ from extraConfigDpuInfra import ExtraConfigDpuInfra, ExtraConfigDpuInfra_NewAPI
 from extraConfigOvnK import ExtraConfigOvnK
 from extraConfigCustomOvn import ExtraConfigCustomOvn
 from extraConfigImageRegistry import ExtraConfigImageRegistry
+from extraConfigStorage import ExtraConfigStorage
 from extraConfigMastersSchedulable import ExtraConfigMastersSchedulable
 from extraConfigMonitoring import ExtraConfigMonitoring
 from extraConfigCNO import ExtraConfigCNO
@@ -42,6 +43,7 @@ extra_config: dict[str, Callable[[ClustersConfig, ExtraConfigArgs, dict[str, Fut
     "ovn_custom": ExtraConfigCustomOvn,
     "host_registries": ExtraConfigHostRegistry,
     "image_registry": ExtraConfigImageRegistry,
+    "storage": ExtraConfigStorage,
     "cno": ExtraConfigCNO,
     "rt": ExtraConfigRT,
     "dualstack": ExtraConfigDualStack,
