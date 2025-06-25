@@ -15,7 +15,8 @@ import urllib.request
 import urllib.error
 import ssl
 import timer
-
+from typing import Callable
+from clusterStorage import ClusterStorage
 
 CONTAINER_NAME = "local-container-registry"
 
@@ -31,6 +32,16 @@ class OCPSystemRole(str, Enum):
 
     AUTHENTICATED = "system:authenticated"
     """Represents any authenticated user or service account in the cluster."""
+
+
+class RegistryType(str, Enum):
+    """Type of registry to deploy."""
+
+    IN_CLUSTER = "in-cluster"
+    """Deploy the registry in the cluster."""
+
+    LOCAL = "local"
+    """Deploy the registry on the local host."""
 
 
 class BaseRegistry(ABC):
@@ -215,16 +226,45 @@ class InClusterRegistry(BaseRegistry):
     def __init__(
         self,
         kubeconfig: str,
-        allow_external_access: bool = True,
+        storage_class: str,
+        storage: ClusterStorage,
         namespace: str = "in-cluster-registry",
         sa: str = "pusher",
+        storage_size: str = "10Gi",
     ) -> None:
         super().__init__(host.LocalHost())
         self.kubeconfig = kubeconfig
-        self.allow_external = allow_external_access
         self.namespace = namespace
         self.sa = sa
+        self.storage_class = storage_class
+        self.storage_size = storage_size
+        self.storage = storage
         self.client = k8sClient.K8sClient(self.kubeconfig, self.host)
+
+    def _wait_for_condition(self, condition_fn: Callable[[], bool], description: str, timeout: str = "30s", interval: int = 3) -> None:
+        """Generic wait utility for any condition function
+
+        Args:
+            condition_fn: Function that returns True when condition is met
+            description: Human readable description of what we're waiting for
+            timeout: Maximum time to wait (e.g. "5m", "30s")
+            interval: Seconds between checks
+        """
+        logger.info(f"Waiting for {description}...")
+        timeout_timer = timer.Timer(timeout)
+
+        while not timeout_timer.triggered():
+            try:
+                if condition_fn():
+                    logger.info(f"{description} - condition met")
+                    return
+            except Exception as e:
+                logger.debug(f"Condition check failed: {e}")
+
+            logger.debug(f"Still waiting for {description}...")
+            time.sleep(interval)
+
+        raise RuntimeError(f"Timed out waiting for {description} after {timeout}")
 
     def deploy(self) -> None:
         self._wait_for_registry_operator_ready()
@@ -232,6 +272,16 @@ class InClusterRegistry(BaseRegistry):
         self._ensure_project_and_sa()
         self._grant_roles()
         self.podman_authenticate()
+
+    def undeploy(self) -> None:
+        """Undeploy the in-cluster registry, restoring to OpenShift defaults"""
+        logger.info("Undeploying in-cluster registry and restoring to OpenShift defaults")
+
+        self._podman_logout()
+        self._remove_project_and_sa()
+        self._restore_ocp_registry_defaults()
+
+        logger.info("In-cluster registry undeployment completed successfully")
 
     def trust(self, target: Optional[host.Host] = None) -> None:
         # https://docs.redhat.com/en/documentation/openshift_container_platform/4.18/html/registry/securing-exposing-registry#registry-exposing-default-registry-manually_securing-exposing-registry
@@ -259,19 +309,6 @@ class InClusterRegistry(BaseRegistry):
                 logger.info(f"Registry operator ready after {tries} tries")
                 break
 
-    def _wait_for_registry_default_route(self, timeout: str = "10s", max_tries: int = 5) -> None:
-        logger.info("Waiting for registry default route")
-        for tries in range(max_tries):
-            if self.client.oc("get route default-route -n openshift-image-registry --template='{{ .spec.host }}'").success():
-                logger.info(f"Route available after {tries + 1} tries")
-                return
-            if tries < max_tries - 1:  # Don't wait after the last attempt
-                logger.debug(f"Route not ready, waiting {timeout} (attempt {tries + 1}/{max_tries})")
-                wait_timer = timer.Timer(timeout)
-                while not wait_timer.triggered():
-                    time.sleep(0.1)  # Small sleep to prevent busy waiting
-        raise RuntimeError("Registry default route not available")
-
     def _create_router_ca_configmap(self) -> str:
         """Create a ConfigMap with the router CA certificate for image registry trust."""
         cm_name = "registry-router-ca"
@@ -294,33 +331,107 @@ class InClusterRegistry(BaseRegistry):
     def _configure_ocp_registry(self) -> None:
         # https://docs.redhat.com/en/documentation/openshift_container_platform/4.18/html/registry/setting-up-and-configuring-the-registry#configuring-registry-storage-baremetal
 
-        # Set management state to Managed and wait for it to be applied
-        logger.info("Setting registry management state to Managed")
-        self.client.oc_run_or_die("patch configs.imageregistry.operator.openshift.io cluster --type=merge --patch '{\"spec\":{\"managementState\":\"Managed\"}}'")
-        self.client.oc_run_or_die("wait --for=jsonpath='{.spec.managementState}'=Managed configs.imageregistry.operator.openshift.io/cluster --timeout=5m")
+        # Create registry-specific PVC using the existing storage class
+        logger.info(f"Creating registry storage with storage class: {self.storage_class}")
 
-        # Configure storage with emptyDir and wait for it to be applied
-        logger.info("Configuring registry storage with emptyDir")
-        self.client.oc_run_or_die("patch configs.imageregistry.operator.openshift.io cluster --type=merge --patch '{\"spec\":{\"storage\":{\"emptyDir\":{}}}}'")
-        self.client.oc_run_or_die("wait --for=jsonpath='{.spec.storage.emptyDir}' configs.imageregistry.operator.openshift.io/cluster --timeout=5m")
+        # Create PVC for registry using the provided storage class
+        # The PV will be created automatically by the storage class or external storage management
+        self._create_registry_pvc()
 
-        # Configure default route if external access is allowed
-        if self.allow_external:
-            logger.info("Enabling registry default route for external access")
-            self.client.oc_run_or_die("patch configs.imageregistry.operator.openshift.io/cluster --type merge -p '{\"spec\":{\"defaultRoute\":true}}'")
-            self.client.oc_run_or_die("wait --for=jsonpath='{.spec.defaultRoute}'=true configs.imageregistry.operator.openshift.io/cluster --timeout=5m")
+        # Configure registry with all settings in a single atomic patch
+        logger.info("Configuring registry with management state, storage, and route settings")
+        registry_patch = '{"spec":{"managementState":"Managed","storage":{"pvc":{"claim":"registry-storage"}},"defaultRoute":true,"replicas":1,"rolloutStrategy":"Recreate"}}'
 
-            # Wait for the route to be created before trying to use it
-            self._wait_for_registry_default_route()
+        self.client.oc_run_or_die(f"patch configs.imageregistry.operator.openshift.io cluster --type=merge --patch '{registry_patch}'")
 
-            # Configure image config to trust router certificates
-            logger.info("Configuring image config to trust router certificates")
-            cm_name = self._create_router_ca_configmap()
-            self.client.oc_run_or_die(f"wait --for=jsonpath='{{.spec.additionalTrustedCA.name}}'={cm_name} image.config.openshift.io/cluster --timeout=5m")
+        # Wait for all configurations to be applied
+        self._wait_for_condition(lambda: self.client.oc("get configs.imageregistry.operator.openshift.io cluster -o jsonpath='{.spec.managementState}'").out.strip() == "Managed", "registry management state to be set to Managed")
+        self._wait_for_condition(lambda: bool(self.client.oc("get configs.imageregistry.operator.openshift.io cluster -o jsonpath='{.spec.storage.pvc}'").out.strip()), "registry to be configured with PVC storage")
+        self._wait_for_condition(lambda: self.client.oc("get configs.imageregistry.operator.openshift.io cluster -o jsonpath='{.spec.rolloutStrategy}'").out.strip() == "Recreate", "registry rollout strategy to be set to Recreate")
+
+        # Wait for PVC binding after registry configuration
+        self._ensure_pvc_binding_after_registry_config()
+
+        # Wait for route creation and configure trust (always enabled)
+        logger.info("Waiting for registry default route to be created")
+        self._wait_for_condition(lambda: self.client.oc("get configs.imageregistry.operator.openshift.io cluster -o jsonpath='{.spec.defaultRoute}'").out.strip() == "true", "defaultRoute spec to be set to true")
+
+        # Wait for the route to be created before trying to use it
+        self._wait_for_condition(lambda: self.client.oc("get route default-route -n openshift-image-registry --template='{{ .spec.host }}'").success(), "registry default route to be created")
+
+        # Configure image config to trust router certificates
+        logger.info("Configuring image config to trust router certificates")
+        cm_name = self._create_router_ca_configmap()
+        self._wait_for_condition(lambda: self.client.oc("get image.config.openshift.io/cluster -o jsonpath='{.spec.additionalTrustedCA.name}'").out.strip() == cm_name, f"image config to trust CA configmap {cm_name}")
 
         # Wait for the registry to be ready
         logger.info("Waiting for registry to be ready")
-        self.client.oc_run_or_die("wait --for=jsonpath='{.status.readyReplicas}'=1 configs.imageregistry.operator.openshift.io/cluster --timeout=15m")
+        self._wait_for_condition(
+            lambda: self.client.oc("get configs.imageregistry.operator.openshift.io cluster -o jsonpath='{.status.readyReplicas}'").out.strip() == "1",
+            "registry to have 1 ready replica",
+            timeout="3m",  # Needs longer timeout for pod scheduling and image pulling
+        )
+
+    def _create_registry_pvc(self) -> None:
+        """Create PVC for registry using the provided storage class"""
+        logger.info(f"Creating registry PVC using storage class: {self.storage_class}")
+
+        pvc_manifest = f"""
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: registry-storage
+  namespace: openshift-image-registry
+spec:
+  accessModes:
+  - ReadWriteMany
+  resources:
+    requests:
+      storage: {self.storage_size}
+  storageClassName: {self.storage_class}
+"""
+
+        # Apply the PVC manifest
+        lh = host.LocalHost()
+        temp_pvc_path = "/tmp/registry-pvc.yaml"
+        lh.write(temp_pvc_path, pvc_manifest)
+
+        # Delete existing PVC if it exists
+        self.client.oc("delete pvc registry-storage -n openshift-image-registry --ignore-not-found")
+
+        # Create new PVC
+        result = self.client.oc(f"apply -f {temp_pvc_path}")
+        lh.remove(temp_pvc_path)
+
+        if not result.success():
+            logger.error_and_exit(f"Failed to create registry PVC: {result.out}")
+
+        logger.info("Registry PVC created successfully")
+
+    def _ensure_pvc_binding_after_registry_config(self) -> None:
+        """Ensure PVC binding occurs after registry is configured to use it"""
+        logger.info("Ensuring PVC binding after registry configuration...")
+
+        logger.info("Waiting for registry to be configured with PVC...")
+        self._wait_for_condition(lambda: self.client.oc("get configs.imageregistry.operator.openshift.io cluster -o jsonpath='{.spec.storage.pvc.claim}'").out.strip() == "registry-storage", "registry to be configured with registry-storage PVC claim")
+
+        # Check PVC binding status
+        pvc_status_result = self.client.oc("get pvc registry-storage -n openshift-image-registry -o jsonpath='{.status.phase}'")
+        if pvc_status_result.success():
+            pvc_status = pvc_status_result.out.strip()
+            logger.info(f"Current PVC status: {pvc_status}")
+
+            if pvc_status == "Bound":
+                logger.info("PVC is already bound")
+                return
+            elif pvc_status == "Pending":
+                logger.info("PVC is pending - this is expected for WaitForFirstConsumer binding mode")
+                logger.info("The PVC will bind when the registry pod is scheduled")
+                return
+            else:
+                logger.error_and_exit(f"PVC is in unexpected state: {pvc_status}")
+        else:
+            logger.error_and_exit("Failed to check PVC status")
 
     def _ensure_project_and_sa(self) -> None:
         # We want to create an orginization (similar to quay.io) and credentials to push and pull from externally
@@ -355,7 +466,11 @@ class InClusterRegistry(BaseRegistry):
         route = self.get_url()
         token = self.create_token()
         self.trust()
-        self.client.oc_run_or_die("wait --for=jsonpath='{.status.readyReplicas}'=1 deployment/image-registry -n openshift-image-registry --timeout=2m")
+        self._wait_for_condition(
+            lambda: self.client.oc("get deployment/image-registry -n openshift-image-registry -o jsonpath='{.status.readyReplicas}'").out.strip() == "1",
+            "image-registry deployment to have 1 ready replica",
+            timeout="2m",
+        )
         logger.info("Waiting on image registry service to be ready at the route through HTTP requests")
         wait_for_http_ready(f"https://{route}/v2/", timeout="6m")
 
@@ -410,23 +525,32 @@ class InClusterRegistry(BaseRegistry):
         """Restore the OpenShift registry to default configuration"""
         logger.info("Restoring OpenShift registry to default configuration")
 
-        # Clean up registry storage using comprehensive cleanup
-        logger.info("Cleaning up registry storage resources...")
+        # Reset registry to OpenShift defaults with single atomic merge patch
+        logger.info("Resetting registry to OpenShift defaults (managementState=Removed, remove storage, defaultRoute=false)")
 
-        # Reset registry to OpenShift defaults
-        logger.info("Resetting registry management state to Removed (OpenShift default)...")
-        self.client.oc_run_or_die("patch configs.imageregistry.operator.openshift.io cluster --type=merge --patch '{\"spec\":{\"managementState\":\"Removed\"}}' ")
-        self.client.oc_run_or_die("wait --for=jsonpath='{.spec.managementState}'=Removed configs.imageregistry.operator.openshift.io/cluster --timeout=5m")
+        # Apply single atomic merge patch - all changes in one API transaction
+        patch_json = '{"spec":{"managementState":"Removed","defaultRoute":false,"storage":null}}'
+        logger.info(f"Applying atomic merge patch: {patch_json}")
+        self.client.oc_run_or_die(f"patch configs.imageregistry.operator.openshift.io cluster --type=merge -p '{patch_json}'")
 
-        # Remove any storage configuration completely (restore to no storage config)
-        logger.info("Removing all storage configuration (restore to OpenShift default)...")
-        self.client.oc_run_or_die("patch configs.imageregistry.operator.openshift.io cluster --type=json -p '[{\"op\": \"remove\", \"path\": \"/spec/storage\"}]' ")
-        self.client.oc_run_or_die("wait --for=jsonpath='{.spec.storage}'=null configs.imageregistry.operator.openshift.io/cluster --timeout=5m")
+        # Wait for all configurations to be applied
+        self._wait_for_condition(lambda: self.client.oc("get configs.imageregistry.operator.openshift.io cluster -o jsonpath='{.spec.managementState}'").out.strip() == "Removed", "registry management state to be set to Removed")
+        self._wait_for_condition(lambda: self.client.oc("get configs.imageregistry.operator.openshift.io cluster -o jsonpath='{.spec.defaultRoute}'").out.strip() in ["false", ""], "registry defaultRoute to be disabled (false or unset)")
 
-        # Disable default route (restore to OpenShift default)
-        logger.info("Disabling default route (restore to OpenShift default)...")
-        self.client.oc_run_or_die("patch configs.imageregistry.operator.openshift.io cluster --type=merge --patch '{\"spec\":{\"defaultRoute\":false}}' ")
-        self.client.oc_run_or_die("wait --for=jsonpath='{.spec.defaultRoute}'=false configs.imageregistry.operator.openshift.io/cluster --timeout=5m")
+        # Wait for registry operator to fully remove deployment and terminate pods
+        logger.info("Waiting for registry operator to fully remove deployment and terminate pods...")
+
+        # Wait for deployment to be deleted by operator
+        self._wait_for_condition(
+            lambda: not self.client.oc("get deployment image-registry -n openshift-image-registry").success(), "registry deployment to be removed by operator", timeout="1m"  # Operator needs time to process the managementState change
+        )
+
+        # Wait for all registry pods to terminate
+        self._wait_for_condition(
+            lambda: not self.client.oc("get pods -n openshift-image-registry -l docker-registry=default --no-headers").success() or not self.client.oc("get pods -n openshift-image-registry -l docker-registry=default --no-headers").out.strip(),
+            "all registry pods to terminate",
+            timeout="1m",  # Pods need time to gracefully terminate
+        )
 
         # Wait for changes to be applied
         logger.info("Waiting for registry to return to default state...")
@@ -441,6 +565,10 @@ class InClusterRegistry(BaseRegistry):
             logger.error_and_exit("Registry management state not properly reset")
 
         logger.info("Registry restored to OpenShift defaults")
+
+        logger.info("Cleaning up registry storage resources...")
+        # Use the storage instance for consistent cleanup
+        self.storage.cleanup_storage_resources("registry-storage", "openshift-image-registry", "registry-pv")
 
 
 def trust_certificates(host_obj: host.Host, certs: dict[str, str]) -> None:
