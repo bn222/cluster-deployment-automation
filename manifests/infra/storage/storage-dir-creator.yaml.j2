@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: storage-dir-creator
+  namespace: kube-system
+spec:
+  selector:
+    matchLabels:
+      app: storage-dir-creator
+  template:
+    metadata:
+      labels:
+        app: storage-dir-creator
+    spec:
+{% if node_selector == "dedicated-workers" %}
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: node-role.kubernetes.io/worker
+                operator: Exists
+              - key: node-role.kubernetes.io/master
+                operator: DoesNotExist
+{% elif node_selector == "worker-masters" %}
+      nodeSelector:
+        node-role.kubernetes.io/worker: ""
+      tolerations:
+      - key: node-role.kubernetes.io/master
+        operator: Exists
+        effect: NoSchedule
+{% else %}
+      tolerations:
+      - operator: Exists
+{% endif %}
+      containers:
+      - name: storage-dir-creator
+        image: registry.redhat.io/ubi8/ubi-minimal:latest
+        command:
+        - /bin/sh
+        - -c
+        - |
+          mkdir -p /host/var/lib/registry-storage
+          chmod 755 /host/var/lib/registry-storage
+          echo "Storage directory created at /host/var/lib/registry-storage"
+          sleep 30
+          echo "Task completed, exiting..."
+        securityContext:
+          privileged: true
+        volumeMounts:
+        - name: host-root
+          mountPath: /host
+      volumes:
+      - name: host-root
+        hostPath:
+          path: /
+      hostNetwork: true
+      hostPID: true 
