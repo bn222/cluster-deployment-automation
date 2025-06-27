@@ -50,7 +50,7 @@ class BaseRegistry(ABC):
         pass
 
 
-class ImageRegistry(BaseRegistry):
+class LocalRegistry(BaseRegistry):
     def __init__(self, rsh: host.Host, listen_port: int = 5000) -> None:
         super().__init__(rsh)
         self.listen_port = listen_port
@@ -186,9 +186,9 @@ class ImageRegistry(BaseRegistry):
         client.oc("patch image.config.openshift.io/cluster " f"--patch {shlex.quote(json.dumps(data))} --type=merge")
 
 
-def ensure_local_registry_running(rsh: host.Host, delete_all: bool = False) -> ImageRegistry:
+def ensure_local_registry_running(rsh: host.Host, delete_all: bool = False) -> LocalRegistry:
     logger.info(f"Ensuring local registry running on {rsh.hostname()}")
-    reg = ImageRegistry(rsh)
+    reg = LocalRegistry(rsh)
     reg.ensure_running(delete_all=delete_all)
     reg.trust(host.LocalHost())
     return reg
