@@ -13,6 +13,7 @@ import common
 from typing import Any
 import urllib.parse
 from urllib.parse import urlparse
+import urllib.request
 from typing import Optional
 import json
 import requests
@@ -207,6 +208,7 @@ class IPUBMC(BMC):
         # This script will restart redfish upon reboot of the IMC.
         # Our post_init_app.sh script installed from ipu-opi-operator
         # checks for and executes this if it exists.
+        ntp_server = "clock.corp.redhat.com"
         start_redfish = """
 #!/bin/sh
 logger "Activating redfish"
@@ -215,6 +217,26 @@ cp /work/redfish/certs/server.crt /etc/pki/ca-trust/source/anchors/
 /usr/bin/scripts/set_acc_kernel_cmdline.sh -a -b custom
 update-ca-trust
 systemctl restart redfish
+"""
+        pre_init_app = """
+#!/bin/sh
+
+CURDIR=$(pwd)
+WORKDIR=`dirname $(realpath $0)`
+
+if [ -d "$WORKDIR" ]; then
+    cd $WORKDIR
+    if [ -e load_custom_pkg.sh ]; then
+        # Fix up the cp_init.cfg file
+        ./load_custom_pkg.sh
+    fi
+    # run scripts in /work/scripts/pre_init_app.d
+    for i in ./pre_init_app.d/*.sh ; do
+        if [ -r "$i" ]; then
+            . "$i"
+        fi
+    done
+fi
 """
         sha = self.current_file_sha()
         server = host.RemoteHost(server_with_key)
@@ -228,9 +250,65 @@ systemctl restart redfish
         imc.write("/work/scripts/start-redfish.sh", start_redfish)
         imc.run("chmod 0755 /work/scripts/start-redfish.sh")
 
+        # Install chrony
+        imc.write("/work/scripts/pre_init_app.sh", pre_init_app)
+        imc.run("mkdir -pm 0700 /work/scripts/pre_init_app.d")
+        packageserver = 'https://dl.rockylinux.org/pub/rocky/9/BaseOS/aarch64/os/Packages/c/'
+        try:
+            response = urllib.request.urlopen(packageserver)
+        except Exception:
+            packageserver = 'https://dl.rockylinux.org/vault/rocky/9/BaseOS/aarch64/os/Packages/c/'
+        try:
+            response = urllib.request.urlopen(packageserver)
+        except Exception:
+            logger.info("Setting time on IMC and not installing chrony")
+            imc.run(f"date -s \"{time.asctime(localtime())}\"")
+        else:
+            html = response.read().decode('utf-8')
+            name_match = re.search(r"\"chrony.*rpm\"", html)
+            if name_match:
+                chronypackage = html[name_match.start() + 1 : name_match.end() - 1]
+                chrony_script = f"""
+#!/bin/bash
+logger "Activating chrony"
+update=0
+if ! rpm -q chrony; then
+ echo "Installing chrony rpm"
+ rpm -ivh /work/scripts/chrony/{chronypackage}
+ update=1
+fi
+echo "Checking for chrony conf file"
+if [ -e /etc/chrony.conf ]; then
+ echo "conf file exists."
+ cp /etc/chrony.conf /etc/chrony.conf.bak
+ # configure  server
+ sed -i '/server {ntp_server}/d' /etc/chrony.conf
+ echo 'server {ntp_server} maxpoll 10 iburst' >> /etc/chrony.conf
+ update=1
+else
+ echo "File does not exist: /etc/chrony.conf Exiting"
+ exit
+fi
+if [ $update -eq 1 ]; then
+ echo "Update detected. Restarting chrony"
+ systemctl restart chronyd
+ timedatectl set-timezone America/Los_Angeles
+fi
+"""
+                imc.write("/work/scripts/pre_init_app.d/chrony.sh", chrony_script)
+                imc.run("chmod 0700 /work/scripts/pre_init_app.d/chrony.sh")
+                chronyurl = f'{packageserver}{chronypackage}'
+
+                logger.info(f"Chrony package found at {chronyurl}")
+                chronydata = urllib.request.urlopen(chronyurl)
+
+                imc.run("mkdir -pm 0700 /work/scripts/chrony")
+                imc.write(f"/work/scripts/chrony/{chronypackage}", chronydata.read().decode('latin-1'), 'latin-1')
+                imc.run(f"chmod 0700 /work/scripts/chrony/{chronypackage}")
+                logger.info("Starting chrony on IMC")
+                imc.run("/work/scripts/pre_init_app.d/chrony.sh")
+
         # Install the certificates and config file required for redfish.
-        logger.info("Setting time on IMC")
-        imc.run(f"date -s \"{time.asctime(localtime())}\"")
         imc.run("mkdir -pm 0700 /work/redfish/certs")
         imc.run("chmod 0700 /work/redfish")
         imc.run("chmod 0700 /work/redfish/certs")
@@ -248,6 +326,9 @@ systemctl restart redfish
         logger.info("Starting redfish on IMC")
         imc.run("/work/scripts/start-redfish.sh")
         time.sleep(5)
+
+        imc_time = imc.run("date").out
+        logger.info(f"Time on IMC is {imc_time}")
 
         imc.write("/work/cda_sha", sha)
 
