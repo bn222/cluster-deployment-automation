@@ -644,17 +644,27 @@ def wait_true(name: str, n_tries: int, func: Callable[..., bool], **func_kwargs:
     # Wait until the "func" is successful, or we will reach "n_tries".
     # When "n_tries" is zero it will run until "func" succeeds.
     logger.info(f"Waiting for {name}")
-    t = timer.Timer("1h")
-    while True:
+
+    # Use reasonable timeout for operations - longer for unlimited tries (n_tries=0)
+    timeout = "45m" if n_tries == 0 else "15m"
+    t = timer.Timer(timeout)
+
+    for try_count in itertools.count(0):
         if func(**func_kwargs):
-            logger.info(f"Took {t.elapsed()} for {name}")
+            logger.info(f"Took {try_count} tries for {name}")
             return True
 
-        if t.triggered():
-            logger.info(f"Timeout triggered for {t.elapsed()} for {name}")
+        if n_tries and try_count >= n_tries:
+            logger.info(f"The limit of {n_tries} tries was reached for {name}")
             return False
 
-        time.sleep(5)
+        if t.triggered():
+            logger.warning(f"Timeout after {t.elapsed()} for {name} (tried {try_count} times)")
+            return False
+
+        time.sleep(30)
+
+    return True
 
 
 def wait_futures(msg: str, futures: list[tuple[str, Future[bool]]], cb: Callable[[], None] = lambda: None) -> None:
