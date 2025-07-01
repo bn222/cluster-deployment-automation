@@ -401,7 +401,7 @@ class Host:
         ret = self.run(f"virsh dominfo {name}", logging.DEBUG)
         return not ret.returncode and state_running(ret.out)
 
-    def write(self, fn: str, contents: str) -> None:
+    def write(self, fn: str, contents: str, encoding: str = 'utf-8') -> None:
         dir_path = os.path.dirname(fn)
         if self.is_localhost():
             if dir_path and not os.path.exists(dir_path):
@@ -413,7 +413,7 @@ class Host:
             self.run_or_die(f"mkdir -p {dir_path}")
             with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
                 tmp_filename = tmp_file.name
-                tmp_file.write(contents.encode('utf-8'))
+                tmp_file.write(contents.encode(encoding))
             self.copy_to(tmp_filename, fn)
             os.remove(tmp_filename)
 
