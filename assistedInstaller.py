@@ -127,6 +127,8 @@ class AssistedClientAutomation(AssistedClient):  # type: ignore
                 logger.info(f"Cluster state changed to {new_state}")
             time.sleep(1)
             cur_state = new_state
+            if cur_state == "error":
+                break
             if cur_state == status:
                 break
 
