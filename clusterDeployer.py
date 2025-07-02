@@ -466,11 +466,35 @@ class ClusterDeployer(BaseDeployer):
             return True
 
         logger.error(f"Master {name} reboot failed")
+        self._capture_failure_logs(node, infra_env)
         return False
+
+    def _capture_failure_logs(self, node: ClusterNode, infra_env: str) -> None:
+        """Capture comprehensive logs when a master fails to boot"""
+        logger.error(f"Capturing failure logs for {node.config.name}")
+
+        # Capture assisted installer logs with unique directory (context includes node name)
+        context = f"{node.config.name}_failure"
+        common.capture_assisted_installer_logs(context=context)
+
+        # Also capture AI status logs
+        self._capture_ai_status_logs(node)
+
+    def _capture_ai_status_logs(self, node: ClusterNode) -> None:
+        """Capture cluster and host status from AI API"""
+        logger.error("Capturing AI cluster and host status")
+        try:
+            cluster_info = self._ai.get_ai_cluster_info(self._cc.name)
+            host_info = self._ai.get_ai_host(node.config.name)
+            logger.error(f"Cluster status: {cluster_info}")
+            logger.error(f"Host status: {host_info}")
+        except Exception as e:
+            logger.error(f"Failed to capture AI status: {e}")
 
     def _install_worker_with_retry(self, infra_env: str, node: ClusterNode) -> bool:
         def installation_finished(ai: AssistedClientAutomation, node_name: str) -> bool:
             info = ai.get_ai_host(node_name)
+            logger.debug(f"Worker {name} installation status in _install_worker_with_retry: {info}")
             return info is not None and info.status in ["error", "added-to-existing-cluster"]
 
         name = node.config.name
@@ -480,10 +504,14 @@ class ClusterDeployer(BaseDeployer):
 
                 common.wait_true(f"installation {name}", 0, installation_finished, ai=self._ai, node_name=name)
                 info = self._ai.get_ai_host(name)
+                logger.debug(f"Worker {name} installation status: {info}")
+                # FIXME: node.ensure_reboot() is not implemented yet for physical nodes, just returns True
                 if info is not None and info.status == "added-to-existing-cluster" and node.ensure_reboot():
                     logger.info(f"Worker {name} installation finished after {try_count} retries")
                     break
 
+            # Capture failure logs
+            self._capture_failure_logs(node, infra_env)
             logger.warn(f"Worker {name} installation failed, retrying...")
             node.teardown()
             self._ai.delete(name)
