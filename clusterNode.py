@@ -111,7 +111,7 @@ class VmClusterNode(ClusterNode):
         self.install_wait = True
 
     def setup_vm(self, iso_or_image_path: str) -> host.Result:
-        disk_size_gb = self.config.disk_size
+        disk_size_gb = self.config.get_effective_disk_size()
         if iso_or_image_path.endswith(".iso"):
             options = "-o preallocation="
             if self.config.is_preallocated():

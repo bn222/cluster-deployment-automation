@@ -28,6 +28,7 @@ from libvirt import Libvirt
 from baseDeployer import BaseDeployer
 from state_file import StateFile
 from imageRegistry import InClusterRegistry
+from clusterStorage import create_cluster_storage, ClusterStorage, StorageType
 
 
 def match_to_proper_version_format(version_cluster_config: str) -> str:
@@ -375,6 +376,36 @@ class ClusterDeployer(BaseDeployer):
 
         self.update_dnsmasq()
 
+        logger.info("Deploying storage for applications")
+
+        # Get registry node information - required for storage deployment
+        registry_node = self._cc.get_registry_storage_node()
+        if not registry_node:
+            logger.error_and_exit("No master node is configured with registry_storage=true. This should have been automatically configured during cluster config initialization.")
+
+        logger.info(f"Using node '{registry_node.name}' for registry storage")
+        storage: ClusterStorage = create_cluster_storage(kubeconfig_path=self._cc.kubeconfig, storage_type=StorageType.HOSTPATH, target_node_hostname=registry_node.name, storage_path="/var/lib/registry-storage")
+        storage.deploy_storage()
+
+        # Cast to HostPathStorage to access PV creation method
+        from clusterStorage import HostPathStorage
+
+        hostpath_storage = storage if isinstance(storage, HostPathStorage) else None
+        if not hostpath_storage:
+            logger.error_and_exit("Expected HostPathStorage implementation for registry storage")
+
+        # Create persistent volume for registry storage
+        logger.info("Creating persistent volume for registry storage...")
+        registry_storage_size = self._cc.get_registry_storage_node().in_cluster_registry_storage_size
+        hostpath_storage.create_pv_with_node_affinity(pv_name="registry-pv", storage_size=registry_storage_size, storage_path="/var/lib/registry-storage")
+
+        # Get storage class for applications
+        storage_class_name = storage.get_storage_class_name()
+
+        logger.info("Deploying In-Cluster Registry with persistent storage")
+        icr = InClusterRegistry(kubeconfig=self._cc.kubeconfig, storage_class=storage_class_name, storage=storage, storage_size=registry_storage_size)
+        icr.deploy()
+
     def create_workers(self) -> None:
         if len(self._cc.workers) == 0:
             logger.info("No workers to setup")
@@ -446,10 +477,6 @@ class ClusterDeployer(BaseDeployer):
         for h in hosts_with_workers:
             for worker in h.k8s_worker_nodes:
                 worker.set_password()
-
-        logger.info("Deploying In-Cluster Registry")
-        icr = InClusterRegistry(self._cc.kubeconfig)
-        icr.deploy()
 
     def _wait_master_reboot(self, infra_env: str, node: ClusterNode) -> bool:
         def master_ready(ai: AssistedClientAutomation, node_name: str) -> bool:
