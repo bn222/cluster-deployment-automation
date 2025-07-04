@@ -11,7 +11,7 @@ import common
 from typing import Optional
 from logger import logger
 from clustersConfig import ExtraConfigArgs
-from imageRegistry import LocalRegistry
+from imageRegistry import ImageRegistry
 from reglocal import git_build_local, GitBuildLocalContainerInfo
 from common import git_repo_setup
 
@@ -73,7 +73,7 @@ def _sno_make_deploy(
         logger.info(f"Image {image} provided to load custom sriov-network-operator")
         deploy_env["SRIOV_NETWORK_OPERATOR_IMAGE"] = image
     elif build_local:
-        imgReg = LocalRegistry(rsh)
+        imgReg = ImageRegistry(rsh)
         imgReg.deploy()
         registry = imgReg.get_url()
         project = "openshift-sriov-network-operator"
