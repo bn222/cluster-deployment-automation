@@ -20,6 +20,13 @@ class BMC:
         self.password = password
         logger.info(f"{full_url} {user} {password}")
 
+    @property
+    def base_url(self) -> str:
+        scheme = ""
+        if not self.url.startswith("https://") and not self.url.startswith("http://"):
+            scheme = "https://"
+        return f"{scheme}{self.url}"
+
     @staticmethod
     def from_bmc_config(bmc_config: BmcConfig) -> 'BMC':
         return BMC.from_bmc(bmc_config.url, bmc_config.user, bmc_config.password)
@@ -105,7 +112,7 @@ class BMC:
             for _ in range(10):
                 headers = {"Content-Type": "application/json"}
                 payload = {"ResetType": "GracefulRestart"}
-                full_url = f"{self.url}/redfish/v1/Managers/iDRAC.Embedded.1/Actions/Manager.Reset"
+                full_url = f"{self.base_url}/redfish/v1/Managers/iDRAC.Embedded.1/Actions/Manager.Reset"
                 response = requests.post(full_url, auth=(self.user, self.password), headers=headers, json=payload, verify=False)
                 if 200 <= response.status_code < 300:
                     logger.info("Command to reset redfish sent successfully")
