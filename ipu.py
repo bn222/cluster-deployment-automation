@@ -198,7 +198,12 @@ class IPUBMC(BMC):
             password = "calvincalvincalvin"
         else:
             password = bmc_config.password
-        super().__init__(bmc_config.url, bmc_config.user, password)
+        super().__init__(
+            bmc_config.url,
+            bmc_config.user,
+            password,
+            port=8443,
+        )
         self._host_bmc = host_bmc
 
     def prepared(self, imc: host.Host) -> bool:
@@ -342,7 +347,7 @@ fi
             return sha("".join(f.readlines()))
 
     def _create_imc_rsh(self) -> host.Host:
-        rsh = host.RemoteHost(self.url)
+        rsh = host.RemoteHost(self.bmc_host)
         rsh.ssh_connect("root", password="", discover_auth=False)
         return rsh
 
@@ -422,8 +427,8 @@ fi
         except requests.exceptions.RequestException as e:
             logger.error(f"Request failed: {e}")
 
-    def _redfish_available(self, url: str) -> bool:
-        full_url = f"https://{url}:8443/redfish/v1/Systems/1"
+    def _redfish_available(self) -> bool:
+        full_url = f"{self.base_url}/redfish/v1/Systems/1"
         try:
             response = requests.get(full_url, auth=(self.user, self.password), verify=False)
             response.raise_for_status()
@@ -434,7 +439,7 @@ fi
             return False
 
     def _virtual_media_is_inserted(self, filename: str) -> bool:
-        url = f"https://{self.url}:8443/redfish/v1/Systems/1/VirtualMedia/1"
+        url = f"{self.base_url}/redfish/v1/Systems/1/VirtualMedia/1"
         data = self._requests_get(url)
         inserted = data.get("Inserted")
         if not isinstance(inserted, bool) or not inserted:
@@ -469,18 +474,18 @@ fi
         logger.info(f"Done iso_path {repr(iso_path)} is inserted as VirtualMedia, took {t.elapsed()}")
 
     def _insert_media(self, iso_path: str, *, expected_size: int) -> None:
-        url = f"https://{self.url}:8443/redfish/v1/Systems/1/VirtualMedia/1/Actions/VirtualMedia.InsertMedia"
+        url = f"{self.base_url}/redfish/v1/Systems/1/VirtualMedia/1/Actions/VirtualMedia.InsertMedia"
         data = {"Image": iso_path, "TransferMethod": "Upload"}
         self._requests_post(url, data)
         self._wait_iso_downloaded(iso_path, expected_size=expected_size)
 
     def _bootsource_override_cd(self) -> None:
-        url = f"https://{self.url}:8443/redfish/v1/Systems/1"
+        url = f"{self.base_url}/redfish/v1/Systems/1"
         data = {"Boot": {"BootSourceOverrideEnabled": "Once", "BootSourceOverrideTarget": "Cd"}}
         self._requests_patch(url, data)
 
     def _reboot(self) -> None:
-        url = f"https://{self.url}:8443/redfish/v1/Managers/1/Actions/Manager.Reset"
+        url = f"{self.base_url}/redfish/v1/Managers/1/Actions/Manager.Reset"
         data = {"ResetType": "ForceRestart"}
         self._requests_post(url, data)
 
@@ -497,7 +502,7 @@ fi
         time.sleep(20)
 
     def _redfish_version(self) -> str:
-        url = f"https://{self.url}:8443/redfish/v1/Managers/1"
+        url = f"{self.base_url}/redfish/v1/Managers/1"
         data = self._requests_get(url)
         fwversion = data.get("FirmwareVersion")
         if not isinstance(fwversion, str):
@@ -508,7 +513,7 @@ fi
         return match.group(1)
 
     def _redfish_name(self) -> str:
-        url = f"https://{self.url}:8443/redfish/v1/"
+        url = f"{self.base_url}/redfish/v1/"
         data = self._requests_get(url)
         name = data.get("Name")
         if not isinstance(name, str):
@@ -516,7 +521,7 @@ fi
         return name
 
     def _version_via_ssh(self) -> Optional[str]:
-        rh = host.RemoteHost(self.url)
+        rh = host.RemoteHost(self.bmc_host)
         # TODO: after mev ts upgrade, remove the timeout + try/except
         try:
             rh.ssh_connect("root", password="", discover_auth=False, timeout="5s")
@@ -531,7 +536,7 @@ fi
         return match.group(1).strip()
 
     def version(self) -> str:
-        if self._redfish_available(self.url):
+        if self._redfish_available():
             return self._redfish_version()
         else:
             fwversion = self._version_via_ssh()
@@ -540,12 +545,12 @@ fi
             return fwversion
 
     def is_ipu(self) -> bool:
-        logger.info(f"Checking if DPU is IPU via {self.url}")
-        if self._redfish_available(self.url):
+        logger.info(f"Checking if DPU is IPU via {self.bmc_host}")
+        if self._redfish_available():
             return "Intel IPU" in self._redfish_name()
         else:
             # workaround: remove when redfish is started properly at boot
-            logger.info(f"Redfish is not up on {self.url}, using SSH to check")
+            logger.info(f"Redfish is not up on {self.bmc_host}, using SSH to check")
             return self._version_via_ssh() is not None
 
     def ensure_firmware(self, force: bool, version: str) -> None:
@@ -559,9 +564,9 @@ fi
                 return False
 
         assert self.is_ipu()
-        imc = host.Host(self.url)
+        imc = host.Host(self.bmc_host)
 
-        logger.info(f"Will ensure {self.url} is on firmware version: {version}")
+        logger.info(f"Will ensure {self.bmc_host} is on firmware version: {version}")
         logger.info("Checking if firmware update is required")
 
         if force or (not firmware_is_same()):
@@ -574,7 +579,7 @@ fi
         lh = host.LocalHost()
 
         logger.info("Starting flash of SSD/SPI (this will take some time ~40min)")
-        fw_up_cmd = f"--dpu-type ipu --imc-address {self.url} firmware up --version {version}"
+        fw_up_cmd = f"--dpu-type ipu --imc-address {self.bmc_host} firmware up --version {version}"
         ret = lh.run_in_container(fw_up_cmd, interactive=True)
 
         if not ret.success():

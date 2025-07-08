@@ -14,27 +14,34 @@ class BmcConfig:
 
 
 class BMC:
-    def __init__(self, full_url: str, user: str = "root", password: str = "calvin"):
-        self.url = full_url
+    def __init__(
+        self,
+        bmc_host: str,
+        user: str = "root",
+        password: str = "calvin",
+        *,
+        port: int = 443,
+    ):
+        if not bmc_host:
+            raise ValueError("BMC host not defined")
+        self.bmc_host = bmc_host
         self.user = user
         self.password = password
-        logger.info(f"{full_url} {user} {password}")
+        self.port = port
 
-    @property
-    def base_url(self) -> str:
-        scheme = ""
-        if not self.url.startswith("https://") and not self.url.startswith("http://"):
-            scheme = "https://"
-        return f"{scheme}{self.url}"
+        url = f"https://{self.bmc_host}"
+        if self.port != 443:
+            url = f"{url}:{self.port}"
+        self.base_url = url
+
+        logger.info(f"BMC: {bmc_host} {user} {password}")
 
     @staticmethod
     def from_bmc_config(bmc_config: BmcConfig) -> 'BMC':
-        return BMC.from_bmc(bmc_config.url, bmc_config.user, bmc_config.password)
+        return BMC(bmc_config.url, bmc_config.user, bmc_config.password)
 
     @staticmethod
     def from_bmc(ip_or_hostname: str, user: str = "root", password: str = "calvin") -> 'BMC':
-        if ip_or_hostname == "":
-            raise ValueError("BMC not defined")
         return BMC(ip_or_hostname, user, password)
 
     """
@@ -72,7 +79,7 @@ class BMC:
     def boot_iso_redfish(self, iso_path: str, retries: int = 10, retry_delay: int = 60) -> None:
         def boot_iso_with_retry(iso_path: str, attempt: int) -> None:
             logger.info(iso_path)
-            logger.info(f"Trying to boot {self.url} using {iso_path}, attempt {attempt}")
+            logger.info(f"Trying to boot {self.bmc_host} using {iso_path}, attempt {attempt}")
             red = self._redfish()
             try:
                 red.eject_iso()
@@ -90,7 +97,7 @@ class BMC:
             logger.info("setting to boot from iso")
             red.restart()
             time.sleep(10)
-            logger.info(f"Finished sending boot to {self.url}")
+            logger.info(f"Finished sending boot to {self.bmc_host}")
 
         assert ":" in iso_path
         for attempt in range(retries):
@@ -124,7 +131,7 @@ class BMC:
             t = timer.Timer("10m")
 
             while not t.triggered():
-                response = requests.get(self.url, auth=(self.user, self.password), verify=False, timeout=5)
+                response = requests.get(self.base_url, auth=(self.user, self.password), verify=False, timeout=5)
                 if response.status_code == 200:
                     logger.info("Redfish reset completed")
                     return
@@ -134,7 +141,7 @@ class BMC:
             logger.error_and_exit(f"Redfish didn't come up after {t} time")
 
     def _redfish(self) -> Redfish:
-        return Redfish(self.url, self.user, self.password, debug=False)
+        return Redfish(self.bmc_host, self.user, self.password, debug=False)
 
     def stop(self) -> None:
         self._redfish().stop()
