@@ -447,9 +447,27 @@ class ClusterDeployer(BaseDeployer):
             for worker in h.k8s_worker_nodes:
                 worker.set_password()
 
+        self._wait_cluster_ready()
         logger.info("Deploying In-Cluster Registry")
         icr = InClusterRegistry(self._cc.kubeconfig)
         icr.deploy()
+
+    def _wait_cluster_ready(self) -> None:
+        if self._client is None:
+            self._client = self.client()
+        logger.info("Waiting for all cluster operators to be ready")
+        timeout = "30s"
+        for tries in itertools.count():
+            if all(
+                rc.success()
+                for rc in [
+                    self._client.oc(f"wait co --all --for='condition=AVAILABLE=True' --timeout={timeout}"),
+                    self._client.oc(f"wait co --all --for='condition=PROGRESSING=False' --timeout={timeout}"),
+                    self._client.oc(f"wait co --all --for='condition=DEGRADED=False' --timeout={timeout}"),
+                ]
+            ):
+                logger.info(f"Cluster ready after {tries} tries")
+                break
 
     def _wait_master_reboot(self, infra_env: str, node: ClusterNode) -> bool:
         def master_ready(ai: AssistedClientAutomation, node_name: str) -> bool:
