@@ -27,7 +27,6 @@ from arguments import PRE_STEP, WORKERS_STEP, MASTERS_STEP, POST_STEP
 from libvirt import Libvirt
 from baseDeployer import BaseDeployer
 from state_file import StateFile
-from imageRegistry import InClusterRegistry
 
 
 def match_to_proper_version_format(version_cluster_config: str) -> str:
@@ -231,7 +230,6 @@ class ClusterDeployer(BaseDeployer):
                 duration[MASTERS_STEP].stop()
             else:
                 logger.error_and_exit("Masters must be of length one for deploying microshift")
-
         if POST_STEP in self.steps and not self.state.deployed("post-step"):
             duration[POST_STEP].start()
             self._postconfig()
@@ -446,10 +444,6 @@ class ClusterDeployer(BaseDeployer):
         for h in hosts_with_workers:
             for worker in h.k8s_worker_nodes:
                 worker.set_password()
-
-        logger.info("Deploying In-Cluster Registry")
-        icr = InClusterRegistry(self._cc.kubeconfig)
-        icr.deploy()
 
     def _wait_master_reboot(self, infra_env: str, node: ClusterNode) -> bool:
         def master_ready(ai: AssistedClientAutomation, node_name: str) -> bool:
