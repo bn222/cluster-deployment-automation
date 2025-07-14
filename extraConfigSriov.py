@@ -74,8 +74,7 @@ def _sno_make_deploy(
         deploy_env["SRIOV_NETWORK_OPERATOR_IMAGE"] = image
     elif build_local:
         imgReg = ImageRegistry(rsh)
-        imgReg.deploy()
-        registry = imgReg.get_url()
+        registry = imgReg.start_image_registry(client)
         project = "openshift-sriov-network-operator"
         container_infos = [
             GitBuildLocalContainerInfo(
