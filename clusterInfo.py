@@ -49,19 +49,19 @@ def _default_cred_paths() -> list[str]:
     return paths
 
 
-def _read_gspread_sheet(cred_path: str) -> gspread.spreadsheet.Spreadsheet:
+def _read_gspread_worksheet1(cred_path: str) -> gspread.worksheet.Worksheet:
     try:
         credentials = ServiceAccountCredentials.from_json_keyfile_name(cred_path, SCOPES)
         file = gspread.auth.authorize(credentials)
         sheet = file.open(SHEET)
+        return sheet.sheet1
     except Exception as e:
         raise ValueError(f"Failure accessing google sheet: {e}. See https://docs.gspread.org/en/latest/oauth2.html#for-bots-using-service-account and share {repr(SHEET)} sheet ( {URL} )")
-    return sheet
 
 
 @tenacity.retry(wait=tenacity.wait_fixed(10), stop=tenacity.stop_after_attempt(5))
-def _read_gspread_sheet_with_retry(cred_path: str) -> gspread.spreadsheet.Spreadsheet:
-    return _read_gspread_sheet(cred_path)
+def _read_gspread_worksheet1_with_retry(cred_path: str) -> gspread.worksheet.Worksheet:
+    return _read_gspread_worksheet1(cred_path)
 
 
 def read_sheet(
@@ -82,8 +82,7 @@ def read_sheet(
             break
     if cred_path is None:
         raise ValueError(f"Credentials not found in {cred_paths}")
-    sheet = _read_gspread_sheet_with_retry(cred_path)
-    sheet1 = sheet.sheet1
+    sheet1 = _read_gspread_worksheet1_with_retry(cred_path)
     return [{k: str(v) for k, v in record.items()} for record in sheet1.get_all_records()]
 
 
