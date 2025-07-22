@@ -4,6 +4,7 @@ from ailib import Redfish
 from dataclasses import dataclass
 import requests
 import timer
+import tenacity
 
 
 @dataclass(frozen=True)
@@ -140,8 +141,22 @@ class BMC:
                     time.sleep(1)
             logger.error_and_exit(f"Redfish didn't come up after {t} time")
 
+    @tenacity.retry(
+        stop=tenacity.stop_after_delay(5 * 60),
+        wait=tenacity.wait_fixed(1),
+        retry=tenacity.retry_if_exception_type(Exception),
+        reraise=True,
+    )
     def _redfish(self) -> Redfish:
-        return Redfish(self.bmc_host, self.user, self.password, debug=False)
+        try:
+            return Redfish(self.bmc_host, self.user, self.password, debug=False)
+        except Exception as e:
+            logger.error(f"Failure to create Redfish instance: {e}")
+            raise
+        except SystemExit as e:
+            # The library may try to sys.exit(). We don't want that.
+            logger.error(f"Fatal failure to create Redfish instance: {e}")
+            raise RuntimeError(f"failure to create redfish instance: {e}")
 
     def stop(self) -> None:
         self._redfish().stop()
