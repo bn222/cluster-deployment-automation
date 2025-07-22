@@ -517,23 +517,24 @@ class ClustersConfig:
             assert self._cluster_info is not None
             return self._cluster_info.dpu_mac_addresses[a]
 
-        format_string = contents
+        env = jinja2.Environment()
 
-        template = jinja2.Template(format_string)
-        template.globals['worker_number'] = worker_number
-        template.globals['worker_name'] = worker_name
-        template.globals['primary_network_port'] = primary_network_port
-        template.globals['api_network'] = primary_network_port
-        template.globals['secondary_network_port'] = secondary_network_port
-        template.globals['iso_server'] = iso_server
-        template.globals['bmc'] = bmc
-        template.globals['activation_key'] = activation_key
-        template.globals['organization_id'] = organization_id
-        template.globals['bmc_hostname'] = bmc_hostname
-        template.globals['DPU_mac_address'] = dpu_mac_address
+        env.globals['worker_number'] = worker_number
+        env.globals['worker_name'] = worker_name
+        env.globals['primary_network_port'] = primary_network_port
+        env.globals['api_network'] = primary_network_port
+        env.globals['secondary_network_port'] = secondary_network_port
+        env.globals['iso_server'] = iso_server
+        env.globals['bmc'] = bmc
+        env.globals['activation_key'] = activation_key
+        env.globals['organization_id'] = organization_id
+        env.globals['bmc_hostname'] = bmc_hostname
+        env.globals['DPU_mac_address'] = dpu_mac_address
 
         kwargs = {}
         kwargs["cluster_name"] = cluster_name
+
+        template = env.from_string(contents)
 
         t: str = template.render(**kwargs)
         return t
