@@ -13,6 +13,7 @@ from dpuVendor import init_vendor_plugin
 import timer
 import re
 from dpuVendor import detect_dpu
+from firewall import enable_firewall, disable_firewall
 
 MICROSHIFT_KUBECONFIG = "/root/kubeconfig.microshift"
 
@@ -137,9 +138,9 @@ def ExtraConfigDpu(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, 
     imgReg = imageRegistry.ensure_local_registry_running(lh, delete_all=False)
     imgReg.trust(acc)
     acc.run("systemctl restart crio")
-    # Disable firewall to ensure host-side can reach dpu
-    acc.run("systemctl stop firewalld")
-    acc.run("systemctl disable firewalld")
+    # Enable and configure firewall at IPU 
+    enable_firewall(acc)
+
 
     vendor_plugin = init_vendor_plugin(acc, detect_dpu(dpu_node))
     # TODO: For Intel, this configures hugepages. Figure out a better way
