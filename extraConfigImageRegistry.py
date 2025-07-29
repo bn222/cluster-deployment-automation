@@ -43,6 +43,8 @@ def ExtraConfigImageRegistry(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: 
             # Deploy in-cluster registry with configurable storage size
             logger.info("Deploying in-cluster registry...")
             in_cluster_reg.deploy()
+            lh = host.LocalHost()
+            ensure_test_images_in_registry(in_cluster_reg.get_url(), lh)
 
         case RegistryType.LOCAL.value:
             rh = host.LocalHost()
@@ -80,10 +82,16 @@ def ExtraConfigImageRegistry(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: 
             logger.info("Deploying MicroShift registry...")
             microshift_reg.deploy()
 
+            lh = host.LocalHost()
             # Trust the registry certificates on the remote host
-            microshift_reg.trust(host.LocalHost())
+            microshift_reg.trust(lh)
+            ensure_test_images_in_registry(microshift_reg.get_url(), lh)
         case _:
             logger.error_and_exit(f"Invalid registry type: {cfg.registry_type}")
+
+
+def ensure_test_images_in_registry(registry_url: str, host: host.Host) -> None:
+    host.run_or_die(f"skopeo copy docker://ghcr.io/ovn-kubernetes/kubernetes-traffic-flow-tests:latest docker://{registry_url}/in-cluster-registry/kubernetes-traffic-flow-tests:latest")
 
 
 def main() -> None:
