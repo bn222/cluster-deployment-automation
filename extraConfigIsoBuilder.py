@@ -38,6 +38,9 @@ def ExtraConfigIsoBuilder(
     activation_key: str = cast(str, cfg.activation_key)
     image_mode_url: str = cfg.image_mode_url
     iso_builder_url: str = cfg.iso_builder_url
+    bootc_build_local: bool = cfg.bootc_build_local
+    bootc_dir: str = cfg.bootc_dir
+    iso_builder_auth_file: Optional[str] = cfg.iso_builder_auth_file
 
     # Optional bootc iso build params
     input_iso: Optional[str] = cfg.input_iso
@@ -52,6 +55,10 @@ def ExtraConfigIsoBuilder(
     if dpu_flavor == "ipu":
         extra_args = " ip=192.168.0.2:::255.255.255.0::enp0s1f0:off netroot=iscsi:192.168.0.1::::iqn.e2000:acc acpi=force"
         kernel_args = (kernel_args or "") + extra_args
+        remove_args = "rd.live.check"
+        grub_replacements = [
+            "timeout=60|timeout=5",
+        ]
 
     # Build the ISO
     BootcIsoBuilder(
@@ -67,4 +74,8 @@ def ExtraConfigIsoBuilder(
         kernel_args=kernel_args,
         remove_args=remove_args,
         dpu_flavor=dpu_flavor,
+        auth_file_path=iso_builder_auth_file,  # Use auth file from iso_builder config
+        bootc_build_local=bootc_build_local,
+        grub_replacements=grub_replacements,
+        bootc_dir=bootc_dir,
     ).build()

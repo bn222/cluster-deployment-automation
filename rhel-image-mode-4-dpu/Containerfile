@@ -1,12 +1,13 @@
-ARG DPU_FLAVOR="${DPU_FLAVOR:-agnostic}"
-ARG RHC_ACT_KEY="${RHC_ACT_KEY}"
-ARG RHC_ORG_ID="${RHC_ORG_ID}"
 ARG MAJOR_VERSION="${MAJOR_VERSION:-9}"
 ARG MINOR_VERSION="${MINOR_VERSION:-6}"
+
 
 FROM registry.redhat.io/rhel${MAJOR_VERSION}/rhel-bootc:${MAJOR_VERSION}.${MINOR_VERSION}
 # 1. Add all extra repos in one g# Will mount redhat.repo from a secret instead
 
+# Re-declare ARG after FROM to make build-arg available, then set ENV
+ARG DPU_FLAVOR=agnostic
+ENV DPU_FLAVOR=${DPU_FLAVOR}
 RUN distro=$(sed -n 's/^distroverpkg=//p' /etc/yum.conf) && \
     source /etc/os-release && \
     releasever="$VERSION_ID" && \
@@ -52,29 +53,46 @@ RUN --mount=type=secret,id=redhat-repo \
         -e "s|sslclientkey *=.*|sslclientkey=/run/secrets/entitlement-key|" \
         /run/secrets/redhat-repo > /etc/yum.repos.d/redhat.repo 
 
-# 2. Consolidated all package installs into one layer,
-#    with conditional bits for IPU flavor.
+# After setting up all repositories, add this layer to cache repo metadata
+RUN --mount=type=secret,id=entitlement-cert \
+    --mount=type=secret,id=entitlement-key \
+    --mount=type=secret,id=rhsm-ca \
+    dnf makecache --refresh && \
+    dnf repolist
+
+# 2. Consolidated all package installs into one layer
 RUN --mount=type=secret,id=entitlement-cert \
     --mount=type=secret,id=entitlement-key \
     --mount=type=secret,id=rhsm-ca \
     dnf install -y --allowerasing \
       rhc rhc-worker-playbook \
       git \
+      go-toolset \
       dhcp-client \
       microshift microshift-multus \
-      make firewalld jq gcc glibc-devel \
-      && if [ "$DPU_FLAVOR" = "ipu" ]; then \
-           dnf install -y iscsi-initiator-utils && \
-           mkdir -p /usr/lib/bootc/kargs.d && \
-           printf 'kargs = ["ip=192.168.0.2:::255.255.255.0::enp0s1f0:off","netroot=iscsi:192.168.0.1::::iqn.e2000:acc","acpi=force"]\n' \
-             > /usr/lib/bootc/kargs.d/00-network.toml && \
-           printf 'dracutmodules+=" iscsi network "' \
-             >> /usr/lib/dracut/dracut.conf.d/50-custom-added-modules.conf && \
-           kver=$(cd /usr/lib/modules && echo *) && \
-           dracut -vf "/usr/lib/modules/$kver/initramfs.img" "$kver"; \
-        fi \
-      && dnf clean all && \
-      rm -rf /etc/yum.repos.d/redhat.repo
+      make firewalld jq gcc glibc-devel 
+
+COPY hugepages-setup.service /tmp/hugepages-setup.service
+
+RUN --mount=type=secret,id=entitlement-cert \
+    --mount=type=secret,id=entitlement-key \
+    --mount=type=secret,id=rhsm-ca \
+    if [ "$DPU_FLAVOR" = "ipu" ]; then \
+             echo "Installing ipu" && \
+             dnf install -y iscsi-initiator-utils && \
+             mkdir -p /usr/lib/bootc/kargs.d && \
+             printf 'kargs = ["ip=192.168.0.2:::255.255.255.0::enp0s1f0:off","netroot=iscsi:192.168.0.1::::iqn.e2000:acc","acpi=force"]\n' \
+               > /usr/lib/bootc/kargs.d/00-network.toml && \
+             printf 'dracutmodules+=" iscsi network "' \
+               >> /usr/lib/dracut/dracut.conf.d/50-custom-added-modules.conf && \
+             mkdir -p /etc/iscsi && \
+             printf 'node.startup = automatic\nnode.conn[0].timeo.noop_out_interval = 5\nnode.conn[0].timeo.noop_out_timeout = 10\nnode.session.timeo.replacement_timeout = 120\nnode.session.err_timeo.abort_timeout = 15\nnode.session.err_timeo.lu_reset_timeout = 30\nnode.session.err_timeo.tgt_reset_timeout = 30\nnode.session.initial_login_retry_max = 8\n' \
+               > /etc/iscsi/iscsid.conf && \
+             sed -i 's/thin_pool_autoextend_threshold = 100/thin_pool_autoextend_threshold = 80/' /etc/lvm/lvm.conf && \
+             kver=$(cd /usr/lib/modules && echo *) && \
+             dracut -vf "/usr/lib/modules/$kver/initramfs.img" "$kver"; \
+          fi
+
 
 
 # 3. Enable services in one go
@@ -101,6 +119,9 @@ ExecStop=/bin/rm -f /etc/rhc/.rhc_connect_credentials
 [Install]
 WantedBy=multi-user.target
 EOF
+
+# Create symlink for VSP P4 directories to work on OSTree
+RUN mkdir -p /var/p4 && ln -sf /var/p4 /opt/p4
 # 4. Tweak MicroShift service and OVS drop-in
 RUN mkdir -p /etc/systemd/system/microshift.service.d && \
     cat > /etc/systemd/system/microshift.service.d/override.conf <<EOF
@@ -127,14 +148,15 @@ ExecStartPre=/bin/sh -c '/bin/getent group hugetlbfs >/dev/null || groupadd -r h
 ExecStartPre=/sbin/usermod -a -G hugetlbfs openvswitch
 ExecStartPre=/bin/chown -Rhv openvswitch. /etc/openvswitch
 EOF
-RUN systemctl enable rhc-connect microshift microshift-make-rshared.service
-
-
-# 5. Install Go and user setup in one layer
-RUN curl -LO https://go.dev/dl/go1.22.6.linux-arm64.tar.gz && \
-    tar -C /usr/local -xzf go1.22.6.linux-arm64.tar.gz && \
-    rm go1.22.6.linux-arm64.tar.gz && \
-    echo "export PATH=\$PATH:/usr/local/go/bin" >> /etc/profile 
+RUN systemctl enable rhc-connect microshift microshift-make-rshared.service && \
+    if [ "$DPU_FLAVOR" = "ipu" ]; then \
+     cp /tmp/hugepages-setup.service /etc/systemd/system/hugepages-setup.service && \
+        systemctl enable hugepages-setup.service && \
+        systemctl enable iscsid iscsi && \
+        mkdir -p /etc/systemd/system/iscsid.service.d && \
+        printf '[Unit]\nDefaultDependencies=no\nConflicts=shutdown.target\nBefore=shutdown.target umount.target\n\n[Service]\nKillMode=none\nTimeoutStopSec=30\n' \
+          > /etc/systemd/system/iscsid.service.d/shutdown-fix.conf; \
+    fi
 
 RUN useradd -m -p '$6$DYgjv/BVpdq/0EVt$2fd9RPHleTgsFWzTLL/I.znl9vbKgt00eXQ0LNbkc7wBF67fSYBsZd6LutDZHI0YZNg3SKB04SdpLOkuWRzni.' -G wheel redhat && \
     echo -e 'redhat\tALL=(ALL)\tNOPASSWD: ALL' >> /etc/sudoers && \
@@ -142,3 +164,14 @@ RUN useradd -m -p '$6$DYgjv/BVpdq/0EVt$2fd9RPHleTgsFWzTLL/I.znl9vbKgt00eXQ0LNbkc
     echo 'u redhat 1000 "Red Hat User" /home/redhat /bin/bash' > /usr/lib/sysusers.d/redhat.conf && \
     echo 'g redhat 1000' >> /usr/lib/sysusers.d/redhat.conf && \
     echo 'g hugetlbfs 999' > /usr/lib/sysusers.d/hugetlbfs.conf
+
+# Configure SSH to permit root login
+RUN mkdir -p /etc/ssh/sshd_config.d && \
+    echo 'PermitRootLogin yes' > /etc/ssh/sshd_config.d/99-permit-root-login.conf
+
+RUN systemctl disable firewalld && systemctl enable sshd && systemctl disable NetworkManager-wait-online.service
+
+RUN --mount=type=secret,id=entitlement-cert \
+    --mount=type=secret,id=entitlement-key \
+    --mount=type=secret,id=rhsm-ca \
+     dnf clean all

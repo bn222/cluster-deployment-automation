@@ -39,14 +39,25 @@ class IpuPlugin(VendorPlugin):
     def download_p4_tar(self, rh: host.Host) -> None:
         logger.info("Downloading p4.tar.gz")
         rh.run_or_die(f"curl -L {self.P4_URL} -o /tmp/p4.tar.gz")
-        rh.run("rm -rf /opt/p4")
-        rh.run_or_die("tar -U -C /opt/ -xzf /tmp/p4.tar.gz")
-        rh.run("mv /opt/intel-ipu-acc-components-2.0.0.11126 /opt/p4")
+        rh.run("rm -rf /opt/p4/*")
+        rh.run_or_die("tar -U -C /tmp/ -xzf /tmp/p4.tar.gz")
+        rh.run("mv /tmp/intel-ipu-acc-components-2.0.0.11126/* /opt/p4/")
         rh.run("mv /opt/p4/p4-cp /opt/p4/p4-cp-nws")
         rh.run("mv /opt/p4/p4-sde /opt/p4/p4sde")
+        rh.run("rm -rf /tmp/intel-ipu-acc-components-2.0.0.11126")
 
     def configure_p4_hugepages(self, rh: host.Host) -> None:
         logger.info("Configuring hugepages for p4 pod")
+
+        # Check if the service already exists - skip if it does
+        try:
+            result = rh.run("systemctl list-unit-files hugepages-setup.service")
+            if "hugepages-setup.service" in result.out:
+                logger.info("hugepages-setup.service already exists, skipping configuration")
+                return
+        except Exception as e:
+            logger.debug(f"Could not check for existing service: {e}, proceeding with setup")
+
         # The p4 container typically sets this up. If we are running the container as a daemonset in microshift, we need to
         # ensure this resource is available prior to the pod starting to ensure dpdk is successful
         hugepages_service = """[Unit]

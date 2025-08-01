@@ -93,9 +93,9 @@ class IPUClusterNode(ClusterNode):
         acc.ssh_connect("root", "redhat")
         logger.info(acc.run("uname -a"))
         logger.info("Connected to ACC")
-        if acc.exists("/cda-install"):
-            logger.error_and_exit("Found /cda-install file from a previous installation (install failed)")
-        acc.write("/cda-install", f"{time.time()}")
+        if acc.exists("/var/cda-install"):
+            logger.error_and_exit("Found /var/cda-install file from a previous installation (install failed)")
+        acc.write("/var/cda-install", f"{time.time()}")
 
     def start(self, iso_or_image_path: str) -> bool:
         assert self.config.bmc is not None
@@ -183,7 +183,6 @@ class IPUClusterNode(ClusterNode):
         # after an IMC reboot (which occurs during the RHEL installation)
         assert self.config.dpu_host is not None
         logger.info(f"Reloading idpf on host side {self.config.dpu_host}")
-
         ipu_host = host.RemoteHost(self.config.dpu_host)
         ipu_host.ssh_connect("core")
         ipu_host.run("sudo rmmod idpf")

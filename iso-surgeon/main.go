@@ -12,20 +12,23 @@ import (
 )
 
 type IsoBuilder struct {
-	inputISO       string
-	outputISO      string
-	kickstartFile  string
-	bootcImage     string
-	kernelArgs     string
-	removeGrubArgs string
-	tempDir        string
-	rhelVersion    string
-	rootDir        string
+	inputISO         string
+	outputISO        string
+	kickstartFile    string
+	bootcImage       string
+	kernelArgs       string
+	removeGrubArgs   string
+	grubReplacements []string
+	rhelVersion      string
+	rootDir          string
 }
 
 func NewIsoBuilder() *IsoBuilder {
 	return &IsoBuilder{
-		kernelArgs:  "",
+		kernelArgs: "",
+		grubReplacements: []string{
+			"timeout=60|timeout=5",
+		},
 		rhelVersion: "9.6",
 		rootDir:     "/workdir",
 	}
@@ -49,7 +52,8 @@ func main() {
 	rootCmd.Flags().StringVarP(&ib.bootcImage, "bootc_image", "u", "", "Bootc image URL or directory")
 	rootCmd.Flags().StringVarP(&ib.kernelArgs, "kernel_args", "a", ib.kernelArgs, "Kernel arguments")
 	rootCmd.Flags().StringVarP(&ib.removeGrubArgs, "remove_args", "r", "", "Grub arguments to remove")
-	rootCmd.Flags().StringVarP(&ib.rhelVersion, "rhel_version", "v", ib.rhelVersion, "RHEL ISO Version")
+	rootCmd.Flags().StringSliceVarP(&ib.grubReplacements, "grub_replace", "R", ib.grubReplacements, "GRUB replacements in format 'old_text|new_text' (splits on pipe)")
+	rootCmd.Flags().StringVarP(&ib.rhelVersion, "rhel_version", "v", ib.rhelVersion, "RHEL version")
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
@@ -120,7 +124,23 @@ func (ib *IsoBuilder) run() error {
 	if ib.removeGrubArgs != "" {
 		args = append(args, "-r", ib.removeGrubArgs)
 	}
+	// Add GRUB replacements
+	for _, replacement := range ib.grubReplacements {
+		if replacement != "" {
+			log.Printf("DEBUG: Processing GRUB replacement: '%s'", replacement)
+			parts := strings.Split(replacement, "|")
+			log.Printf("DEBUG: Split into %d parts: %v", len(parts), parts)
+			if len(parts) == 2 {
+				log.Printf("DEBUG: Adding -R '%s' '%s'", parts[0], parts[1])
+				args = append(args, "-R", parts[0], parts[1])
+			} else {
+				log.Printf("Skipping invalid GRUB replacement: %s", replacement)
+			}
+		}
+	}
 	args = append(args, ib.inputISO, ib.outputISO)
+	log.Printf("DEBUG: Final mkksiso command args: %v", args)
+	log.Printf("DEBUG: Full command will be: mkksiso %s", strings.Join(args, " "))
 	runCmd("mkksiso", args...)
 	fmt.Println("Done.")
 	return nil

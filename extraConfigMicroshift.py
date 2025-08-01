@@ -88,46 +88,96 @@ def ExtraConfigMicroshift(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dic
 
     # Configure firewalld for microshift
     logger.info("Configuring firewall for microshift")
-    acc.run("systemctl disable firewalld")
-    acc.run("systemctl stop firewalld")
+    fw_active = acc.run("systemctl is-active firewalld")
+    fw_enabled = acc.run("systemctl is-enabled firewalld")
+
+    if fw_active.success() and "active" in fw_active.out:
+        logger.info("Stopping firewalld service")
+        acc.run("systemctl stop firewalld")
+
+    if fw_enabled.success() and "enabled" in fw_enabled.out:
+        logger.info("Disabling firewalld service")
+        acc.run("systemctl disable firewalld")
 
     # Adjust the timeout for microshift service to ensure it starts successfully
-    acc.run_or_die("mkdir -p /etc/systemd/system/microshift.service.d/")
-    acc.write("/etc/systemd/system/microshift.service.d/override.conf", "[Service]\nTimeoutStartSec=15m")
+    acc.run("mkdir -p /etc/systemd/system/microshift.service.d/")
+    override_content = "[Service]\nTimeoutStartSec=15m"
+    existing_override = acc.run("cat /etc/systemd/system/microshift.service.d/override.conf 2>/dev/null")
+    service_override_changed = False
+    if not existing_override.success() or override_content not in existing_override.out:
+        logger.info("Writing microshift service timeout override")
+        acc.write("/etc/systemd/system/microshift.service.d/override.conf", override_content)
+        acc.run("systemctl daemon-reload")
+        service_override_changed = True
 
-    # Check on the status of the cluster
-    acc.write("/etc/yum.repos.d/microshift-canidate.repo", early_access_microshift())
+    # Check if microshift is already installed
+    ms_installed = acc.run("rpm -q microshift")
+    multus_installed = acc.run("rpm -q microshift-multus")
+    microshift_already_installed = ms_installed.success() and multus_installed.success()
+
+    # Only add early access repo if microshift is not already installed
+    if not microshift_already_installed:
+        repo_exists = acc.run("test -f /etc/yum.repos.d/microshift-canidate.repo")
+        if not repo_exists.success():
+            logger.info("Writing microshift candidate repository")
+            acc.write("/etc/yum.repos.d/microshift-canidate.repo", early_access_microshift())
+    else:
+        logger.info("Microshift already installed, skipping early access repository setup")
+
     time.sleep(1)
     logger.info("Checking if time is set properly to avoid OCSR errors")
     logger.info(acc.run("systemctl status chronyd --no-pager -l"))
     lh_date = host.LocalHost().run("date").out.strip()
-    acc_date = host.LocalHost().run("date").out.strip()
+    acc_date = acc.run("date").out.strip()
     logger.info(f"LocalHost date: {lh_date}")
     logger.info(f"ACC date: {acc_date}")
     logger.info("Manually synchronizing time")
     host.sync_time(lh, acc)
     lh_date = host.LocalHost().run("date").out.strip()
-    acc_date = host.LocalHost().run("date").out.strip()
+    acc_date = acc.run("date").out.strip()
     logger.info(f"LocalHost date: {lh_date}")
     logger.info(f"ACC date: {acc_date}")
 
-    logger.info("Installing microshift")
-    acc.run_or_die("dnf install -y microshift microshift-multus", retry=60)
+    # Install microshift packages (idempotent)
+    config_changed = service_override_changed
+
+    if not microshift_already_installed:
+        logger.info("Installing microshift")
+        acc.run_or_die("dnf install -y microshift microshift-multus", retry=60)
+        config_changed = True
+    else:
+        logger.info("Microshift packages already installed")
+
+    # Configure crio runtime (idempotent)
     ret = acc.run(r"grep '\[crio.runtime.runtimes.crun\]' /etc/crio/crio.conf")
     if not ret.success():
+        logger.info("Adding crun configuration to crio.conf")
         crun_conf_lines = ['[crio.runtime.runtimes.crun]', 'runtime_path = "/usr/bin/crun"', 'runtime_type = "oci"', 'runtime_root = "/run/crun"']
         for line in crun_conf_lines:
             acc.run(f'echo \'{line}\' >> /etc/crio/crio.conf')
-    acc.run("systemctl restart crio.service")
-    logger.info("Starting microshift")
-    acc.run("systemctl restart microshift")
-    acc.run("systemctl enable microshift")
+        acc.run("systemctl restart crio.service")
+        config_changed = True
+    else:
+        logger.info("crun configuration already present in crio.conf")
+
+    # Start and enable microshift (idempotent)
+    logger.info("Managing microshift service")
+    ms_enabled = acc.run("systemctl is-enabled microshift")
+    if not ms_enabled.success() or "enabled" not in ms_enabled.out:
+        logger.info("Enabling microshift service")
+        acc.run("systemctl enable microshift")
+        config_changed = True
+
+    ms_active = acc.run("systemctl is-active microshift")
+    if not ms_active.success() or "active" not in ms_active.out:
+        logger.info("Starting microshift service")
+        acc.run("systemctl restart microshift")
+    elif config_changed:
+        logger.info("Configuration changed, restarting microshift service")
+        acc.run("systemctl restart microshift")
 
     contents = read_prep_microshift_kubeconfig(acc)
     kubeconfig = write_microshift_kubeconfig(contents, host.LocalHost())
-
-    acc.run("systemctl stop firewalld")
-    acc.run("systemctl disable firewalld")
 
     def cb() -> None:
         acc.run("ip r del default via 192.168.0.1")
