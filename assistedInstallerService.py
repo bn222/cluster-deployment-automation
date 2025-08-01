@@ -127,6 +127,8 @@ class AssistedInstallerService:
         y["data"]["CONTROLLER_IMAGE"] = AssistedInstallerService.CONTROLLER_IMAGE
         y["data"]["AGENT_DOCKER_IMAGE"] = AssistedInstallerService.AGENT_DOCKER_IMAGE
         y["data"]["OS_IMAGES"] = self._strip_unused_versions(y["data"]["OS_IMAGES"])
+        # The following is a w/a until https://github.com/openshift/assisted-service/pull/7911/commits/db9ebbe39ec04840cdee1bc4f7104440dff7fc03 goes in
+        y["data"]["AIUI_CHAT_API_URL"] = f"http://{self._ip}:12121"
 
         # y["data"]["OS_IMAGES"] = replace_broken_images(y["data"]["OS_IMAGES"])
 
