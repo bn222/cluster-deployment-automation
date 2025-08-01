@@ -47,7 +47,7 @@ def main_deploy_openshift(cc: ClustersConfig, args: argparse.Namespace, state_fi
     The usage details are here:
         https://aicli.readthedocs.io/en/latest/
     """
-    ai = AssistedClientAutomation(f"{args.url}:8090", ais)
+    ai = AssistedClientAutomation(f"{args.url}:8090")
     cd = ClusterDeployer(cc, ai, args.steps, args.secrets_path, state_file, args.resume)
 
     if args.additional_post_config:
@@ -88,7 +88,7 @@ def main_snapshot(args: argparse.Namespace, cc: ClustersConfig, state_file: Stat
     args = parse_args()
 
     ais = AssistedInstallerService(cc.version, args.url)
-    ai = AssistedClientAutomation(f"{args.url}:8090", ais)
+    ai = AssistedClientAutomation(f"{args.url}:8090")
 
     name = cc.name if args.name is None else args.name
     cs = ClusterSnapshotter(cc, ais, ai, name)
