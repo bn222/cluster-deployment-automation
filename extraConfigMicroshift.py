@@ -112,7 +112,7 @@ def ExtraConfigMicroshift(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dic
     logger.info(f"ACC date: {acc_date}")
 
     logger.info("Installing microshift")
-    acc.run_or_die("dnf install -y microshift microshift-multus", retry=3)
+    acc.run_or_die("dnf install -y microshift microshift-multus", retry=60)
     ret = acc.run(r"grep '\[crio.runtime.runtimes.crun\]' /etc/crio/crio.conf")
     if not ret.success():
         crun_conf_lines = ['[crio.runtime.runtimes.crun]', 'runtime_path = "/usr/bin/crun"', 'runtime_type = "oci"', 'runtime_root = "/run/crun"']
