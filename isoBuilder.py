@@ -19,7 +19,7 @@ class BootcIsoBuilder:
         bootc_image_url: str,
         image_builder_url: str,
         dpu_flavor: str = "agnostic",
-        rhel_version: str = "9.6",
+        rhel_version: str = "9",
         input_iso: Optional[str] = None,
         kickstart: Optional[str] = None,
         kernel_args: Optional[str] = "",

@@ -19,7 +19,8 @@ type IsoBuilder struct {
 	kernelArgs       string
 	removeGrubArgs   string
 	grubReplacements []string
-	rhelVersion      string
+	streamVersion    string
+	architecture     string
 	rootDir          string
 }
 
@@ -29,8 +30,9 @@ func NewIsoBuilder() *IsoBuilder {
 		grubReplacements: []string{
 			"timeout=60|timeout=5",
 		},
-		rhelVersion: "9.6",
-		rootDir:     "/workdir",
+		streamVersion: "9",
+		architecture:  "aarch64", // Default, can be overridden via flag
+		rootDir:       "/workdir",
 	}
 }
 
@@ -38,7 +40,7 @@ func main() {
 	ib := NewIsoBuilder()
 	rootCmd := &cobra.Command{
 		Use:   "iso-builder",
-		Short: "Build a customized RHEL Bootc ISO",
+		Short: "Build a customized CentOS Stream Bootc ISO",
 		Run: func(cmd *cobra.Command, args []string) {
 			if err := ib.run(); err != nil {
 				log.Fatalf("Error: %v", err)
@@ -53,7 +55,8 @@ func main() {
 	rootCmd.Flags().StringVarP(&ib.kernelArgs, "kernel_args", "a", ib.kernelArgs, "Kernel arguments")
 	rootCmd.Flags().StringVarP(&ib.removeGrubArgs, "remove_args", "r", "", "Grub arguments to remove")
 	rootCmd.Flags().StringSliceVarP(&ib.grubReplacements, "grub_replace", "R", ib.grubReplacements, "GRUB replacements in format 'old_text|new_text' (splits on pipe)")
-	rootCmd.Flags().StringVarP(&ib.rhelVersion, "rhel_version", "v", ib.rhelVersion, "RHEL version")
+	rootCmd.Flags().StringVarP(&ib.streamVersion, "stream_version", "v", ib.streamVersion, "CentOS Stream version (major version, e.g., '9')")
+	rootCmd.Flags().StringVarP(&ib.architecture, "architecture", "A", ib.architecture, "Architecture (e.g., aarch64, x86_64)")
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
@@ -73,8 +76,9 @@ func (ib *IsoBuilder) run() error {
 		return fmt.Errorf("loop support failed: %s", err)
 	}
 
-	if arch := strings.TrimSpace(runCmdOutput("uname", "-m")); arch != "aarch64" {
-		return fmt.Errorf("must run on aarch64 (got %s)", arch)
+	// Detect architecture from container image if provided
+	if err := ib.detectArchitectureFromContainer(); err != nil {
+		log.Printf("Warning: Could not detect architecture from container image: %v", err)
 	}
 
 	if _, err := os.Stat(ib.outputISO); err == nil {
@@ -195,10 +199,53 @@ func (ib *IsoBuilder) prepareContainerImage() error {
 		ib.bootcImage = "docker://" + ib.bootcImage
 	}
 
+	// Map architecture names for skopeo
+	arch := ib.architecture
+	if arch == "x86_64" {
+		arch = "amd64" // skopeo uses amd64 for x86_64
+	}
+
 	return exec.Command("skopeo", "copy",
-		"--override-arch=arm64",
+		"--override-arch="+arch,
 		ib.bootcImage,
 		"oci:/tmp/container:latest").Run()
+}
+
+func (ib *IsoBuilder) detectArchitectureFromContainer() error {
+	if ib.bootcImage == "" {
+		// No container image provided, keep default architecture
+		return nil
+	}
+
+	if !hasKnownTransport(ib.bootcImage) {
+		log.Printf("No known transport prefix on image %s, assuming docker://", ib.bootcImage)
+		ib.bootcImage = "docker://" + ib.bootcImage
+	}
+
+	// Use skopeo to inspect the container image and get its architecture
+	cmd := exec.Command("skopeo", "inspect", ib.bootcImage)
+	output, err := cmd.Output()
+	if err != nil {
+		log.Printf("Warning: Could not inspect container image for architecture: %v", err)
+		return nil // Don't fail, just use default architecture
+	}
+
+	// Simple parsing to extract architecture from JSON output
+	// Look for "architecture":"aarch64" or similar
+	outputStr := string(output)
+	if strings.Contains(outputStr, `"architecture":"aarch64"`) {
+		ib.architecture = "aarch64"
+		log.Printf("Detected architecture from container: %s", ib.architecture)
+	} else if strings.Contains(outputStr, `"architecture":"amd64"`) {
+		ib.architecture = "x86_64" // CentOS Stream uses x86_64 naming
+		log.Printf("Detected architecture from container: %s", ib.architecture)
+	} else if strings.Contains(outputStr, `"architecture":"x86_64"`) {
+		ib.architecture = "x86_64"
+		log.Printf("Detected architecture from container: %s", ib.architecture)
+	}
+	// If no recognized architecture found, keep the default
+
+	return nil
 }
 
 var knownTransports = []string{
@@ -222,30 +269,31 @@ func hasKnownTransport(ref string) bool {
 
 func (ib *IsoBuilder) prepareInputIso() error {
 	if ib.inputISO == "" {
-		versionBits := strings.Split(ib.rhelVersion, ".")
-		if len(versionBits) != 2 {
-			return fmt.Errorf("invalid RHEL version format: expected MAJOR.MINOR")
+		// Validate supported architecture
+		if ib.architecture != "aarch64" && ib.architecture != "x86_64" {
+			return fmt.Errorf("unsupported architecture: %s (supported: aarch64, x86_64)", ib.architecture)
 		}
-		major := versionBits[0]
-		minor := versionBits[1]
+
+		// For CentOS Stream, we use a simpler versioning scheme (just major version)
+		major := ib.streamVersion
+
+		// Construct the CentOS Stream mirror URL
 		downloadURL := fmt.Sprintf(
-			"http://download.eng.bos.redhat.com/rhel-%s/nightly/RHEL-%s/latest-RHEL-%s.%s/compose/BaseOS/aarch64/iso/",
-			major, major, major, minor)
+			"https://mirror.stream.centos.org/%s-stream/BaseOS/%s/iso/",
+			major, ib.architecture)
 
-		cmd := fmt.Sprintf(
-			`curl -s %s | grep -oP 'href="\K[RHEL-]*[\d\.-]+aarch64-boot\.iso(?=")' | head -n1`,
-			downloadURL)
+		// For CentOS Stream, we can directly construct the ISO name
+		// Format: CentOS-Stream-{major}-latest-{arch}-boot.iso
+		isoName := fmt.Sprintf("CentOS-Stream-%s-latest-%s-boot.iso", major, ib.architecture)
+		ib.inputISO = isoName
+		fmt.Printf("Using CentOS Stream ISO: %s\n", ib.inputISO)
 
-		isoName := runCmdOutput("bash", "-c", cmd)
-		ib.inputISO = strings.TrimSpace(isoName)
-		fmt.Println(ib.inputISO)
-
-		if ib.inputISO == "" {
-			return fmt.Errorf("failed to extract ISO file name from %s", downloadURL)
-		}
-
+		// Check if ISO already exists locally
 		if _, err := os.Stat(ib.inputISO); err != nil {
+			fmt.Printf("Downloading ISO from: %s\n", downloadURL+ib.inputISO)
 			runCmd("curl", "-O", downloadURL+ib.inputISO)
+		} else {
+			fmt.Printf("ISO already exists locally: %s\n", ib.inputISO)
 		}
 	}
 	return nil
