@@ -11,6 +11,7 @@ network --bootproto=dhcp --device=enp0s1f0d1
 bootloader --location=mbr --driveorder=sda --append="{{ kargs }}"
 {% endif %}
 ostreecontainer --url=/run/install/repo/container --transport=oci --no-signature-verification
+reboot --eject
 %post --log=/var/log/anaconda/post-install.log --erroronfail
 
 # Add the pull secret to CRI-O and set root user-only read/write permissions
@@ -24,6 +25,7 @@ RHC_ACT_KEY={{ rhc_act_key }}
 RHC_ORG_ID={{ rhc_org_id }}
 EOF
 
+touch /etc/rhc/.run_rhc_connect_next_boot
 
 mkdir -p /home/redhat/.ssh
 cat << EOF > /home/redhat/.ssh/authorized_keys
@@ -34,7 +36,31 @@ chmod 600 /etc/crio/openshift-pull-secret
 # Configure the firewall with the mandatory rules for MicroShift
 firewall-offline-cmd --zone=trusted --add-source=10.42.0.0/16
 firewall-offline-cmd --zone=trusted --add-source=169.254.169.1
+
+cat << EOF > /etc/ostree/auth.json
+{{ ostree_auth_json }}
+EOF
+
+{% if dpu_flavor == "ipu" %}
+# Simple IPU boot fix: Just set UEFI IET VIRTUAL-DISK as first boot option
+echo "Configuring IPU boot order..." >> /var/log/anaconda/post-install.log
+ISCSI_ENTRY=$(efibootmgr | grep "IET VIRTUAL-DISK" | head -1 | sed 's/Boot\([0-9A-F]*\).*/\1/')
+if [ -n "$ISCSI_ENTRY" ]; then
+    echo "Found UEFI IET VIRTUAL-DISK entry: $ISCSI_ENTRY" >> /var/log/anaconda/post-install.log
+    # Simple approach: just set this entry as BootNext for one-time boot
+    efibootmgr -n $ISCSI_ENTRY
+    echo "Set BootNext to $ISCSI_ENTRY" >> /var/log/anaconda/post-install.log
+    efibootmgr >> /var/log/anaconda/post-install.log
+else
+    echo "ERROR: UEFI IET VIRTUAL-DISK not found" >> /var/log/anaconda/post-install.log
+    exit 1
+fi
+{% endif %}
+
 {% if is_remote %}
 bootc switch --mutate-in-place --transport registry {{ image_ref }}
 {% endif %}
+
+sync
+sleep 3
 %end

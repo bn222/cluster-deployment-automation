@@ -77,15 +77,16 @@ class ExtraConfigArgs:
     kickstart: Optional[str] = None
     remove_args: Optional[str] = None
 
-    registry: Optional[list[RegistryInfo]] = None
-
     # Custom OVN repo URL
     ovn_repo: Optional[str] = None
     # Custom OVN ref, it should be existing commit hash or branch
     ovn_ref: Optional[str] = None
 
     registries: Optional[list[RegistryInfo]] = None
-    import_pull_secret: bool = False
+    import_pull_secret: bool = True
+    bootc_dir: str = "rhel-image-mode-4-dpu"
+    bootc_build_local: bool = True
+    iso_builder_auth_file: Optional[str] = None
 
     def __post_init__(self) -> None:
         if self.registries is not None:

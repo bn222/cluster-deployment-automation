@@ -1,0 +1,14 @@
+[Unit]
+Description=Setup Hugepages for P4 containers
+Before=microshift.service
+Wants=microshift.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/mkdir -p /dev/hugepages
+ExecStart=/bin/mount -t hugetlbfs -o pagesize=2M none /dev/hugepages
+ExecStart=/bin/sh -c 'echo 512 > /sys/devices/system/node/node0/hugepages/hugepages-2048kB/nr_hugepages'
+
+[Install]
+WantedBy=multi-user.target

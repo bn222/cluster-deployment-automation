@@ -39,6 +39,7 @@ You can optionally provide:
 * `--input_iso`: use an existing RHEL boot ISO
 * `--kickstart`: custom kickstart file
 * `--kernel_args`: GRUB arguments to inject
+* `--grub_replace`: GRUB replacements in format 'old_text:new_text' (can be used multiple times, splits on "|")
 * `--output_iso`: destination path for the new ISO
 * `--rhel_version`: the version of RHEL to generate if no input iso is given
 

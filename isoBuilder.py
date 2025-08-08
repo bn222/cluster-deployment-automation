@@ -19,11 +19,15 @@ class BootcIsoBuilder:
         bootc_image_url: str,
         image_builder_url: str,
         dpu_flavor: str = "agnostic",
-        rhel_version: str = "9.6",
+        rhel_version: str = "9",
         input_iso: Optional[str] = None,
         kickstart: Optional[str] = None,
         kernel_args: Optional[str] = "",
         remove_args: Optional[str] = None,
+        grub_replacements: Optional[list[str]] = None,
+        auth_file_path: Optional[str] = None,  # Allow custom auth file path
+        bootc_dir: str = "rhel-image-mode-4-dpu",
+        bootc_build_local: bool = True,
     ):
         self.h = host
         self.name_of_final_iso = name_of_final_iso
@@ -32,12 +36,17 @@ class BootcIsoBuilder:
         self.activation_key = activation_key
         self.bootc_image_url = bootc_image_url
         self.image_builder_url = image_builder_url
+        self.dpu_flavor = dpu_flavor
         self.rhel_version = rhel_version
         self.input_iso = input_iso
         self.kickstart = kickstart
         self.kernel_args = kernel_args
         self.remove_args = remove_args
-        self.dpu_flavor = dpu_flavor
+        self.grub_replacements = grub_replacements or []
+        # Use custom auth file path if provided, otherwise fallback to secrets_path for backwards compatibility
+        self.auth_file_path = auth_file_path or secrets_path
+        self.bootc_dir = bootc_dir
+        self.bootc_build_local = bootc_build_local
 
     def _add_transport_prefix(self, image: str) -> str:
         if image.startswith("containers-storage:") or image.startswith("docker://"):
@@ -52,29 +61,49 @@ class BootcIsoBuilder:
     def ensure_image_is_built(self, image_name: str, build_action: Callable[[], None]) -> None:
         """
         Ensures the image is available:
-        - Always rebuild local images (from dir or containers-storage)
-        - Always pull remote images (e.g., docker://)
-        - If pull/build fails, error out
+        - Local images (localhost/, containers-storage:, dir://): build locally, no push
+        - Docker registry images (docker://): build locally and push to registry
+        - Other remote images: try to pull from registry
         """
         is_local = image_name.startswith("containers-storage:") or image_name.startswith("dir://") or image_name.startswith("localhost/")
+        is_docker_registry = image_name.startswith("docker://")
 
         if is_local:
-            logger.info(f"Always rebuilding local image '{image_name}' for consistency.")
+            logger.info(f"Building local image '{image_name}' (no push)")
             build_action()
             return
 
+        if is_docker_registry and self.bootc_build_local:
+            # Strip docker:// prefix for podman commands
+            registry_name = image_name.replace("docker://", "")
+
+            logger.info(f"Building image locally and pushing to '{registry_name}'")
+            build_action()
+
+            # Push to the docker registry
+            logger.info(f"Pushing image to {registry_name}")
+            push_result = self.h.run(f"sudo podman push --authfile {self.auth_file_path} {registry_name}")
+            if not push_result.success():
+                logger.error_and_exit(f"Failed to push image to '{registry_name}': {push_result.err}")
+
+            logger.info(f"Successfully pushed image to {registry_name}")
+            return
+
+        # For other remote images, try to pull
         logger.info(f"Pulling remote image: {image_name}")
-        if not self.h.run(f"sudo podman pull {image_name}").success():
+        if not self.h.run(f"sudo podman pull --authfile {self.auth_file_path} {image_name}").success():
             logger.error_and_exit(f"Failed to pull remote image '{image_name}', push the container to {image_name} to build the iso here, or change transport to localhost to build a default image")
 
         if not self.h.run(f"sudo podman image exists {image_name}").success():
             logger.error_and_exit(f"Image '{image_name}' could not be pulled or built.")
 
-    def build_image_mode_container(self, image_name: str, dir: str = "rhel-image-mode-4-dpu") -> None:
+    def build_image_mode_container(self, image_name: str) -> None:
         label = "Image Mode container"
         logger.info(f"Building {label} image from local source...")
-        if not os.path.exists(dir):
-            logger.error_and_exit(f"Expected local directory at {dir}, but it does not exist.")
+        # Strip docker:// prefix for podman commands
+        image_name = image_name.replace("docker://", "")
+        if not os.path.exists(self.bootc_dir):
+            logger.error_and_exit(f"Expected local directory at {self.bootc_dir}, but it does not exist.")
 
         entitlement_cert = next((os.path.join(r, f) for r, _, fs in os.walk("/etc/pki/entitlement/") for f in fs if f.endswith(".pem") and not f.endswith("-key.pem")), None)
         entitlement_key = next((os.path.join(r, f) for r, _, fs in os.walk("/etc/pki/entitlement/") for f in fs if f.endswith("-key.pem")), None)
@@ -87,15 +116,15 @@ class BootcIsoBuilder:
         args = [
             "sudo podman build",
             "--security-opt label=type:unconfined_t",
-            f"--authfile {self.secrets_path}",
-            f"--build-arg=DPU_FLAVOR={self.dpu_flavor}",
+            f"--authfile {self.auth_file_path}",
+            f"--build-arg DPU_FLAVOR={self.dpu_flavor}",
             "--arch aarch64",
             f"--secret=id=redhat-repo,src={repo_file}",
             f"--secret=id=entitlement-cert,src={entitlement_cert}",
             f"--secret=id=entitlement-key,src={entitlement_key}",
             f"--secret=id=rhsm-ca,src={rhsm_ca}",
             f"-t {image_name}",
-            dir,
+            self.bootc_dir,
         ]
         command = " ".join(args)
 
@@ -113,7 +142,7 @@ class BootcIsoBuilder:
         if not os.path.exists(dir):
             logger.error_and_exit(f"Expected local directory at {dir}, but it does not exist.")
 
-        err, out, returncode = self.h.run(f"sudo podman build --security-opt label=type:unconfined_t " f"--authfile {self.secrets_path} --platform linux/arm64 -t {image_name} {dir}")
+        err, out, returncode = self.h.run(f"sudo podman build --security-opt label=type:unconfined_t " f"--authfile {self.auth_file_path} --platform linux/arm64 -t {image_name} {dir}")
         if returncode:
             logger.error_and_exit(f"Failed to build {label} image with error: {err}")
 
@@ -124,6 +153,8 @@ class BootcIsoBuilder:
     def generate_kickstart_image_mode(self, final_kickstart: str) -> None:
         with open(self.secrets_path, "r") as f_in:
             file_contents = f_in.read()
+        with open(self.auth_file_path, "r") as f_in:
+            ostree_auth_json = f_in.read()
 
         ssh_pub, _, _ = next(common.iterate_ssh_keys(), (None, None, None))
         if ssh_pub is not None:
@@ -138,6 +169,7 @@ class BootcIsoBuilder:
             lines = f.read()
         image_name = self.bootc_image_url
         is_local = image_name.startswith("containers-storage:") or image_name.startswith("dir://") or image_name.startswith("localhost/")
+        image_ref = self.bootc_image_url.replace("docker://", "")
 
         with open(final_kickstart, "w") as f_out:
             template = Template(lines)
@@ -149,7 +181,9 @@ class BootcIsoBuilder:
                     rhc_act_key=self.activation_key,
                     kargs=self.kernel_args,
                     is_remote=not is_local,
-                    image_ref=self.bootc_image_url,
+                    ostree_auth_json=ostree_auth_json,
+                    image_ref=image_ref,
+                    dpu_flavor=self.dpu_flavor,
                 )
             )
         if not os.path.exists(final_kickstart):
@@ -185,7 +219,7 @@ class BootcIsoBuilder:
                 "sudo podman run --rm --privileged",
                 "--security-opt label=type:unconfined_t",
                 "--arch aarch64",
-                f"-v {self.secrets_path}:/run/containers/0/auth.json:ro",
+                f"-v {self.auth_file_path}:/run/containers/0/auth.json:ro",
                 "-v /var/lib/containers:/var/lib/containers",
                 "-v /run/containers/storage:/run/containers/storage",
                 "-v /dev:/dev",
@@ -199,6 +233,9 @@ class BootcIsoBuilder:
                 args.append(f"-a '{self.kernel_args}'")
             if self.remove_args:
                 args.append(f"-r '{self.remove_args}'")
+            if self.grub_replacements:
+                for replacement in self.grub_replacements:
+                    args.append(f"-R '{replacement}'")
             if self.input_iso:
                 args.append(f"-i {self.input_iso}")
             if self.kickstart:
