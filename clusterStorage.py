@@ -1,12 +1,12 @@
 import os
 import time
-import tempfile
 import jinja2
 from abc import ABC, abstractmethod
 from logger import logger
 from k8sClient import K8sClient
 from enum import Enum
 from typing import Optional
+from common import apply_yaml_content
 
 
 class StorageType(str, Enum):
@@ -22,20 +22,6 @@ class ClusterStorage(ABC):
     def __init__(self, kubeconfig_path: str):
         self.client = K8sClient(kubeconfig_path)
         self.manifests_path = os.path.join(os.path.dirname(__file__), "manifests", "infra", "storage")
-
-    def _apply_yaml_content(self, yaml_content: str, description: str = "manifest") -> bool:
-        """Apply YAML content using a temporary file and return success status"""
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml') as f:
-            f.write(yaml_content)
-            f.flush()
-            result = self.client.oc(f"apply -f {f.name}")
-
-        if result.success():
-            logger.info(f"{description} applied successfully")
-            return True
-        else:
-            logger.error(f"Failed to apply {description}: {result.out}")
-            return False
 
     @abstractmethod
     def deploy_storage(self) -> None:
@@ -82,7 +68,7 @@ spec:
   storageClassName: {self.get_storage_class_name()}
 """
 
-            if not self._apply_yaml_content(pvc_yaml, f"PVC '{pvc_name}'"):
+            if not apply_yaml_content(self.client, pvc_yaml, description=f"PVC '{pvc_name}'"):
                 logger.error_and_exit(f"Failed to create PVC '{pvc_name}'")
 
             logger.info(f"PVC '{pvc_name}' created successfully")
@@ -167,6 +153,10 @@ class HostPathStorage(ClusterStorage):
 
         self._ensure_storage_directory()
 
+        if self.client.oc("get storageclass local-hostpath").success():
+            logger.info("HostPath storage class already exists, skipping deployment")
+            return
+
         storage_manifest = os.path.join(self.manifests_path, "simple-hostpath-storage.yaml")
 
         with open(storage_manifest, 'r') as f:
@@ -177,7 +167,7 @@ class HostPathStorage(ClusterStorage):
         storage_class_yaml = parts[0].strip()
 
         # Apply storage class
-        if not self._apply_yaml_content(storage_class_yaml, "storage class"):
+        if not apply_yaml_content(self.client, storage_class_yaml, description="storage class"):
             logger.error_and_exit("Failed to create hostPath storage class")
 
         # Verify storage class was created
@@ -241,7 +231,7 @@ class HostPathStorage(ClusterStorage):
         logger.debug(f"Rendered PV manifest:\n{rendered}")
 
         # Apply the PV
-        if not self._apply_yaml_content(rendered, f"PV '{pv_name}' with node affinity"):
+        if not apply_yaml_content(self.client, rendered, description=f"PV '{pv_name}' with node affinity"):
             logger.error_and_exit(f"Failed to create PV '{pv_name}'")
 
         logger.info(f"PV '{pv_name}' created successfully")
@@ -286,7 +276,7 @@ class HostPathStorage(ClusterStorage):
         logger.debug(f"Rendered DaemonSet manifest:\n{rendered}")
 
         # Apply the DaemonSet
-        if not self._apply_yaml_content(rendered, "storage directory creator DaemonSet"):
+        if not apply_yaml_content(self.client, rendered, description="storage directory creator DaemonSet"):
             logger.error_and_exit("Failed to create storage directory creator DaemonSet")
 
         logger.info("Storage directory creator DaemonSet applied successfully")

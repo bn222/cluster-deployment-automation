@@ -17,6 +17,7 @@ import ssl
 import timer
 from typing import Callable
 from clusterStorage import HostPathStorage
+from common import apply_yaml_content, render_template_to_string
 
 CONTAINER_NAME = "local-container-registry"
 
@@ -42,6 +43,9 @@ class RegistryType(str, Enum):
 
     LOCAL = "local"
     """Deploy the registry on the local host."""
+
+    MICROSHIFT = "microshift"
+    """Deploy the registry on a MicroShift cluster."""
 
 
 class BaseRegistry(ABC):
@@ -229,7 +233,7 @@ class InClusterRegistry(BaseRegistry):
         storage: HostPathStorage,
         namespace: str = "in-cluster-registry",
         sa: str = "pusher",
-        storage_size: str = "10Gi",
+        storage_size: str = "8Gi",
     ) -> None:
         super().__init__(host.LocalHost())
         self.kubeconfig = kubeconfig
@@ -331,7 +335,7 @@ class InClusterRegistry(BaseRegistry):
 
         # Create registry-specific PVC using the existing storage class
         logger.info(f"Creating registry storage with storage class: {self.storage.get_storage_class_name()}")
-        self.storage.create_pv_with_node_affinity(pv_name="registry-pv", storage_size=self.storage_size, storage_path="/var/lib/registry-storage")
+        self.storage.create_pv_with_node_affinity(pv_name="registry-pv", storage_size=self.storage_size, storage_path=self.storage.storage_path)
 
         # Create PVC for registry using the provided storage class
         # The PV will be created automatically by the storage class or external storage management
@@ -410,11 +414,8 @@ spec:
         self.client.oc("delete pvc registry-storage -n openshift-image-registry --ignore-not-found")
 
         # Create new PVC
-        result = self.client.oc(f"apply -f {temp_pvc_path}")
-        lh.remove(temp_pvc_path)
-
-        if not result.success():
-            logger.error_and_exit(f"Failed to create registry PVC: {result.out}")
+        if not apply_yaml_content(self.client, pvc_manifest, description="registry PVC"):
+            logger.error_and_exit("Failed to create registry PVC")
 
         logger.info("Registry PVC created successfully")
 
@@ -619,7 +620,7 @@ def trust_certificates(host_obj: host.Host, certs: dict[str, str]) -> None:
     """
     for filename, content in certs.items():
         host_obj.write(f"/etc/pki/ca-trust/source/anchors/{filename}", content)
-    host_obj.run_or_die("sudo update-ca-trust extract")
+    host_obj.run_or_die("update-ca-trust extract")
 
 
 def wait_for_http_ready(url: str, timeout: str = "6m", interval: str = "5s", expected_codes: tuple[int, ...] = (200, 401, 403)) -> None:
@@ -664,3 +665,165 @@ def wait_for_http_ready(url: str, timeout: str = "6m", interval: str = "5s", exp
                 time.sleep(0.1)  # Small sleep to prevent busy waiting
 
     raise RuntimeError(f"Timed out waiting for {url} to be ready.")
+
+
+class MicroshiftRegistry(InClusterRegistry):
+    def __init__(self, host: host.Host, kubeconfig: str, external_ip: str, storage: HostPathStorage, base_dns_domain: str = "nip.io", storage_size: str = "8Gi") -> None:
+        # Initialize as InClusterRegistry but with MicroShift-specific namespace
+        super().__init__(kubeconfig=kubeconfig, storage=storage, storage_size=storage_size, namespace="openshift-image-registry", sa="registry-sa")
+        self.host = host
+        self.manifests_path = os.path.join(os.path.dirname(__file__), "manifests", "infra", "image-registry")
+        self.external_ip = external_ip
+        self.base_dns_domain = base_dns_domain
+
+    def deploy(self) -> None:
+        """Deploy MicroShift registry with LoadBalancer service"""
+        logger.info("Deploying MicroShift registry with external access...")
+
+        self._ensure_namespace_exists()
+        storage_path = self.storage._ensure_storage_directory()
+        self.storage.create_pv_with_node_affinity(pv_name="registry-pv", storage_size=self.storage_size, storage_path=storage_path)
+        self._create_registry_pvc()
+        self._configure_microshift_registry()
+        self._wait_for_registry_ready()
+        self.podman_authenticate()
+
+        logger.info("MicroShift registry deployment completed successfully!")
+        self._show_registry_info()
+
+    def _ensure_namespace_exists(self) -> None:
+        """Ensure the openshift-image-registry namespace exists, creating it if necessary"""
+        logger.info("Ensuring openshift-image-registry namespace exists...")
+
+        # Check if namespace already exists
+        result = self.client.oc("get namespace openshift-image-registry")
+        if result.success():
+            logger.info("Namespace openshift-image-registry already exists")
+        else:
+            # Create the namespace
+            logger.info("Creating openshift-image-registry namespace...")
+            create_result = self.client.oc("create namespace openshift-image-registry")
+            if create_result.success():
+                logger.info("Successfully created openshift-image-registry namespace")
+            else:
+                logger.error_and_exit(f"Failed to create namespace: {create_result.out}")
+
+    def _create_registry_pvc(self) -> None:
+        """Create PVC for MicroShift registry using the hostpath storage class"""
+        logger.info("Creating registry PVC for MicroShift...")
+
+        # Use the storage instance to create the PVC
+        self.storage.create_pvc("registry-storage", "openshift-image-registry", self.storage_size)
+
+        logger.info("Registry PVC created successfully")
+
+    def undeploy(self) -> None:
+        """Undeploy MicroShift registry and clean up all resources"""
+        logger.info("Undeploying MicroShift registry...")
+
+        # Delete the registry manifests
+        self._delete_registry_manifests()
+
+        # Clean up storage resources
+        self._cleanup_registry_storage()
+
+        # Clean up namespace
+        self._cleanup_namespace()
+
+        logger.info("MicroShift registry undeployment completed successfully!")
+
+    def _cleanup_namespace(self) -> None:
+        """Clean up the openshift-image-registry namespace"""
+        logger.info("Cleaning up openshift-image-registry namespace...")
+
+        # Delete the namespace
+        result = self.client.oc("delete namespace openshift-image-registry --ignore-not-found --timeout=120s")
+        if result.success():
+            logger.info("Successfully deleted openshift-image-registry namespace")
+        else:
+            logger.warning(f"Failed to delete namespace: {result.out}")
+
+    def _configure_microshift_registry(self) -> None:
+        """Configure MicroShift registry with LoadBalancer service"""
+
+        logger.info("Deploying MicroShift registry config...")
+        self.client.oc_run_or_die(f"apply -f {os.path.join(self.manifests_path, 'registry-config.yaml')}")
+
+        logger.info("Deploying MicroShift registry manifests...")
+        template_file = os.path.join(self.manifests_path, "registry.yaml.j2")
+
+        rendered_manifest = render_template_to_string(template_file, external_ip=self.external_ip, base_dns_domain=self.base_dns_domain)
+
+        if not apply_yaml_content(self.client, rendered_manifest, description="registry manifest"):
+            logger.error_and_exit("Failed to deploy registry manifests")
+
+    def _wait_for_registry_ready(self) -> None:
+        """Wait for registry deployment to be ready"""
+        logger.info("Waiting for registry deployment to be ready...")
+
+        # Wait for deployment to be available
+        self._wait_for_condition(lambda: self.client.oc("get deployment/registry -n openshift-image-registry -o jsonpath='{.status.readyReplicas}'").out.strip() == "1", "registry deployment to have 1 ready replica", timeout="300s")
+
+        logger.info("Registry is ready!")
+
+    def podman_authenticate(self) -> None:
+        """
+        No need to authenticate, the registry uses anonymous users.
+        """
+        registry_url = self.get_url()
+
+        # The registry is insecure by default (no TLS in manifest)
+        # Use http and expect 401 if auth is required, which it is.
+        logger.info(f"Waiting for image registry to be ready at http://{registry_url}/v2/")
+        wait_for_http_ready(f"http://{registry_url}/v2/", timeout="3m", expected_codes=(200, 401))
+
+        # Registry is insecure, so use --tls-verify=false
+
+        logger.info(f"Successfully logged into in-cluster registry at {registry_url}")
+        logger.info(f"To push images, use format: podman push <image> {registry_url}/<image-name>:<tag>")
+
+    def _show_registry_info(self) -> None:
+        """Show registry access information"""
+        logger.info("Registry deployment complete!")
+        print("")
+        print("MicroShift Registry Access Information:")
+        print("=" * 40)
+        registry_url = self.get_url()
+
+        print(f"NodePort: {self.external_ip or 'localhost'}:30500")
+        print("")
+        print("Usage Example:")
+        print(f"podman tag myapp:latest {registry_url}/{self.namespace}/myapp:v1.0.0")
+        print(f"podman push {registry_url}/{self.namespace}/myapp:v1.0.0 --tls-verify=false")
+        print("")
+
+    def _delete_registry_manifests(self) -> None:
+        """Delete all registry manifests"""
+        logger.info("Deleting registry manifests...")
+
+        # Render the template and delete using the same manifest
+        template_file = os.path.join(self.manifests_path, "registry.yaml.j2")
+        rendered_manifest = render_template_to_string(template_file, external_ip=self.external_ip, base_dns_domain=self.base_dns_domain)
+
+        if not apply_yaml_content(self.client, rendered_manifest, delete=True, description="registry manifest"):
+            logger.error_and_exit("Failed to delete registry manifests")
+
+        # Also delete individual resources that might exist (fallback)
+        resources_to_delete = ["deployment/registry", "service/registry", "service/registry-loadbalancer", "service/registry-nodeport", "route/default-route"]
+
+        for resource in resources_to_delete:
+            logger.debug(f"Deleting {resource} in openshift-image-registry namespace...")
+            result = self.client.oc(f"delete {resource} -n openshift-image-registry --ignore-not-found --timeout=30s")
+            if result.success():
+                logger.debug(f"Successfully deleted {resource}")
+            else:
+                logger.debug(f"Failed to delete {resource} (may not exist): {result.out}")
+
+    def _cleanup_registry_storage(self) -> None:
+        """Clean up registry storage resources"""
+        logger.info("Cleaning up registry storage resources...")
+
+        # Use the storage instance for consistent cleanup
+        self.storage.cleanup_storage_resources("registry-storage", "openshift-image-registry", "registry-pv")
+
+        logger.info("Registry storage cleanup completed")

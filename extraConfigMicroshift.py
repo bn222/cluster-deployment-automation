@@ -118,6 +118,10 @@ def ExtraConfigMicroshift(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dic
         crun_conf_lines = ['[crio.runtime.runtimes.crun]', 'runtime_path = "/usr/bin/crun"', 'runtime_type = "oci"', 'runtime_root = "/run/crun"']
         for line in crun_conf_lines:
             acc.run(f'echo \'{line}\' >> /etc/crio/crio.conf')
+
+    domain = f"{dpu_node.ip}.nip.io"
+    configure_microshift_domain(acc, domain)
+    configure_crio_insecure_registry(acc, dpu_node.ip, domain)
     acc.run("systemctl restart crio.service")
     logger.info("Starting microshift")
     acc.run("systemctl restart microshift")
@@ -140,6 +144,40 @@ def ExtraConfigMicroshift(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dic
         except Exception:
             time.sleep(30)
             pass
+
+
+def configure_crio_insecure_registry(host: host.Host, external_ip: str, base_dns_domain: str) -> None:
+    """Configure CRI-O to treat registry as insecure - simple and effective"""
+    logger.info("Configuring CRI-O insecure registry access...")
+
+    registry_urls = [f"{external_ip}:5000", f"{external_ip}:30500", f"default-route-openshift-image-registry.apps.{base_dns_domain}"]
+
+    crio_config = f"""[crio.image]
+insecure_registries = {registry_urls}
+"""
+
+    # Write config
+    host.write("/etc/crio/crio.conf.d/99-insecure-registry.conf", crio_config)
+    logger.info("CRI-O configured for insecure registry access")
+
+
+def configure_microshift_domain(host: host.Host, domain: str) -> None:
+    """Configure MicroShift to use the correct domain"""
+    logger.info(f"Configuring MicroShift domain for {domain}")
+
+    microshift_config = f"""
+dns:
+  baseDomain: {domain}
+cluster:
+  domain: cluster.local
+"""
+
+    # Write MicroShift config
+    host.write("/etc/microshift/config.d/domain.yaml", microshift_config)
+
+    # Restart MicroShift to pick up new config
+    logger.info("Restarting MicroShift with new domain configuration...")
+    host.run_or_die("systemctl restart microshift")
 
 
 def main() -> None:

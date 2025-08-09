@@ -167,7 +167,7 @@ class NodeConfig:
 
     def get_effective_disk_size(self) -> str:
         """Calculate final disk size including registry storage if enabled"""
-        if not self.registry_storage:
+        if not self.registry_storage or self.kind != "vm":
             return self.disk_size
 
         # Get registry size (default to 8Gi if not specified)
@@ -584,16 +584,21 @@ class ClustersConfig:
             node_names = [n.name for n in registry_nodes]
             raise ValueError(f"Only one master can have registry_storage=true, found: {node_names}")
 
-            # If no registry storage node is configured, automatically configure the first master
+        # If no registry storage node is configured, automatically configure the first master
         if len(registry_nodes) <= 0 and len(self.masters) > 0:
             registry_node = self.masters[0]
-            logger.info(f"No registry node configured. Using master node '{registry_node.name}' as default registry storage node.")
+            logger.info(f"No registry node configured. Using master node '{registry_node.name}' (kind: {registry_node.kind}) as default registry storage node.")
 
             # Configure registry storage (uses existing default in_cluster_registry_storage_size)
             registry_node.registry_storage = True
 
             logger.info(f"Configured node '{registry_node.name}' with registry_storage=True and storage_size={registry_node.in_cluster_registry_storage_size}")
-            logger.info(f"Node '{registry_node.name}' effective disk size: {registry_node.get_effective_disk_size()}")
+
+            # Only show effective disk size for VMs (baremetal nodes can't have disk size modified)
+            if registry_node.kind == "vm":
+                logger.info(f"Node '{registry_node.name}' effective disk size: {registry_node.get_effective_disk_size()}")
+            else:
+                logger.info(f"Node '{registry_node.name}' is baremetal - registry will use hostpath storage on existing disk")
 
 
 def main() -> None:
