@@ -10,6 +10,7 @@ import time
 import base64
 import binascii
 from enum import Enum
+from typing import Optional
 import urllib.request
 import urllib.error
 import ssl
@@ -40,7 +41,7 @@ class BaseRegistry(ABC):
         pass
 
     @abstractmethod
-    def trust(self, target: host.Host | None = None) -> None:
+    def trust(self, target: Optional[host.Host] = None) -> None:
         """Configure trust for the registry's certificate on the target host (or self)."""
         pass
 
@@ -50,7 +51,7 @@ class BaseRegistry(ABC):
         pass
 
 
-class ImageRegistry(BaseRegistry):
+class LocalRegistry(BaseRegistry):
     def __init__(self, rsh: host.Host, listen_port: int = 5000) -> None:
         super().__init__(rsh)
         self.listen_port = listen_port
@@ -161,7 +162,7 @@ class ImageRegistry(BaseRegistry):
     def delete_all(self) -> None:
         self._delete_all()
 
-    def trust(self, target: host.Host | None = None) -> None:
+    def trust(self, target: Optional[host.Host] = None) -> None:
         target = target or self.host
         cert_dir = self.certificate_path()
 
@@ -186,9 +187,9 @@ class ImageRegistry(BaseRegistry):
         client.oc("patch image.config.openshift.io/cluster " f"--patch {shlex.quote(json.dumps(data))} --type=merge")
 
 
-def ensure_local_registry_running(rsh: host.Host, delete_all: bool = False) -> ImageRegistry:
+def ensure_local_registry_running(rsh: host.Host, delete_all: bool = False) -> LocalRegistry:
     logger.info(f"Ensuring local registry running on {rsh.hostname()}")
-    reg = ImageRegistry(rsh)
+    reg = LocalRegistry(rsh)
     reg.ensure_running(delete_all=delete_all)
     reg.trust(host.LocalHost())
     return reg
@@ -217,7 +218,7 @@ class InClusterRegistry(BaseRegistry):
         self._grant_roles()
         self.podman_authenticate()
 
-    def trust(self, target: host.Host | None = None) -> None:
+    def trust(self, target: Optional[host.Host] = None) -> None:
         # https://docs.redhat.com/en/documentation/openshift_container_platform/4.18/html/registry/securing-exposing-registry#registry-exposing-default-registry-manually_securing-exposing-registry
         route = self.get_url()
         cert_b64 = self.client.oc_run_or_die("get secret -n openshift-ingress  router-certs-default -o go-template='{{index .data \"tls.crt\"}}'").out.strip()
