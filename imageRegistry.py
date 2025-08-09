@@ -10,7 +10,9 @@ import time
 import base64
 import binascii
 from enum import Enum
-
+import urllib.request
+import urllib.error
+import ssl
 
 CONTAINER_NAME = "local-container-registry"
 
@@ -237,7 +239,7 @@ class InClusterRegistry(BaseRegistry):
                 logger.info(f"Registry operator ready after {tries} tries")
                 break
 
-    def _wait_for_registry_default_route(self, timeout: float = 10.0, max_tries: int = 3) -> None:
+    def _wait_for_registry_default_route(self, timeout: float = 10.0, max_tries: int = 5) -> None:
         logger.info("Waiting for registry default route")
         for tries in range(max_tries):
             if self.client.oc("get route default-route -n openshift-image-registry --template='{{ .spec.host }}'").success():
@@ -249,10 +251,25 @@ class InClusterRegistry(BaseRegistry):
 
     def _configure_ocp_registry(self) -> None:
         # https://docs.redhat.com/en/documentation/openshift_container_platform/4.18/html/registry/setting-up-and-configuring-the-registry#configuring-registry-storage-baremetal
+
+        # Set management state to Managed and wait for it to be applied
+        logger.info("Setting registry management state to Managed")
         self.client.oc_run_or_die("patch configs.imageregistry.operator.openshift.io cluster --type=merge --patch '{\"spec\":{\"managementState\":\"Managed\"}}'")
+        self.client.oc_run_or_die("wait --for=jsonpath='{.spec.managementState}'=Managed configs.imageregistry.operator.openshift.io/cluster --timeout=5m")
+
+        # Configure storage with emptyDir and wait for it to be applied
+        logger.info("Configuring registry storage with emptyDir")
         self.client.oc_run_or_die("patch configs.imageregistry.operator.openshift.io cluster --type=merge --patch '{\"spec\":{\"storage\":{\"emptyDir\":{}}}}'")
+        self.client.oc_run_or_die("wait --for=jsonpath='{.spec.storage.emptyDir}' configs.imageregistry.operator.openshift.io/cluster --timeout=5m")
+
+        # Configure default route if external access is allowed
         if self.allow_external:
+            logger.info("Enabling registry default route for external access")
             self.client.oc_run_or_die("patch configs.imageregistry.operator.openshift.io/cluster --type merge -p '{\"spec\":{\"defaultRoute\":true}}'")
+            self.client.oc_run_or_die("wait --for=jsonpath='{.spec.defaultRoute}'=true configs.imageregistry.operator.openshift.io/cluster --timeout=5m")
+
+        # Wait for the registry to be ready
+        logger.info("Waiting for registry to be ready")
         self.client.oc_run_or_die("wait --for=jsonpath='{.status.readyReplicas}'=1 configs.imageregistry.operator.openshift.io/cluster --timeout=15m")
 
     def _ensure_project_and_sa(self) -> None:
@@ -274,9 +291,14 @@ class InClusterRegistry(BaseRegistry):
         """
         Login to the in-cluster registry using Podman on the host with a token.
         """
+        SECONDS = 1
+        MINUTES = SECONDS * 60
         route = self.get_url()
         token = self.create_token()
         self.trust()
+        self.client.oc_run_or_die("wait --for=jsonpath='{.status.readyReplicas}'=1 deployment/image-registry -n openshift-image-registry --timeout=2m")
+        logger.info("Waiting on image registry service to be ready at the route through HTTP requests")
+        wait_for_http_ready(f"https://{route}/v2/", timeout=6 * MINUTES)
         self.host.run_or_die(f"podman login -u {self.sa} -p {token} {route}")
         logger.info(f"Successfully logged into in-cluster registry at {route}")
 
@@ -291,3 +313,39 @@ def trust_certificates(host_obj: host.Host, certs: dict[str, str]) -> None:
     for filename, content in certs.items():
         host_obj.write(f"/etc/pki/ca-trust/source/anchors/{filename}", content)
     host_obj.run_or_die("sudo update-ca-trust extract")
+
+
+def wait_for_http_ready(url: str, timeout: int = 120, interval: int = 5, expected_codes: tuple[int, ...] = (200, 401, 403)) -> None:
+    """
+    Wait until the HTTP endpoint is reachable and returns an expected status code.
+
+    Args:
+        url (str): The URL to check.
+        timeout (int): Max total wait time in seconds.
+        interval (int): Time to wait between retries.
+        expected_codes (tuple): Acceptable HTTP status codes.
+
+    Raises:
+        RuntimeError: If the URL is not ready within the timeout.
+    """
+
+    ctx = ssl._create_unverified_context()
+    start = time.time()
+    logger.info(f"Waiting for HTTP endpoint {url} to be reachable")
+    while time.time() - start < timeout:
+        try:
+            req = urllib.request.Request(url)
+            with urllib.request.urlopen(req, context=ctx) as response:
+                if response.status in expected_codes:
+                    logger.debug(f"[READY] {url} responded with status {response.status}")
+                    return
+        except urllib.error.HTTPError as e:
+            if e.code in expected_codes:
+                logger.debug(f"[READY] {url} responded with status {e.code}")
+                return
+            logger.debug(f"[WAITING] {url} returned HTTP {e.code}")
+        except Exception as e:
+            logger.debug(f"[WAITING] {url} not reachable: {e}")
+        time.sleep(interval)
+
+    raise RuntimeError(f"Timed out waiting for {url} to be ready.")
