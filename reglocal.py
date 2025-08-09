@@ -3,7 +3,7 @@ import os
 import dataclasses
 from logger import logger
 import host
-from imageRegistry import ImageRegistry
+from imageRegistry import LocalRegistry
 
 
 @dataclasses.dataclass(frozen=True)
@@ -36,7 +36,7 @@ def git_build_local(rsh: host.Host, repo_dir: str, registry: str, project: str, 
             logger.info("Maybe you lack authentication? Issue a `podman login registry.ci.openshift.org` first or create \"$XDG_RUNTIME_DIR/containers/auth.json\". See https://oauth-openshift.apps.ci.l2s4.p1.openshiftapps.com/oauth/token/request")
             logger.error_and_exit(f"{cmd} failed with returncode {ret.returncode}: output: {ret.out}")
 
-    imgReg = ImageRegistry(rsh)
+    imgReg = LocalRegistry(rsh)
     for ci in container_infos:
         rsh.run_or_die(
             shlex.join(

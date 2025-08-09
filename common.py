@@ -24,6 +24,10 @@ from typing import Union
 import time
 import itertools
 import timer
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from k8sClient import K8sClient
 
 
 T = TypeVar("T")
@@ -818,3 +822,42 @@ def _capture_container_logs(lh: host.Host, logs_dir: str, container_name: str) -
 
         logger.error(f"Exception capturing logs for {container_name}: {e}")
         logger.error(f"Exception details saved to: {exception_filename}")
+
+
+def apply_yaml_content(client: 'K8sClient', yaml_content: str, description: str = "manifest", delete: bool = False) -> bool:
+    """Apply YAML content using a temporary file and return success status"""
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml') as f:
+        f.write(yaml_content)
+        f.flush()
+        if delete:
+            result = client.oc(f"delete -f {f.name} --ignore-not-found --timeout=60s")
+        else:
+            result = client.oc(f"apply -f {f.name}")
+
+    if result.success():
+        action = "deleted" if delete else "applied"
+        logger.info(f"{description} {action} successfully")
+        return True
+    else:
+        action = "delete" if delete else "apply"
+        logger.error(f"Failed to {action} {description}: {result.out}")
+        return False
+
+
+def render_template_to_string(template_file: str, **kwargs: Any) -> str:
+    """Render Jinja2 template to string"""
+    try:
+        import jinja2
+
+        with open(template_file, 'r') as f:
+            template_content = f.read()
+
+        template = jinja2.Template(template_content)
+        rendered = template.render(**kwargs)
+
+        return rendered
+
+    except ImportError:
+        logger.error_and_exit("Jinja2 is required for template rendering. Install with: pip3 install jinja2")
+    except Exception as e:
+        logger.error_and_exit(f"Failed to render template: {e}")
