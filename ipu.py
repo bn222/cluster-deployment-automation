@@ -219,7 +219,8 @@ class IPUBMC(BMC):
 logger "Activating redfish"
 cp /work/redfish/certs/server.key /etc/pki/ca-trust/source/anchors/
 cp /work/redfish/certs/server.crt /etc/pki/ca-trust/source/anchors/
-/usr/bin/scripts/set_acc_kernel_cmdline.sh -a -b custom
+/usr/bin/scripts/set_acc_kernel_cmdline.sh -a -b iscsi
+sync
 update-ca-trust
 systemctl restart redfish
 """
