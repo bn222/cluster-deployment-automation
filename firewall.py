@@ -10,7 +10,6 @@ PORT_RULES = {
 
 logger = logging.getLogger("firewall")
 
-
 def enable_firewall(host):
     logger.info("Enabling and configuring firewall...")
     host.run("systemctl enable firewalld")
@@ -34,7 +33,6 @@ def enable_firewall(host):
     host.run("firewall-cmd --set-log-denied=all")
     host.run("firewall-cmd --reload")
     logger.info("Firewall enabled and configured.")
-
 
 def disable_firewall(host):
     logger.info("Disabling firewall rules and cleaning up...")
