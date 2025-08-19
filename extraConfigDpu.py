@@ -13,7 +13,7 @@ from dpuVendor import init_vendor_plugin
 import timer
 import re
 from dpuVendor import detect_dpu
-from firewall import enable_firewall
+from firewall import enable_firewall, disable_firewall
 
 MICROSHIFT_KUBECONFIG = "/root/kubeconfig.microshift"
 

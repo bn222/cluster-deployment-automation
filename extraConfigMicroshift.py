@@ -8,7 +8,7 @@ import host
 import yaml
 import time
 import sys
-from firewall import enable_firewall
+from firewall import enable_firewall, disable_firewall
 
 
 def early_access_microshift() -> str:
