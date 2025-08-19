@@ -8,7 +8,6 @@ import host
 import yaml
 import time
 import sys
-from firewall import enable_firewall, disable_firewall
 
 
 def early_access_microshift() -> str:
@@ -89,6 +88,8 @@ def ExtraConfigMicroshift(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dic
 
     # Configure firewalld for microshift
     logger.info("Configuring firewall for microshift")
+    acc.run("systemctl disable firewalld")
+    acc.run("systemctl stop firewalld")
 
     # Adjust the timeout for microshift service to ensure it starts successfully
     acc.run_or_die("mkdir -p /etc/systemd/system/microshift.service.d/")
@@ -125,8 +126,8 @@ def ExtraConfigMicroshift(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dic
     contents = read_prep_microshift_kubeconfig(acc)
     kubeconfig = write_microshift_kubeconfig(contents, host.LocalHost())
 
-    # Enable and configure firewall at IPU
-    enable_firewall(acc)
+    acc.run("systemctl stop firewalld")
+    acc.run("systemctl disable firewalld")
 
     def cb() -> None:
         acc.run("ip r del default via 192.168.0.1")
