@@ -12,7 +12,7 @@ PORT_RULES = {
 logger = logging.getLogger("firewall")
 
 
-def enable_firewall(rh: host.Host):
+def enable_firewall(rh: host.Host) -> None:
     logger.info("Enabling and configuring firewall...")
     rh.run("systemctl enable firewalld")
     rh.run("systemctl start firewalld")
@@ -37,7 +37,7 @@ def enable_firewall(rh: host.Host):
     logger.info("Firewall enabled and configured.")
 
 
-def disable_firewall(rh: host.Host):
+def disable_firewall(rh: host.Host) -> None:
     logger.info("Disabling firewall rules and cleaning up...")
     rh.run("systemctl enable firewalld")
     rh.run("systemctl start firewalld")
