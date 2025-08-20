@@ -222,7 +222,7 @@ cp /work/redfish/certs/server.crt /etc/pki/ca-trust/source/anchors/
 /usr/bin/scripts/set_acc_kernel_cmdline.sh -a -b iscsi
 sync
 update-ca-trust
-systemctl restart redfish
+( sleep 15 ; systemctl restart redfish ) &
 """
         pre_init_app = """
 #!/bin/sh
