@@ -222,7 +222,7 @@ cp /work/redfish/certs/server.crt /etc/pki/ca-trust/source/anchors/
 /usr/bin/scripts/set_acc_kernel_cmdline.sh -a -b iscsi
 sync
 update-ca-trust
-systemctl restart redfish
+( sleep 15 ; systemctl restart redfish ) &
 """
         pre_init_app = """
 #!/bin/sh
@@ -271,7 +271,7 @@ fi
             imc.run(f"date -s \"{time.asctime(localtime())}\"")
         else:
             html = response.read().decode('utf-8')
-            name_match = re.search(r"\"chrony.*rpm\"", html)
+            name_match = re.search(r"\"chrony(.*rpm?)\"", html)
             if name_match:
                 chronypackage = html[name_match.start() + 1 : name_match.end() - 1]
                 chrony_script = f"""
