@@ -16,6 +16,7 @@ import clusterInfo
 from clusterInfo import ClusterInfo
 from dataclasses import dataclass, field
 from bmc import BmcConfig
+from imageRegistry import RegistryType
 
 
 def base_iso_path(cluster_name: str) -> str:
@@ -86,6 +87,7 @@ class ExtraConfigArgs:
 
     registries: Optional[list[RegistryInfo]] = None
     import_pull_secret: bool = False
+    registry_type: str = RegistryType.IN_CLUSTER.value
 
     def __post_init__(self) -> None:
         if self.registries is not None:
@@ -139,6 +141,9 @@ class NodeConfig:
     ram: str = "32768"
     cpu: str = "8"
     disk_kind: str = "qcow2"
+    # Registry storage configuration
+    registry_storage: bool = False
+    in_cluster_registry_storage_size: str = "8Gi"
 
     def __post_init__(self) -> None:
         # bmc ip is mandatory for physical, not for vm
@@ -159,6 +164,26 @@ class NodeConfig:
 
     def is_preallocated(self) -> bool:
         return self.preallocated == "true"
+
+    def get_effective_disk_size(self) -> str:
+        """Calculate final disk size including registry storage if enabled"""
+        if not self.registry_storage or self.kind != "vm":
+            return self.disk_size
+
+        # Get registry size (default to 8Gi if not specified)
+        registry_size = self.in_cluster_registry_storage_size
+
+        # Calculate effective size
+        base_size = int(self.disk_size)
+        registry_gb = int(registry_size.replace("Gi", ""))
+        effective_size = base_size + registry_gb
+
+        logger.info(f"Node {self.name}: base={base_size}Gi + registry={registry_gb}Gi = {effective_size}Gi")
+        return str(effective_size)
+
+    def get_registry_storage_size(self) -> str:
+        """Get the registry storage size for this node"""
+        return self.in_cluster_registry_storage_size or "10Gi"
 
 
 @dataclass
@@ -292,6 +317,9 @@ class ClustersConfig:
 
         if self.kind == "openshift":
             self.configure_ip_range()
+
+        # Validate registry storage configuration
+        self.validate_registry_storage_config()
 
         for c in self.preconfig:
             c.pre_check()
@@ -534,6 +562,43 @@ class ClustersConfig:
 
     def is_sno(self) -> bool:
         return len(self.masters) == 1 and self.kind == "openshift"
+
+    def get_registry_storage_node(self) -> NodeConfig:
+        """Find the master node designated for registry storage"""
+        registry_nodes = [m for m in self.masters if m.registry_storage]
+
+        if len(registry_nodes) > 1:
+            node_names = [n.name for n in registry_nodes]
+            raise ValueError(f"Multiple masters have registry_storage=true: {node_names}")
+        elif len(registry_nodes) < 1:
+            raise ValueError("No master node is configured with registry_storage=true. This should have been automatically configured during cluster config initialization.")
+
+        return registry_nodes[0]
+
+    def validate_registry_storage_config(self) -> None:
+        """Validate and configure registry storage defaults"""
+        registry_nodes = [m for m in self.masters if m.registry_storage]
+
+        # Validate that only one master has registry_storage=true
+        if len(registry_nodes) > 1:
+            node_names = [n.name for n in registry_nodes]
+            raise ValueError(f"Only one master can have registry_storage=true, found: {node_names}")
+
+        # If no registry storage node is configured, automatically configure the first master
+        if len(registry_nodes) <= 0 and len(self.masters) > 0:
+            registry_node = self.masters[0]
+            logger.info(f"No registry node configured. Using master node '{registry_node.name}' (kind: {registry_node.kind}) as default registry storage node.")
+
+            # Configure registry storage (uses existing default in_cluster_registry_storage_size)
+            registry_node.registry_storage = True
+
+            logger.info(f"Configured node '{registry_node.name}' with registry_storage=True and storage_size={registry_node.in_cluster_registry_storage_size}")
+
+            # Only show effective disk size for VMs (baremetal nodes can't have disk size modified)
+            if registry_node.kind == "vm":
+                logger.info(f"Node '{registry_node.name}' effective disk size: {registry_node.get_effective_disk_size()}")
+            else:
+                logger.info(f"Node '{registry_node.name}' is baremetal - registry will use hostpath storage on existing disk")
 
 
 def main() -> None:
