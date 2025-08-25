@@ -2,7 +2,7 @@ from clustersConfig import ClustersConfig
 from clustersConfig import NodeConfig
 from concurrent.futures import Future
 from concurrent.futures import ThreadPoolExecutor
-from typing import Optional
+from typing import Optional, Tuple
 from logger import logger
 from clustersConfig import ExtraConfigArgs
 import host
@@ -14,9 +14,11 @@ CUSTOM_IMAGE = "ovnk-custom-image:dev"
 DEFAULT_OVN_REPO = "https://github.com/ovn-org/ovn.git"
 DEFAULT_OVN_REF = "main"
 # OVN build dependencies that can be removed to simplify build on UBI.
-REMOVE_DEPS = "graphviz groff sphinx-build unbound checkpolicy selinux-policy-devel"
+REMOVE_DEPS = "graphviz groff sphinx-build unbound checkpolicy selinux-policy-devel tcpdump"
 EXECUTOR_SIZE = 20
 IMAGE_PATH = "/tmp/image.tar"
+VERSION_KEY = "VERSION_ID="
+UBI_IMAGE = "registry.access.redhat.com/ubi{}/ubi:{}"
 
 
 def ExtraConfigCustomOvn(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, Future[Optional[host.Result]]]) -> None:
@@ -31,7 +33,11 @@ def ExtraConfigCustomOvn(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict
     node.ssh_connect("core")
 
     tag_ovnk_image(node)
-    build_image(node, cfg)
+    major, version = detect_ubi_version(node)
+    ubi_image = UBI_IMAGE.format(major, version)
+    logger.info(f"Using {ubi_image} as base image.")
+
+    build_image(node, cfg, ubi_image)
     save_image(node)
 
     executor = ThreadPoolExecutor(max_workers=EXECUTOR_SIZE)
@@ -62,11 +68,26 @@ def tag_ovnk_image(node: host.Host) -> None:
         logger.info(f"Tagging the original image as \"{ORIGINAL_IMAGE}\"")
 
 
-def build_image(node: host.Host, cfg: ExtraConfigArgs) -> None:
+def detect_ubi_version(node: host.Host) -> Tuple[str, str]:
+    result = node.run_or_die("sudo crictl exec --name ovn-controller cat /etc/os-release")
+    for line in result.out.splitlines():
+        if line.startswith(VERSION_KEY):
+            version = line.removeprefix(VERSION_KEY).strip("\"")
+            major, _, _ = version.partition(".")
+            return major, version
+
+    die(f"Couldn't find proper os-release: {result.out}")
+
+    # The return is there to satisfy the linter, it's unreachable normally.
+    return "", ""
+
+
+def build_image(node: host.Host, cfg: ExtraConfigArgs, ubi_image: str) -> None:
     logger.info("Building custom OVN image")
     node.copy_to("manifests/ovn/Dockerfile", "/tmp/Dockerfile")
     node.run_or_die(
         f"sudo podman build -t {CUSTOM_IMAGE} "
+        f"--build-arg OVNK_BUILDER_IMAGE={ubi_image} "
         f"--build-arg OVNK_IMAGE={ORIGINAL_IMAGE} "
         f"--build-arg OVN_REPO={cfg.ovn_repo or DEFAULT_OVN_REPO} "
         f"--build-arg OVN_REF={cfg.ovn_ref or DEFAULT_OVN_REF} "
