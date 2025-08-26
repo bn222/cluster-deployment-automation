@@ -271,9 +271,9 @@ fi
             imc.run(f"date -s \"{time.asctime(localtime())}\"")
         else:
             html = response.read().decode('utf-8')
-            name_match = re.search(r"chrony\S*rpm", html)
+            name_match = re.search(r"chrony\S*rpm\"", html)
             if name_match:
-                chronypackage = html[name_match.start() : name_match.end()]
+                chronypackage = html[name_match.start() : name_match.end() - 1]
                 chronyurl = f'{packageserver}{chronypackage}'
                 chrony_script = f"""
 #!/bin/bash
