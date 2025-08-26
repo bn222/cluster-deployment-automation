@@ -271,9 +271,10 @@ fi
             imc.run(f"date -s \"{time.asctime(localtime())}\"")
         else:
             html = response.read().decode('utf-8')
-            name_match = re.search(r"\"chrony(.*rpm?)\"", html)
+            name_match = re.search(r"chrony\S*rpm", html)
             if name_match:
-                chronypackage = html[name_match.start() + 1 : name_match.end() - 1]
+                chronypackage = html[name_match.start() : name_match.end()]
+                chronyurl = f'{packageserver}{chronypackage}'
                 chrony_script = f"""
 #!/bin/bash
 logger "Activating chrony"
@@ -301,9 +302,6 @@ if [ $update -eq 1 ]; then
  timedatectl set-timezone America/Los_Angeles
 fi
 """
-                imc.write("/work/scripts/pre_init_app.d/chrony.sh", chrony_script)
-                imc.run("chmod 0700 /work/scripts/pre_init_app.d/chrony.sh")
-                chronyurl = f'{packageserver}{chronypackage}'
 
                 logger.info(f"Chrony package found at {chronyurl}")
                 chronydata = urllib.request.urlopen(chronyurl)
@@ -311,6 +309,8 @@ fi
                 imc.run("mkdir -pm 0700 /work/scripts/chrony")
                 imc.write(f"/work/scripts/chrony/{chronypackage}", chronydata.read().decode('latin-1'), 'latin-1')
                 imc.run(f"chmod 0700 /work/scripts/chrony/{chronypackage}")
+                imc.write("/work/scripts/pre_init_app.d/chrony.sh", chrony_script)
+                imc.run("chmod 0700 /work/scripts/pre_init_app.d/chrony.sh")
                 logger.info("Starting chrony on IMC")
                 imc.run("/work/scripts/pre_init_app.d/chrony.sh")
 
