@@ -121,7 +121,9 @@ class VmClusterNode(ClusterNode):
 
             os.makedirs(os.path.dirname(self.config.image_path), exist_ok=True)
             logger.info(f"creating {disk_size_gb}GB storage for VM {self.config.name} at {self.config.image_path}")
+            self.hostconn.lock()
             self.hostconn.run_or_die(f'qemu-img create -f qcow2 {options} {self.config.image_path} {disk_size_gb}G')
+            self.hostconn.unlock()
 
             cdrom_line = f"--cdrom {iso_or_image_path}"
         else:

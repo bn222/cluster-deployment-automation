@@ -17,6 +17,7 @@ from paramiko import ssh_exception, RSAKey, Ed25519Key
 from logger import logger
 from abc import ABC, abstractmethod
 import timer
+import threading
 
 
 def default_id_rsa_path() -> str:
@@ -146,6 +147,13 @@ class Host:
         self._bmc = bmc
         self._logins: list[Login] = []
         self.sudo_needed = False
+        self.mtx = threading.Lock()
+
+    def lock(self) -> None:
+        self.mtx.acquire()
+
+    def unlock(self) -> None:
+        self.mtx.release()
 
     @lru_cache(maxsize=None)
     def is_localhost(self) -> bool:
