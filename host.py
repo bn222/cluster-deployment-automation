@@ -149,11 +149,8 @@ class Host:
         self.sudo_needed = False
         self.mtx = threading.Lock()
 
-    def lock(self) -> None:
-        self.mtx.acquire()
-
-    def unlock(self) -> None:
-        self.mtx.release()
+    def mutex(self) -> threading.Lock:
+        return self.mtx
 
     @lru_cache(maxsize=None)
     def is_localhost(self) -> bool:
