@@ -222,7 +222,7 @@ cp /work/redfish/certs/server.crt /etc/pki/ca-trust/source/anchors/
 /usr/bin/scripts/set_acc_kernel_cmdline.sh -a -b iscsi
 sync
 update-ca-trust
-( sleep 15 ; systemctl restart redfish ) &
+systemctl restart redfish
 """
         pre_init_app = """
 #!/bin/sh
@@ -321,6 +321,7 @@ fi
         imc.write("/work/redfish/certs/server.crt", server.read_file("/root/.local-container-registry/domain.crt"))
         imc.write("/work/redfish/certs/server.key", server.read_file("/root/.local-container-registry/domain.key"))
         imc.run("cp /etc/imc-redfish-configuration.json /work/redfish/")
+        imc.run("""sed -i -e's|restricted-to.*|restricted-to-interface" : null,|g' /work/redfish/imc-redfish-configuration.json""")
         imc.run(f"echo {self.password} | bash /usr/bin/ipu-redfish-generate-password-hash.sh")
 
         # WA: use idpf for ACC to IMC. Remove when we've moved to icc-net:
