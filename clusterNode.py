@@ -259,6 +259,12 @@ class X86ClusterNode(ClusterNode):
         self.dynamic_ip = ips[0]
         return True
 
+    def teardown(self) -> None:
+        assert self.config.bmc is not None
+        bmc = BMC.from_bmc_config(self.config.bmc)
+        h = host.Host(self.config.node, bmc)
+        h.stop()
+
 
 class BFClusterNode(ClusterNode):
     external_port: str
