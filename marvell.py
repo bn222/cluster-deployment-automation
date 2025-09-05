@@ -90,6 +90,8 @@ def _pxeboot_marvell_dpu(name: str, bmc: BmcConfig, mac: str, ip: str, iso: str)
 
     image = os.environ.get("CDA_MARVELL_TOOLS_IMAGE", "quay.io/sdaniele/marvell-tools:latest")
 
+    logger.info(f"run pxeboot via {image}")
+
     r = rsh.run(
         "set -o pipefail ; "
         "sudo "
