@@ -70,7 +70,7 @@ class IsoDeployer(BaseDeployer):
         self._setup_networking()
         assert self._master.kind == "dpu"
         assert self._master.bmc is not None
-        dpu_kind = detect_dpu(self._master)
+        dpu_kind = detect_dpu(self._master, get_external_port=self._cc.get_external_port)
         if dpu_kind == "ipu":
             node = ipu.IPUClusterNode(self._master, self._cc.get_external_port(), self._cc.network_api_port)
             node.start(self._cc.install_iso)

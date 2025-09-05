@@ -1,12 +1,22 @@
 import os
 import shlex
+import typing
 from clustersConfig import NodeConfig
+from bmc import BMC
 from bmc import BmcConfig
 import common
 import host
+from logger import logger
+import coreosBuilder
+from nfs import NFS
 
 
-def marvell_bmc_rsh(bmc: BmcConfig) -> host.Host:
+def marvell_bmc_rsh(
+    bmc: BmcConfig,
+    *,
+    bmc_host: typing.Optional[BmcConfig] = None,
+    get_external_port: typing.Optional[typing.Callable[[], str]] = None,
+) -> typing.Optional[host.Host]:
     # For Marvell DPU, we require that our "BMC" is the host on has the DPU
     # plugged in.
     #
@@ -20,17 +30,53 @@ def marvell_bmc_rsh(bmc: BmcConfig) -> host.Host:
     # same time (e.g. via Jinja2 templates), we can start honoring
     # bmc.user/bmc.password.
     rsh = host.RemoteHost(bmc.url)
-    rsh.ssh_connect("core")
+
+    try:
+        rsh.ssh_connect("core", timeout="2m")
+    except Exception as e:
+        logger.info(f"Cannot connect to core @ {bmc.url}: {e}")
+    else:
+        return rsh
+
+    if bmc_host is None:
+        return None
+
+    assert get_external_port
+
+    logger.info(f"For Marvell host {bmc.url} boot CoreOS Live via BMC {bmc_host.url}")
+
+    coreosBuilder.ensure_fcos_exists()
+    lh = host.LocalHost()
+    nfs = NFS(lh, get_external_port())
+    iso_url = nfs.host_file("/root/iso/fedora-coreos.iso")
+
+    BMC.from_bmc_config(bmc_host).boot_iso_redfish(iso_url)
+
+    rsh.ssh_connect("core", timeout="15m")
     return rsh
 
 
-def is_marvell(bmc: BmcConfig) -> bool:
-    rsh = marvell_bmc_rsh(bmc)
+def is_marvell(
+    bmc: BmcConfig,
+    *,
+    bmc_host: typing.Optional[BmcConfig] = None,
+    get_external_port: typing.Optional[typing.Callable[[], str]] = None,
+) -> bool:
+    rsh = marvell_bmc_rsh(
+        bmc,
+        bmc_host=bmc_host,
+        get_external_port=get_external_port,
+    )
+    if rsh is None:
+        return False
     return "177d:b900" in rsh.run("lspci -nn -d :b900").out
 
 
 def _pxeboot_marvell_dpu(name: str, bmc: BmcConfig, mac: str, ip: str, iso: str) -> None:
     rsh = marvell_bmc_rsh(bmc)
+
+    if rsh is None:
+        raise RuntimeError(f"Cannot connect to {bmc.url} for pxeboot of Marvell DPU")
 
     ip_addr = f"{ip}/24"
     ip_gateway = common.ip_to_gateway(ip, "255.255.255.0")
@@ -43,6 +89,8 @@ def _pxeboot_marvell_dpu(name: str, bmc: BmcConfig, mac: str, ip: str, iso: str)
     ssh_key_options = [f"--ssh-key={shlex.quote(s)}" for s in ssh_keys]
 
     image = os.environ.get("CDA_MARVELL_TOOLS_IMAGE", "quay.io/sdaniele/marvell-tools:latest")
+
+    logger.info(f"run pxeboot via {image}")
 
     r = rsh.run(
         "set -o pipefail ; "
