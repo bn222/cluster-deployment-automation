@@ -4,6 +4,7 @@ from clustersConfig import NodeConfig
 from bmc import BmcConfig
 import common
 import host
+from logger import logger
 
 
 def marvell_bmc_rsh(bmc: BmcConfig) -> host.Host:
@@ -43,6 +44,8 @@ def _pxeboot_marvell_dpu(name: str, bmc: BmcConfig, mac: str, ip: str, iso: str)
     ssh_key_options = [f"--ssh-key={shlex.quote(s)}" for s in ssh_keys]
 
     image = os.environ.get("CDA_MARVELL_TOOLS_IMAGE", "quay.io/sdaniele/marvell-tools:latest")
+
+    logger.info(f"run pxeboot for {bmc.url} to install {image}")
 
     r = rsh.run(
         "set -o pipefail ; "
