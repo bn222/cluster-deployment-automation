@@ -60,10 +60,11 @@ class ClusterNode:
     def ensure_reboot(self) -> bool:
         return True
 
-    def set_password(self, user: str = "root", password: str = "redhat") -> None:
+    def set_password(self, user: str = "root", password: str = "redhat") -> bool:
         rh = host.RemoteHost(self.ip())
         rh.ssh_connect("core")
         rh.run_or_die(f"echo {user}:{password} | sudo chpasswd")
+        return True
 
     def print_logs(self) -> None:
         rh = host.RemoteHost(self.ip())

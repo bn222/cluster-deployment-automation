@@ -367,9 +367,8 @@ class ClusterDeployer(BaseDeployer):
         logger.info('updating /etc/hosts')
         self.update_etc_hosts()
 
-        logger.info("Setting password to for root to redhat")
-        for master in master_nodes:
-            master.set_password()
+        nodes_with_futures = [(n.config.name, executor.submit(n.set_password)) for n in master_nodes]
+        wait_futures("set root password to redhat", nodes_with_futures)
 
         self.update_dnsmasq()
 
@@ -440,10 +439,8 @@ class ClusterDeployer(BaseDeployer):
 
         self.wait_for_workers()
 
-        logger.info("Setting password to for root to redhat")
-        for h in hosts_with_workers:
-            for worker in h.k8s_worker_nodes:
-                worker.set_password()
+        nodes_with_futures = [(n.config.name, executor.submit(n.set_password)) for n in worker_nodes]
+        wait_futures("set root password to redhat", nodes_with_futures)
 
     def _wait_master_reboot(self, infra_env: str, node: ClusterNode) -> bool:
         def master_ready(ai: AssistedClientAutomation, node_name: str) -> bool:
