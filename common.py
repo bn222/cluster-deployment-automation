@@ -680,6 +680,7 @@ def wait_futures(msg: str, futures: list[tuple[str, Future[bool]]], cb: Callable
         else:
             return "Fail"
 
+    futures = sorted(futures)
     state = {name: get_future_state(future) for (name, future) in futures}
     logger.info(f"Waiting for {msg}: {state}")
     max_tries = 200 * 6
