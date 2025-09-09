@@ -1,115 +1,110 @@
 import logging
 import os
-import typing
-from typing import Optional
 from typing import Any
 from io import StringIO
 
 
-class ExtendedLogger:
-    def __init__(self, logger: logging.Logger, byte_limit: int = 50 * 1024 * 1024):
-        self._wrapped_logger = logger
-        self._total_bytes = 0
-        self._byte_limit = byte_limit
-        self._string_buffer = StringIO()
-        self._limit_disabled = False
+class CdaLogger:
+    def __init__(self, byte_limit: int = 50 * 1024 * 1024, lvl: int = logging.INFO):
+        self.byte_limit = byte_limit
+        self.total_bytes = 0
+        self.buffer = StringIO()
 
-    def _process_buffered_log(self, log_level: str = 'info') -> None:
-        string_buffer = object.__getattribute__(self, '_string_buffer')
-        logged_content = string_buffer.getvalue()
-        string_buffer.seek(0)
-        string_buffer.truncate(0)
+        # Create logger
+        self.logger = logging.getLogger("CDA")
+        self.logger.setLevel(lvl)
+        self.logger.handlers.clear()
 
-        if logged_content:
-            limit_disabled = object.__getattribute__(self, '_limit_disabled')
-            if limit_disabled:
-                print(logged_content, end='')
-                return
+        # Add only buffer handler to capture logs
+        self.buffer_handler = logging.StreamHandler(self.buffer)
+        prefix_fmt = "%(asctime)s %(levelname)s [th:%(thread)s] (%(filename)s:%(lineno)d)"
+        date_fmt = "%Y-%m-%d %H:%M:%S"
+        formatter = logging.Formatter(f"{prefix_fmt}: %(message)s", date_fmt)
+        self.buffer_handler.setFormatter(formatter)
+        self.logger.addHandler(self.buffer_handler)
 
-            total_bytes = object.__getattribute__(self, '_total_bytes')
-            byte_limit = object.__getattribute__(self, '_byte_limit')
-            new_bytes = len(logged_content.encode('utf-8'))
+    def _clear_buffer(self) -> None:
+        self.buffer.seek(0)
+        self.buffer.truncate(0)
 
-            if total_bytes + new_bytes > byte_limit:
-                remaining_bytes = byte_limit - total_bytes
-                if remaining_bytes <= 50:
-                    object.__setattr__(self, '_limit_disabled', True)
-                    wrapped_logger = object.__getattribute__(self, '_wrapped_logger')
-                    wrapped_logger.error(f"Log limit of {byte_limit} bytes exceeded. Total: {total_bytes}, New: {new_bytes}, Remaining: {remaining_bytes}")
-                    os._exit(-1)
+    def _get_and_clear_buffer(self) -> str:
+        content = self.buffer.getvalue()
+        self._clear_buffer()
+        return content
 
-                truncation_msg = " [TRUNCATED - Log limit exceeded]"
-                available_bytes = remaining_bytes - len(truncation_msg.encode('utf-8'))
+    def _remaining_bytes(self) -> int:
+        return self.byte_limit - self.total_bytes
 
-                object.__setattr__(self, '_limit_disabled', True)
-                wrapped_logger = object.__getattribute__(self, '_wrapped_logger')
+    def _check_and_output(self, level_name: str) -> None:
+        content = self.buffer.getvalue()
 
-                if available_bytes > 0:
-                    truncated_content = logged_content.encode('utf-8')[:available_bytes].decode('utf-8', errors='ignore')
-                    getattr(wrapped_logger, log_level)(truncated_content)
+        if not content:
+            return
 
-                wrapped_logger.error(truncation_msg)
+        content_bytes = len(content.encode('utf-8'))
 
-                wrapped_logger.error(f"Log limit of {byte_limit} bytes exceeded. Total: {total_bytes}, New: {new_bytes}, Remaining: {remaining_bytes}")
-                os._exit(-1)
-            else:
-                print(logged_content, end='')
-                object.__setattr__(self, '_total_bytes', total_bytes + new_bytes)
+        if content_bytes <= self._remaining_bytes():
+            print(content, end='', flush=True)
+            self.total_bytes += content_bytes
+        else:
+            if self._remaining_bytes() > 50:
+                # Truncate and show partial
+                truncated = content.encode('utf-8')[: self._remaining_bytes() - 40].decode('utf-8', errors='ignore')
+                self.logger.error(truncated + " [TRUNCATED]")
+                truncated_content = self._get_and_clear_buffer()
+                print(truncated_content, flush=True)
 
-    def __getattribute__(self: 'ExtendedLogger', name: str) -> Any:
-        if name in ('error_and_exit', '_wrapped_logger', '_total_bytes', '_byte_limit', '_string_buffer', '_limit_disabled', '_process_buffered_log'):
-            return object.__getattribute__(self, name)
-        if name in ('debug', 'info', 'warning', 'error', 'critical', 'exception'):
-            logger = object.__getattribute__(self, '_wrapped_logger')
-            original_method = logger.__getattribute__(name)
+            # Use logger for error message
+            self.logger.error(f"Log limit of {self.byte_limit} bytes exceeded")
+            error_content = self._get_and_clear_buffer()
+            print(error_content, end='', flush=True)
+            os._exit(-1)
 
-            def counting_wrapper(*args: Any, **kwargs: Any) -> Any:
-                result = original_method(*args, **kwargs)
-                self._process_buffered_log(name)
-                return result
+    def debug(self, msg: Any, *args, **kwargs) -> None:
+        self._clear_buffer()
+        self.logger.debug(msg, *args, **kwargs)
+        self._check_and_output('debug')
 
-            return counting_wrapper
+    def info(self, msg: Any, *args, **kwargs) -> None:
+        self._clear_buffer()
+        self.logger.info(msg, *args, **kwargs)
+        self._check_and_output('info')
 
-        logger = object.__getattribute__(self, '_wrapped_logger')
-        return logger.__getattribute__(name)
+    def warning(self, msg: Any, *args, **kwargs) -> None:
+        self._clear_buffer()
+        self.logger.warning(msg, *args, **kwargs)
+        self._check_and_output('warning')
 
-    def error_and_exit(self: 'ExtendedLogger', msg: str, *, exit_code: int = -1) -> typing.NoReturn:
+    def error(self, msg: Any, *args, **kwargs) -> None:
+        self._clear_buffer()
+        self.logger.error(msg, *args, **kwargs)
+        self._check_and_output('error')
+
+    def critical(self, msg: Any, *args, **kwargs) -> None:
+        self._clear_buffer()
+        self.logger.critical(msg, *args, **kwargs)
+        self._check_and_output('critical')
+
+    def exception(self, msg: Any, *args, **kwargs) -> None:
+        self._clear_buffer()
+        self.logger.exception(msg, *args, **kwargs)
+        self._check_and_output('error')
+
+    def error_and_exit(self, msg: str, *, exit_code: int = -1) -> None:
         self.error(msg)
         os._exit(exit_code)
 
 
-def configure_logger(lvl: Optional[int] = None) -> ExtendedLogger:
-    logger = logging.getLogger("CDA")
+def configure_cda_logger() -> CdaLogger:
+    # Get log level from environment
+    log_level = logging.INFO
+    env_level = os.environ.get("CDA_LOG_LEVEL")
+    if env_level:
+        env_level = env_level.strip().upper()
+        if env_level in ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"):
+            log_level = getattr(logging, env_level)
 
-    if lvl is None:
-        lvl = logging.INFO
-        s = os.environ.get("CDA_LOG_LEVEL")
-        if s:
-            s = s.strip().upper()
-            if s in ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"):
-                lvl = typing.cast(int, getattr(logging, s))
-
-    logger.setLevel(lvl)
-
-    fmt = "%(asctime)s %(levelname)s [th:%(thread)s] (%(filename)s:%(lineno)d): %(message)s"
-    datefmt = "%Y-%m-%d %H:%M:%S"
-    formatter = logging.Formatter(fmt, datefmt)
-
-    extended_logger = ExtendedLogger(logger)
-
-    global prev_handler
-    if prev_handler is not None:
-        logger.removeHandler(prev_handler)
-
-    string_handler = logging.StreamHandler(extended_logger._string_buffer)
-    string_handler.setLevel(lvl)
-    string_handler.setFormatter(formatter)
-    prev_handler = string_handler
-    logger.addHandler(string_handler)
-
-    return extended_logger
+    return CdaLogger(lvl=log_level)
 
 
-prev_handler: Optional[logging.StreamHandler[Any]] = None
-
-logger = configure_logger()
+logger = configure_cda_logger()
