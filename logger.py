@@ -1,6 +1,6 @@
 import logging
 import os
-from typing import Any
+from typing import Any, NoReturn
 from io import StringIO
 
 
@@ -60,39 +60,58 @@ class CdaLogger:
             print(error_content, end='', flush=True)
             os._exit(-1)
 
-    def debug(self, msg: Any, *args, **kwargs) -> None:
+    def debug(self, msg: Any, *args: Any, **kwargs: Any) -> None:
         self._clear_buffer()
         self.logger.debug(msg, *args, **kwargs)
         self._check_and_output('debug')
 
-    def info(self, msg: Any, *args, **kwargs) -> None:
+    def info(self, msg: Any, *args: Any, **kwargs: Any) -> None:
         self._clear_buffer()
         self.logger.info(msg, *args, **kwargs)
         self._check_and_output('info')
 
-    def warning(self, msg: Any, *args, **kwargs) -> None:
+    def warning(self, msg: Any, *args: Any, **kwargs: Any) -> None:
         self._clear_buffer()
         self.logger.warning(msg, *args, **kwargs)
         self._check_and_output('warning')
 
-    def error(self, msg: Any, *args, **kwargs) -> None:
+    def error(self, msg: Any, *args: Any, **kwargs: Any) -> None:
         self._clear_buffer()
         self.logger.error(msg, *args, **kwargs)
         self._check_and_output('error')
 
-    def critical(self, msg: Any, *args, **kwargs) -> None:
+    def critical(self, msg: Any, *args: Any, **kwargs: Any) -> None:
         self._clear_buffer()
         self.logger.critical(msg, *args, **kwargs)
         self._check_and_output('critical')
 
-    def exception(self, msg: Any, *args, **kwargs) -> None:
+    def exception(self, msg: Any, *args: Any, **kwargs: Any) -> None:
         self._clear_buffer()
         self.logger.exception(msg, *args, **kwargs)
         self._check_and_output('error')
 
-    def error_and_exit(self, msg: str, *, exit_code: int = -1) -> None:
+    def error_and_exit(self, msg: str, *, exit_code: int = -1) -> NoReturn:
         self.error(msg)
         os._exit(exit_code)
+
+    # Compatibility methods for existing codebase
+    def log(self, level: int, msg: Any, *args: Any, **kwargs: Any) -> None:
+        if level <= logging.DEBUG:
+            self.debug(msg, *args, **kwargs)
+        elif level <= logging.INFO:
+            self.info(msg, *args, **kwargs)
+        elif level <= logging.WARNING:
+            self.warning(msg, *args, **kwargs)
+        elif level <= logging.ERROR:
+            self.error(msg, *args, **kwargs)
+        else:
+            self.critical(msg, *args, **kwargs)
+
+    def warn(self, msg: Any, *args: Any, **kwargs: Any) -> None:
+        self.warning(msg, *args, **kwargs)
+
+    def setLevel(self, level: int) -> None:
+        self.logger.setLevel(level)
 
 
 def configure_cda_logger() -> CdaLogger:

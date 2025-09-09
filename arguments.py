@@ -7,7 +7,7 @@ import argcomplete
 import difflib
 import typing
 from extraConfigRunner import extra_config
-from logger import logger, configure_logger
+from logger import logger
 from typing import Optional
 
 PRE_STEP = "pre"
@@ -136,7 +136,8 @@ def parse_args() -> argparse.Namespace:
         range_list: Optional[common.RangeList] = getattr(args, 'worker_range_accumulator', None)
         args.worker_range = range_list or common.RangeList.UNLIMITED
 
-    configure_logger(getattr(logging, args.verbosity.upper()))
+    # Update the existing logger's level
+    logger.setLevel(getattr(logging, args.verbosity.upper()))
 
     if not args.secrets_path:
         args.secrets_path = os.path.join(os.getcwd(), "pull_secret.json")
