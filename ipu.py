@@ -99,7 +99,8 @@ class IPUClusterNode(ClusterNode):
 
     def start(self, iso_or_image_path: str) -> bool:
         assert self.config.bmc is not None
-        ipu_bmc = IPUBMC(self.config.bmc)
+        assert self.config.bmc_host is not None
+        ipu_bmc = IPUBMC(self.config.bmc, self.config.bmc_host)
         if ipu_bmc.version() != "1.8.0" and ipu_bmc.version() != "2.0.0":
             logger.error_and_exit(f"Unexpected version {ipu_bmc.version()}, should be 1.8.0 or 2.0.0")
         if self.recovery_mode():
@@ -126,8 +127,9 @@ class IPUClusterNode(ClusterNode):
     def _redfish_boot_ipu(self, external_port: str, node: NodeConfig, iso: str) -> None:
         def helper(node: NodeConfig, iso_address: str) -> str:
             assert node.bmc is not None
+            assert node.bmc_host is not None
             logger.info(f"Booting {node.bmc.url} with {iso_address}")
-            bmc = IPUBMC(node.bmc)
+            bmc = IPUBMC(node.bmc, node.bmc_host)
             bmc.boot_iso_with_redfish(iso_path=iso_address)
             return "Boot command sent"
 
@@ -193,7 +195,7 @@ class IPUClusterNode(ClusterNode):
 
 
 class IPUBMC(BMC):
-    def __init__(self, bmc_config: BmcConfig, host_bmc: Optional[BMC] = None):
+    def __init__(self, bmc_config: BmcConfig, host_bmc: BmcConfig):
         if bmc_config.password == "calvin":
             password = "calvincalvincalvin"
         else:
@@ -204,7 +206,7 @@ class IPUBMC(BMC):
             password,
             port=8443,
         )
-        self._host_bmc = host_bmc
+        self._host_bmc = BMC.from_bmc_config(host_bmc)
 
     def prepared(self, imc: host.Host) -> bool:
         return imc.exists("/work/cda_sha") and imc.read_file("/work/cda_sha") == self.current_file_sha()
@@ -495,7 +497,8 @@ fi
         pass
 
     def start(self) -> None:
-        pass
+        assert self._host_bmc is not None
+        self._host_bmc.start()
 
     def cold_boot(self) -> None:
         assert self._host_bmc is not None

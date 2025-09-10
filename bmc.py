@@ -15,14 +15,7 @@ class BmcConfig:
 
 
 class BMC:
-    def __init__(
-        self,
-        bmc_host: str,
-        user: str = "root",
-        password: str = "calvin",
-        *,
-        port: int = 443,
-    ):
+    def __init__(self, bmc_host: str, user: str = "root", password: str = "calvin", *, port: int = 443):
         if not bmc_host:
             raise ValueError("BMC host not defined")
         self.bmc_host = bmc_host

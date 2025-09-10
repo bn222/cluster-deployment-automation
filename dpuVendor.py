@@ -11,7 +11,9 @@ def detect_dpu(node: clustersConfig.NodeConfig) -> str:
     logger.info("Detecting DPU")
     assert node.kind == "dpu"
     assert node.bmc is not None
-    ipu_bmc = ipu.IPUBMC(node.bmc)
+    assert node.bmc_host is not None
+
+    ipu_bmc = ipu.IPUBMC(node.bmc, node.bmc_host)
     if ipu_bmc.is_ipu():
         return "ipu"
     elif marvell.is_marvell(node.bmc):
