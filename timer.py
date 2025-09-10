@@ -58,7 +58,10 @@ class StopWatch:
         self.stopped = True
 
     def __str__(self) -> str:
-        current = time.time()
+        if not self.stopped:
+            current = time.time()
+        else:
+            current = self.end_time
         return duration_to_str(current - self.start_time)
 
     def elapsed(self) -> float:
