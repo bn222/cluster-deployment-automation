@@ -157,6 +157,17 @@ class BMC:
     def start(self) -> None:
         self._redfish().start()
 
+    def status(self) -> bool:
+        s = self._redfish().status()
+        if isinstance(s, str):
+            return s == "On"
+        else:
+            return False
+
+    def ensure_started(self) -> None:
+        if not self._redfish().status():
+            self.start()
+
     def cold_boot(self) -> None:
         self.stop()
         time.sleep(10)

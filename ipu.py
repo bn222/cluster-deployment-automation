@@ -493,12 +493,21 @@ fi
         data = {"ResetType": "ForceRestart"}
         self._requests_post(url, data)
 
+    def status(self) -> bool:
+        assert self._host_bmc is not None
+        return self._host_bmc.status()
+
     def stop(self) -> None:
         pass
 
     def start(self) -> None:
         assert self._host_bmc is not None
         self._host_bmc.start()
+
+    def ensure_started(self) -> None:
+        ret = self._host_bmc.ensure_started()
+        self._create_imc_rsh().wait_ping()
+        return ret
 
     def cold_boot(self) -> None:
         assert self._host_bmc is not None
