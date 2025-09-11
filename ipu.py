@@ -505,9 +505,8 @@ fi
         self._host_bmc.start()
 
     def ensure_started(self) -> None:
-        ret = self._host_bmc.ensure_started()
+        self._host_bmc.ensure_started()
         self._create_imc_rsh().wait_ping()
-        return ret
 
     def cold_boot(self) -> None:
         assert self._host_bmc is not None
