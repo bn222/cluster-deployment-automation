@@ -44,10 +44,6 @@ class MarvellBMC:
         rsh = host.RemoteHost(self.bmc.url)
 
         try:
-            if boot_coreos:
-                # FIXME: testing only. Drop this part.
-                raise RuntimeError("TEST: for testing simulate host is unrechable and boot coreos")
-
             rsh.ssh_connect("core", timeout="2m")
         except Exception as e:
             logger.info(f"Cannot connect to core @ {self.bmc.url}: {e}")
