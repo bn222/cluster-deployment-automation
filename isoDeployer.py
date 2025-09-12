@@ -6,6 +6,7 @@ import marvell
 import ipu
 from baseDeployer import BaseDeployer
 from clustersConfig import ClustersConfig
+from clusterNode import ClusterNode
 from dpuVendor import detect_dpu
 from state_file import StateFile
 import sys
@@ -70,16 +71,18 @@ class IsoDeployer(BaseDeployer):
         self._setup_networking()
         assert self._master.kind == "dpu"
         assert self._master.bmc is not None
-        dpu_kind = detect_dpu(self._master)
+        cluster_node: ClusterNode
+        dpu_kind = detect_dpu(self._master, get_external_port=self._cc.get_external_port)
         if dpu_kind == "ipu":
-            node = ipu.IPUClusterNode(self._master, self._cc.get_external_port(), self._cc.network_api_port)
-            node.start(self._cc.install_iso)
-            node.post_boot()
+            cluster_node = ipu.IPUClusterNode(self._master, self._cc.get_external_port(), self._cc.network_api_port)
         elif dpu_kind == "marvell":
-            marvell.MarvellIsoBoot(self._master, self._cc.install_iso)
+            cluster_node = marvell.MarvellClusterNode(self._master)
         else:
             logger.error("Unknown DPU")
             sys.exit(-1)
+
+        cluster_node.start(self._cc.install_iso)
+        cluster_node.post_boot()
 
     def _setup_networking(self) -> None:
         assert self._master.ip is not None

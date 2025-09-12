@@ -81,6 +81,8 @@ class CoreosBuilder:
         self._clone_if_not_exists("https://github.com/coreos/coreos-assembler.git")
         config_dir = self._clone_if_not_exists("https://github.com/coreos/fedora-coreos-config")
 
+        lh.run(f"git -C {config_dir} submodule update --init --recursive")
+
         contents = "packages:\n  - kernel-modules-extra\n"
         # contents = contents + "  - python3\n  - libvirt\n  - qemu-img\n  - qemu-kvm\n  - virt-install\n  - netcat\n  - bridge-utils\n  - tcpdump\n"
 

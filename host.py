@@ -160,7 +160,7 @@ class Host:
         assert not self.is_localhost()
         if not self.ping():
             logger.info(f"waiting for '{self._hostname}' to respond to ping")
-            self.wait_ping()
+            self.wait_ping(timeout=timeout)
         logger.info(f"{self._hostname} up, connecting with {username}")
 
         self._logins = []
@@ -371,11 +371,12 @@ class Host:
             raise Exception(f"Can't cold boot host without bmc on {self.hostname()}")
         self._bmc.cold_boot()
 
-    def wait_ping(self) -> None:
-        t = timer.Timer("1h")
+    def wait_ping(self, *, timeout: str = "1h") -> None:
+        t = timer.Timer(timeout)
         while not self.ping():
             if t.triggered():
-                logger.error_and_exit(f"Waited for 1h for ping to {self.hostname()}")
+                logger.info(f"Timeout waiting for {t.elapsed()} for ping to {self.hostname()}")
+                return
         logger.info(f"Waited for {t.elapsed()} for {self.hostname()} to respond")
 
     def ping(self) -> bool:

@@ -48,7 +48,7 @@ def ExtraConfigIsoBuilder(
     if len(cc.masters) < 1:
         logger.error_and_exit("Error: At least one master is needed for the OS environment to match the DPU requirements")
     node = cc.masters[0]
-    dpu_flavor = detect_dpu(node) if node.kind == "dpu" else "agnostic"
+    dpu_flavor = detect_dpu(node, get_external_port=cc.get_external_port) if node.kind == "dpu" else "agnostic"
     if dpu_flavor == "ipu":
         extra_args = " ip=192.168.0.2:::255.255.255.0::enp0s1f0:off netroot=iscsi:192.168.0.1::::iqn.e2000:acc acpi=force"
         kernel_args = (kernel_args or "") + extra_args
