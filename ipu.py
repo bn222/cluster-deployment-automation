@@ -216,6 +216,9 @@ class IPUBMC(bmc.BaseBMC):
 
         logger.info(f"BMC: {bmc_host} {user} {password}")
 
+    def get_dpu_flavor(self) -> str:
+        return "ipu"
+
     def prepared(self, imc: host.Host) -> bool:
         return imc.exists("/work/cda_sha") and imc.read_file("/work/cda_sha") == self.current_file_sha()
 

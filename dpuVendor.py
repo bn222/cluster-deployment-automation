@@ -1,6 +1,7 @@
 import re
 import host
 import typing
+import bmc
 from logger import logger
 from abc import ABC, abstractmethod
 import ipu
@@ -12,7 +13,7 @@ def detect_dpu(
     node: clustersConfig.NodeConfig,
     *,
     get_external_port: typing.Callable[[], str],
-) -> str:
+) -> bmc.BaseBMC:
     logger.info("Detecting DPU")
     assert node.kind == "dpu"
     assert node.bmc is not None
@@ -21,13 +22,13 @@ def detect_dpu(
     ipu_bmc = ipu.IPUBMC(node.bmc, node.bmc_host)
     ipu_bmc.ensure_started()
     if ipu_bmc.is_ipu():
-        return "ipu"
+        return ipu_bmc
 
     marvell_bmc = marvell.MarvellBMC(node.bmc, bmc_host=node.bmc_host, get_external_port=get_external_port)
     if marvell_bmc.is_marvell():
-        return "marvell"
-    else:
-        logger.error_and_exit("Unknown DPU")
+        return marvell_bmc
+
+    logger.error_and_exit("Unknown DPU")
 
 
 class VendorPlugin(ABC):

@@ -24,6 +24,9 @@ class MarvellBMC(bmc.BaseBMC):
         self._bmc_host = bmc_host
         self._get_external_port = get_external_port
 
+    def get_dpu_flavor(self) -> str:
+        return "marvell"
+
     def _ssh_to_bmc(self, *, boot_coreos: bool = True) -> typing.Optional[host.Host]:
         # For Marvell DPU, the "BMC" is the host where the DPU is plugged in.
         #

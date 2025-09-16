@@ -30,6 +30,9 @@ class BaseBMC(abc.ABC):
             url = f"{url}:{port}"
         return url
 
+    def get_dpu_flavor(self) -> str:
+        return "agnostic"
+
 
 class BMC(BaseBMC):
     def __init__(self, bmc_host: str, user: str = "root", password: str = "calvin", *, port: int = 443):

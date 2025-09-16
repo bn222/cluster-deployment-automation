@@ -1,11 +1,13 @@
 from dpuVendor import detect_dpu
 from isoBuilder import BootcIsoBuilder
 import host
+import bmc
 from logger import logger
 from typing import Optional, cast
 from concurrent.futures import Future
 from clustersConfig import ClustersConfig, ExtraConfigArgs
 import datetime
+import ipu
 
 
 def ExtraConfigIsoBuilder(
@@ -48,8 +50,12 @@ def ExtraConfigIsoBuilder(
     if len(cc.masters) < 1:
         logger.error_and_exit("Error: At least one master is needed for the OS environment to match the DPU requirements")
     node = cc.masters[0]
-    dpu_flavor = detect_dpu(node, get_external_port=cc.get_external_port) if node.kind == "dpu" else "agnostic"
-    if dpu_flavor == "ipu":
+
+    dpu_bmc: Optional[bmc.BaseBMC] = None
+    if node.kind == "dpu":
+        dpu_bmc = detect_dpu(node, get_external_port=cc.get_external_port)
+
+    if isinstance(dpu_bmc, ipu.IPUBMC):
         extra_args = " ip=192.168.0.2:::255.255.255.0::enp0s1f0:off netroot=iscsi:192.168.0.1::::iqn.e2000:acc acpi=force"
         kernel_args = (kernel_args or "") + extra_args
 
@@ -66,5 +72,5 @@ def ExtraConfigIsoBuilder(
         kickstart=kickstart,
         kernel_args=kernel_args,
         remove_args=remove_args,
-        dpu_flavor=dpu_flavor,
+        dpu_flavor=dpu_bmc.get_dpu_flavor() if dpu_bmc else "agnostic",
     ).build()
