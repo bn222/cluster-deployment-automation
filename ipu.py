@@ -350,9 +350,9 @@ fi
         with open(__file__) as f:
             return sha("".join(f.readlines()))
 
-    def _create_imc_rsh(self) -> host.Host:
+    def _create_imc_rsh(self, *, timeout: str = "15m") -> host.Host:
         rsh = host.RemoteHost(self.bmc_host)
-        rsh.ssh_connect("root", password="", discover_auth=False)
+        rsh.ssh_connect("root", password="", discover_auth=False, timeout=timeout)
         return rsh
 
     @staticmethod
@@ -506,7 +506,10 @@ fi
 
     def ensure_started(self) -> None:
         self._host_bmc.ensure_started()
-        self._create_imc_rsh().wait_ping()
+        try:
+            self._create_imc_rsh(timeout="5m")
+        except Exception:
+            return
 
     def cold_boot(self) -> None:
         assert self._host_bmc is not None
