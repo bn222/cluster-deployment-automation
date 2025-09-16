@@ -143,7 +143,8 @@ def ExtraConfigDpu(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, 
 
     dpu_bmc = detect_dpu(dpu_node, get_external_port=cc.get_external_port)
 
-    vendor_plugin = init_vendor_plugin(acc, dpu_bmc.get_dpu_flavor())
+    vendor_plugin = init_vendor_plugin(dpu_bmc)
+
     # TODO: For Intel, this configures hugepages. Figure out a better way
     vendor_plugin.setup(acc)
 
