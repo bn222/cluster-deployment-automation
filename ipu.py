@@ -565,14 +565,23 @@ fi
                 raise RuntimeError("Failed to detect imc version thourgh ssh")
             return fwversion
 
-    def is_ipu(self) -> bool:
-        logger.info(f"Checking if DPU is IPU via {self.bmc_host}")
-        if self._redfish_available():
-            return "Intel IPU" in self._redfish_name()
-        else:
+    def detect(self, *, try_hard: bool = False) -> bool:
+        def _detect() -> bool:
+            logger.info(f"Checking if DPU is IPU via {self.bmc_host}")
+            if self._redfish_available():
+                return "Intel IPU" in self._redfish_name()
+
             # workaround: remove when redfish is started properly at boot
             logger.info(f"Redfish is not up on {self.bmc_host}, using SSH to check")
             return self._version_via_ssh() is not None
+
+        if _detect():
+            return True
+        if try_hard:
+            self.ensure_started()
+            if _detect():
+                return True
+        return False
 
     def ensure_firmware(self, force: bool, version: str) -> None:
         def firmware_is_same() -> bool:
@@ -584,7 +593,6 @@ fi
             else:
                 return False
 
-        assert self.is_ipu()
         imc = host.Host(self.bmc_host)
 
         logger.info(f"Will ensure {self.bmc_host} is on firmware version: {version}")

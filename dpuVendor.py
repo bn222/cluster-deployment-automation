@@ -9,26 +9,37 @@ import marvell
 import clustersConfig
 
 
-def detect_dpu(
+def detect_dpu_maybe(
     node: clustersConfig.NodeConfig,
     *,
     get_external_port: typing.Callable[[], str],
-) -> bmc.BaseBMC:
+) -> typing.Optional[bmc.BaseBMC]:
     logger.info("Detecting DPU")
     assert node.kind == "dpu"
     assert node.bmc is not None
     assert node.bmc_host is not None
 
-    ipu_bmc = ipu.IPUBMC(node.bmc, node.bmc_host)
-    ipu_bmc.ensure_started()
-    if ipu_bmc.is_ipu():
-        return ipu_bmc
+    bmcs = [
+        ipu.IPUBMC(node.bmc, node.bmc_host),
+        marvell.MarvellBMC(node.bmc, bmc_host=node.bmc_host, get_external_port=get_external_port),
+    ]
+    for try_hard in (False, True):
+        for b in bmcs:
+            if b.detect(try_hard=try_hard):
+                return b
 
-    marvell_bmc = marvell.MarvellBMC(node.bmc, bmc_host=node.bmc_host, get_external_port=get_external_port)
-    if marvell_bmc.is_marvell():
-        return marvell_bmc
+    return None
 
-    logger.error_and_exit("Unknown DPU")
+
+def detect_dpu(
+    node: clustersConfig.NodeConfig,
+    *,
+    get_external_port: typing.Callable[[], str],
+) -> bmc.BaseBMC:
+    dpu_bmc = detect_dpu_maybe(node, get_external_port=get_external_port)
+    if dpu_bmc is None:
+        logger.error_and_exit("Unknown DPU")
+    return dpu_bmc
 
 
 class VendorPlugin(ABC):

@@ -46,7 +46,7 @@ class MarvellBMC(bmc.BaseBMC):
         rsh = host.RemoteHost(self.bmc.url)
 
         try:
-            rsh.ssh_connect("core", timeout="2m")
+            rsh.ssh_connect("core", timeout="30s")
         except Exception as e:
             logger.info(f"Cannot connect to core @ {self.bmc.url}: {e}")
         else:
@@ -76,8 +76,8 @@ class MarvellBMC(bmc.BaseBMC):
         bmc2 = bmc.BMC.from_bmc_config(self._bmc_host)
         bmc2.boot_iso_redfish(iso_url)
 
-    def is_marvell(self) -> bool:
-        rsh = self._ssh_to_bmc()
+    def detect(self, *, try_hard: bool = False) -> bool:
+        rsh = self._ssh_to_bmc(boot_coreos=try_hard)
         if rsh is None:
             return False
         return "177d:b900" in rsh.run("lspci -nn -d :b900").out

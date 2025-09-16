@@ -30,6 +30,9 @@ class BaseBMC(abc.ABC):
             url = f"{url}:{port}"
         return url
 
+    def detect(self, *, try_hard: bool = False) -> bool:
+        return False
+
     def get_dpu_flavor(self) -> str:
         return "agnostic"
 
