@@ -76,9 +76,9 @@ class IsoDeployer(BaseDeployer):
 
         cluster_node: ClusterNode
         if isinstance(dpu_bmc, ipu.IPUBMC):
-            cluster_node = ipu.IPUClusterNode(self._master, self._cc.get_external_port(), self._cc.network_api_port)
+            cluster_node = ipu.IPUClusterNode(self._master, self._cc.get_external_port(), dpu_bmc)
         elif isinstance(dpu_bmc, marvell.MarvellBMC):
-            cluster_node = marvell.MarvellClusterNode(self._master)
+            cluster_node = marvell.MarvellClusterNode(self._master, dpu_bmc)
         else:
             logger.error_and_exit("Unknown DPU")
 

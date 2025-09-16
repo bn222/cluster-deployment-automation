@@ -144,15 +144,15 @@ class MarvellBMC(bmc.BaseBMC):
 
 
 class MarvellClusterNode(ClusterNode):
-    def __init__(self, node: NodeConfig) -> None:
+    def __init__(self, node: NodeConfig, marvell_bmc: MarvellBMC) -> None:
         assert node.ip is not None
         assert node.bmc is not None
         self._name = node.name
         self._ip = node.ip
         self._mac = node.mac
         self._bmc = node.bmc
+        self._marvell_bmc = marvell_bmc
 
     def start(self, install_iso: str) -> bool:
-        bmc = MarvellBMC(self._bmc)
-        bmc.pxeboot(self._name, self._mac, self._ip, install_iso)
+        self._marvell_bmc.pxeboot(self._name, self._mac, self._ip, install_iso)
         return True
