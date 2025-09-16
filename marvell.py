@@ -1,8 +1,7 @@
 import os
 import shlex
 import typing
-from bmc import BMC
-from bmc import BmcConfig
+import bmc
 from clustersConfig import NodeConfig
 from clusterNode import ClusterNode
 import common
@@ -12,12 +11,12 @@ import coreosBuilder
 from nfs import NFS
 
 
-class MarvellBMC:
+class MarvellBMC(bmc.BaseBMC):
     def __init__(
         self,
-        bmc: BmcConfig,
+        bmc: bmc.BmcConfig,
         *,
-        bmc_host: typing.Optional[BmcConfig] = None,
+        bmc_host: typing.Optional[bmc.BmcConfig] = None,
         get_external_port: typing.Optional[typing.Callable[[], str]] = None,
     ) -> None:
         assert (bmc_host is None) == (get_external_port is None)
@@ -71,7 +70,7 @@ class MarvellBMC:
         nfs = NFS(lh, self._get_external_port())
         iso_url = nfs.host_file("/root/iso/fedora-coreos.iso")
 
-        bmc2 = BMC.from_bmc_config(self._bmc_host)
+        bmc2 = bmc.BMC.from_bmc_config(self._bmc_host)
         bmc2.boot_iso_redfish(iso_url)
 
     def is_marvell(self) -> bool:

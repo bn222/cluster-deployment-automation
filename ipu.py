@@ -8,7 +8,7 @@ from clustersConfig import NodeConfig
 from bmc import BmcConfig
 from clusterNode import ClusterNode
 import host
-from bmc import BMC
+import bmc
 import common
 from typing import Any
 import urllib.parse
@@ -194,19 +194,27 @@ class IPUClusterNode(ClusterNode):
         logger.info("Reload of idpf on host side complete")
 
 
-class IPUBMC(BMC):
+class IPUBMC(bmc.BaseBMC):
     def __init__(self, bmc_config: BmcConfig, host_bmc: BmcConfig):
         if bmc_config.password == "calvin":
             password = "calvincalvincalvin"
         else:
             password = bmc_config.password
-        super().__init__(
-            bmc_config.url,
-            bmc_config.user,
-            password,
-            port=8443,
-        )
-        self._host_bmc = BMC.from_bmc_config(host_bmc)
+
+        bmc_host = bmc_config.url
+        user = bmc_config.user
+        password = password
+        port = 8443
+        base_url = bmc.BaseBMC.build_base_url(bmc_host=bmc_host, port=port)
+
+        self.bmc_host = bmc_host
+        self.user = user
+        self.password = password
+        self.port = port
+        self.base_url = base_url
+        self._host_bmc = bmc.BMC.from_bmc_config(host_bmc)
+
+        logger.info(f"BMC: {bmc_host} {user} {password}")
 
     def prepared(self, imc: host.Host) -> bool:
         return imc.exists("/work/cda_sha") and imc.read_file("/work/cda_sha") == self.current_file_sha()
