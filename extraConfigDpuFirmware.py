@@ -5,6 +5,7 @@ from clustersConfig import ExtraConfigArgs
 from concurrent.futures import Future
 from typing import Optional
 import ipu
+import dpuVendor
 
 
 # Detect which DPU is running and ensure that the right version is in place, only works with IPU for now
@@ -17,8 +18,10 @@ def ExtraConfigDpuFirmware(cc: ClustersConfig, cfg: ExtraConfigArgs, _: dict[str
     assert master.kind == "dpu"
     assert master.bmc is not None
     assert master.bmc_host is not None
-    ipu_bmc = ipu.IPUBMC(master.bmc, master.bmc_host)
-    if ipu_bmc.is_ipu():
-        ipu_bmc.ensure_firmware(cfg.force_firmware_update, cfg.mev_version)
+
+    dpu_bmc = dpuVendor.detect_dpu_maybe(master, get_external_port=cc.get_external_port)
+
+    if isinstance(dpu_bmc, ipu.IPUBMC):
+        dpu_bmc.ensure_firmware(cfg.force_firmware_update, cfg.mev_version)
     else:
         logger.warning("Skipping DPU firmware setup since it's not an IPU")

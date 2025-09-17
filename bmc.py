@@ -1,3 +1,4 @@
+import abc
 from logger import logger
 import time
 from ailib import Redfish
@@ -14,20 +15,37 @@ class BmcConfig:
     password: str = "calvin"
 
 
-class BMC:
-    def __init__(self, bmc_host: str, user: str = "root", password: str = "calvin", *, port: int = 443):
+class BaseBMC(abc.ABC):
+    @staticmethod
+    def build_base_url(
+        *,
+        bmc_host: str,
+        port: int = 443,
+    ) -> str:
         if not bmc_host:
             raise ValueError("BMC host not defined")
+
+        url = f"https://{bmc_host}"
+        if port != 443:
+            url = f"{url}:{port}"
+        return url
+
+    def detect(self, *, try_hard: bool = False) -> bool:
+        return False
+
+    def get_dpu_flavor(self) -> str:
+        return "agnostic"
+
+
+class BMC(BaseBMC):
+    def __init__(self, bmc_host: str, user: str = "root", password: str = "calvin", *, port: int = 443):
+        base_url = BaseBMC.build_base_url(bmc_host=bmc_host, port=port)
+
         self.bmc_host = bmc_host
         self.user = user
         self.password = password
         self.port = port
-
-        url = f"https://{self.bmc_host}"
-        if self.port != 443:
-            url = f"{url}:{self.port}"
-        self.base_url = url
-
+        self.base_url = base_url
         logger.info(f"BMC: {bmc_host} {user} {password}")
 
     @staticmethod

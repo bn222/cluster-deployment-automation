@@ -1,8 +1,7 @@
 import os
 import shlex
 import typing
-from bmc import BMC
-from bmc import BmcConfig
+import bmc
 from clustersConfig import NodeConfig
 from clusterNode import ClusterNode
 import common
@@ -12,18 +11,21 @@ import coreosBuilder
 from nfs import NFS
 
 
-class MarvellBMC:
+class MarvellBMC(bmc.BaseBMC):
     def __init__(
         self,
-        bmc: BmcConfig,
+        bmc: bmc.BmcConfig,
         *,
-        bmc_host: typing.Optional[BmcConfig] = None,
+        bmc_host: typing.Optional[bmc.BmcConfig] = None,
         get_external_port: typing.Optional[typing.Callable[[], str]] = None,
     ) -> None:
         assert (bmc_host is None) == (get_external_port is None)
         self.bmc = bmc
         self._bmc_host = bmc_host
         self._get_external_port = get_external_port
+
+    def get_dpu_flavor(self) -> str:
+        return "marvell"
 
     def _ssh_to_bmc(self, *, boot_coreos: bool = True) -> typing.Optional[host.Host]:
         # For Marvell DPU, the "BMC" is the host where the DPU is plugged in.
@@ -44,7 +46,7 @@ class MarvellBMC:
         rsh = host.RemoteHost(self.bmc.url)
 
         try:
-            rsh.ssh_connect("core", timeout="2m")
+            rsh.ssh_connect("core", timeout="30s")
         except Exception as e:
             logger.info(f"Cannot connect to core @ {self.bmc.url}: {e}")
         else:
@@ -71,11 +73,11 @@ class MarvellBMC:
         nfs = NFS(lh, self._get_external_port())
         iso_url = nfs.host_file("/root/iso/fedora-coreos.iso")
 
-        bmc2 = BMC.from_bmc_config(self._bmc_host)
+        bmc2 = bmc.BMC.from_bmc_config(self._bmc_host)
         bmc2.boot_iso_redfish(iso_url)
 
-    def is_marvell(self) -> bool:
-        rsh = self._ssh_to_bmc()
+    def detect(self, *, try_hard: bool = False) -> bool:
+        rsh = self._ssh_to_bmc(boot_coreos=try_hard)
         if rsh is None:
             return False
         return "177d:b900" in rsh.run("lspci -nn -d :b900").out
@@ -142,15 +144,15 @@ class MarvellBMC:
 
 
 class MarvellClusterNode(ClusterNode):
-    def __init__(self, node: NodeConfig) -> None:
+    def __init__(self, node: NodeConfig, marvell_bmc: MarvellBMC) -> None:
         assert node.ip is not None
         assert node.bmc is not None
         self._name = node.name
         self._ip = node.ip
         self._mac = node.mac
         self._bmc = node.bmc
+        self._marvell_bmc = marvell_bmc
 
     def start(self, install_iso: str) -> bool:
-        bmc = MarvellBMC(self._bmc)
-        bmc.pxeboot(self._name, self._mac, self._ip, install_iso)
+        self._marvell_bmc.pxeboot(self._name, self._mac, self._ip, install_iso)
         return True

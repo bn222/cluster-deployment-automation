@@ -1,6 +1,7 @@
 import re
 import host
 import typing
+import bmc
 from logger import logger
 from abc import ABC, abstractmethod
 import ipu
@@ -8,26 +9,37 @@ import marvell
 import clustersConfig
 
 
-def detect_dpu(
+def detect_dpu_maybe(
     node: clustersConfig.NodeConfig,
     *,
     get_external_port: typing.Callable[[], str],
-) -> str:
+) -> typing.Optional[bmc.BaseBMC]:
     logger.info("Detecting DPU")
     assert node.kind == "dpu"
     assert node.bmc is not None
     assert node.bmc_host is not None
 
-    ipu_bmc = ipu.IPUBMC(node.bmc, node.bmc_host)
-    ipu_bmc.ensure_started()
-    if ipu_bmc.is_ipu():
-        return "ipu"
+    bmcs = [
+        ipu.IPUBMC(node.bmc, node.bmc_host),
+        marvell.MarvellBMC(node.bmc, bmc_host=node.bmc_host, get_external_port=get_external_port),
+    ]
+    for try_hard in (False, True):
+        for b in bmcs:
+            if b.detect(try_hard=try_hard):
+                return b
 
-    marvell_bmc = marvell.MarvellBMC(node.bmc, bmc_host=node.bmc_host, get_external_port=get_external_port)
-    if marvell_bmc.is_marvell():
-        return "marvell"
-    else:
+    return None
+
+
+def detect_dpu(
+    node: clustersConfig.NodeConfig,
+    *,
+    get_external_port: typing.Callable[[], str],
+) -> bmc.BaseBMC:
+    dpu_bmc = detect_dpu_maybe(node, get_external_port=get_external_port)
+    if dpu_bmc is None:
         logger.error_and_exit("Unknown DPU")
+    return dpu_bmc
 
 
 class VendorPlugin(ABC):
@@ -91,18 +103,20 @@ class MarvellDpuPlugin(VendorPlugin):
         logger.warning("Nothing to set up on Marvell DPU")
 
 
-def init_vendor_plugin(h: host.Host, dpu_kind: str) -> VendorPlugin:
+def init_vendor_plugin(dpu_bmc: bmc.BaseBMC) -> VendorPlugin:
     # TODO: Vendor hardware will be handled inside the operator. The user will not explicitely configure the system
     # based on what hardware he is running on. From the perspective of the user, he's dealing with abstract DPUs.
     # This function will therefore be removed completely
-    if dpu_kind == "marvell":
-        logger.info(f"Detected Marvell DPU on {h.hostname()}")
+
+    if isinstance(dpu_bmc, marvell.MarvellBMC):
+        logger.info("Detected Marvell DPU")
         return MarvellDpuPlugin()
-    elif dpu_kind == "ipu":
-        logger.info(f"Detected Intel IPU hardware on {h.hostname()}")
+
+    if isinstance(dpu_bmc, ipu.IPUBMC):
+        logger.info("Detected Intel IPU hardware")
         return IpuPlugin()
-    else:
-        logger.error_and_exit(f"Unexcpeted dpu kind {dpu_kind}")
+
+    logger.error_and_exit(f"Unexcpeted dpu kind {dpu_bmc}")
 
 
 def extractContainerImage(dockerfile: str) -> str:

@@ -8,7 +8,7 @@ from clustersConfig import NodeConfig
 from bmc import BmcConfig
 from clusterNode import ClusterNode
 import host
-from bmc import BMC
+import bmc
 import common
 from typing import Any
 import urllib.parse
@@ -46,17 +46,16 @@ This works by making some assumptions about the current state of the IPU:
 
 class IPUClusterNode(ClusterNode):
     external_port: str
-    network_api_port: str
     config: NodeConfig
     apply_work_around: bool
 
-    def __init__(self, config: NodeConfig, external_port: str, network_api_port: str):
+    def __init__(self, config: NodeConfig, external_port: str, ipu_bmc: 'IPUBMC'):
         super().__init__(config)
         self.external_port = external_port
-        self.network_api_port = network_api_port
         self.config = config
         self.apply_work_around = True
         self.imc: Optional[host.Host] = None
+        self.ipu_bmc = ipu_bmc
 
     def stored_imc(self) -> host.Host:
         assert self.config.bmc is not None
@@ -77,7 +76,6 @@ class IPUClusterNode(ClusterNode):
         assert self.config.ip is not None
         acc = host.RemoteHost(self.config.ip)
         self._wait_for_acc_with_retry(acc=acc)
-        # configure_iso_network_port(self.network_api_port, self.config.ip)
 
     def _wait_for_acc_with_retry(self, acc: host.Host) -> None:
         t = timer.Timer("20m")
@@ -98,14 +96,11 @@ class IPUClusterNode(ClusterNode):
         acc.write("/cda-install", f"{time.time()}")
 
     def start(self, iso_or_image_path: str) -> bool:
-        assert self.config.bmc is not None
-        assert self.config.bmc_host is not None
-        ipu_bmc = IPUBMC(self.config.bmc, self.config.bmc_host)
-        if ipu_bmc.version() != "1.8.0" and ipu_bmc.version() != "2.0.0":
-            logger.error_and_exit(f"Unexpected version {ipu_bmc.version()}, should be 1.8.0 or 2.0.0")
+        if self.ipu_bmc.version() != "1.8.0" and self.ipu_bmc.version() != "2.0.0":
+            logger.error_and_exit(f"Unexpected version {self.ipu_bmc.version()}, should be 1.8.0 or 2.0.0")
         if self.recovery_mode():
             logger.error_and_exit("IPU is in recovery mode, exiting")
-        if not self.redfish_up() and ipu_bmc.prepared(self.stored_imc()):
+        if not self.redfish_up() and self.ipu_bmc.prepared(self.stored_imc()):
             # Next two lines are a workaround until this is fixed: https://issues.redhat.com/browse/IIC-677
             self.stored_imc().run("systemctl restart redfish")
             time.sleep(1)
@@ -129,8 +124,7 @@ class IPUClusterNode(ClusterNode):
             assert node.bmc is not None
             assert node.bmc_host is not None
             logger.info(f"Booting {node.bmc.url} with {iso_address}")
-            bmc = IPUBMC(node.bmc, node.bmc_host)
-            bmc.boot_iso_with_redfish(iso_path=iso_address)
+            self.ipu_bmc.boot_iso_with_redfish(iso_path=iso_address)
             return "Boot command sent"
 
         if is_http_url(iso):
@@ -194,19 +188,30 @@ class IPUClusterNode(ClusterNode):
         logger.info("Reload of idpf on host side complete")
 
 
-class IPUBMC(BMC):
+class IPUBMC(bmc.BaseBMC):
     def __init__(self, bmc_config: BmcConfig, host_bmc: BmcConfig):
         if bmc_config.password == "calvin":
             password = "calvincalvincalvin"
         else:
             password = bmc_config.password
-        super().__init__(
-            bmc_config.url,
-            bmc_config.user,
-            password,
-            port=8443,
-        )
-        self._host_bmc = BMC.from_bmc_config(host_bmc)
+
+        bmc_host = bmc_config.url
+        user = bmc_config.user
+        password = password
+        port = 8443
+        base_url = bmc.BaseBMC.build_base_url(bmc_host=bmc_host, port=port)
+
+        self.bmc_host = bmc_host
+        self.user = user
+        self.password = password
+        self.port = port
+        self.base_url = base_url
+        self._host_bmc = bmc.BMC.from_bmc_config(host_bmc)
+
+        logger.info(f"BMC: {bmc_host} {user} {password}")
+
+    def get_dpu_flavor(self) -> str:
+        return "ipu"
 
     def prepared(self, imc: host.Host) -> bool:
         return imc.exists("/work/cda_sha") and imc.read_file("/work/cda_sha") == self.current_file_sha()
@@ -560,14 +565,23 @@ fi
                 raise RuntimeError("Failed to detect imc version thourgh ssh")
             return fwversion
 
-    def is_ipu(self) -> bool:
-        logger.info(f"Checking if DPU is IPU via {self.bmc_host}")
-        if self._redfish_available():
-            return "Intel IPU" in self._redfish_name()
-        else:
+    def detect(self, *, try_hard: bool = False) -> bool:
+        def _detect() -> bool:
+            logger.info(f"Checking if DPU is IPU via {self.bmc_host}")
+            if self._redfish_available():
+                return "Intel IPU" in self._redfish_name()
+
             # workaround: remove when redfish is started properly at boot
             logger.info(f"Redfish is not up on {self.bmc_host}, using SSH to check")
             return self._version_via_ssh() is not None
+
+        if _detect():
+            return True
+        if try_hard:
+            self.ensure_started()
+            if _detect():
+                return True
+        return False
 
     def ensure_firmware(self, force: bool, version: str) -> None:
         def firmware_is_same() -> bool:
@@ -579,7 +593,6 @@ fi
             else:
                 return False
 
-        assert self.is_ipu()
         imc = host.Host(self.bmc_host)
 
         logger.info(f"Will ensure {self.bmc_host} is on firmware version: {version}")
