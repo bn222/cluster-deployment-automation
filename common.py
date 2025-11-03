@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 import dataclasses
+import shlex
 import ipaddress
+import datetime
 from typing import Any, Callable, Optional, TypeVar, Iterator, Type
 from concurrent.futures import Future
 import contextlib
@@ -31,6 +33,8 @@ if TYPE_CHECKING:
 
 
 T = TypeVar("T")
+
+START_TIME_RFC3339 = datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 def check_type(value: typing.Any, type_hint: typing.Any) -> bool:
@@ -787,7 +791,8 @@ def _capture_container_logs(lh: host.Host, logs_dir: str, container_name: str) -
         # Try multiple approaches to get container logs
         log_content = ""
 
-        result = lh.run(f"podman logs --events-backend=file {container_name}")
+        args = ["podman", "logs", f"--since={START_TIME_RFC3339}", "--events-backend=file", container_name]
+        result = lh.run(shlex.join(args))
         if result.success():
             log_content = result.out or result.err
 
