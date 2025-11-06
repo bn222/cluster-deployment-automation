@@ -104,7 +104,7 @@ class MarvellBMC(bmc.BaseBMC):
 
         ssh_key_options = [f"--ssh-key={shlex.quote(s)}" for s in ssh_keys]
 
-        image = os.environ.get("CDA_MARVELL_TOOLS_IMAGE", "quay.io/sdaniele/marvell-tools:latest")
+        image = os.environ.get("CDA_MARVELL_TOOLS_IMAGE", "quay.io/wizhao/marvell-tools:latest")
 
         logger.info(f"run pxeboot for {self.bmc.url} to install {image}")
 
