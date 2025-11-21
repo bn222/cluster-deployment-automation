@@ -1,0 +1,35 @@
+clusters:
+  - name : "vm"
+    api_vip: "192.168.122.99"
+    ingress_vip: "192.168.122.101"
+    kubeconfig: "/root/kubeconfig.vm"
+    masters:
+    - name: "vm-master-1"
+      kind: "vm"
+      node: "localhost"
+      ip: "192.168.122.141"
+    - name: "vm-master-2"
+      kind: "vm"
+      node: "localhost"
+      ip: "192.168.122.142"
+    - name: "vm-master-3"
+      kind: "vm"
+      node: "localhost"
+      ip: "192.168.122.143"
+    workers:
+    - name: "vm-worker-1"
+      kind: "vm"
+      node: "localhost"
+      ip: "192.168.122.144"
+      bmc:
+        url: "hostname or ip"
+    - name: "vm-worker-2"
+      kind: "vm"
+      node: "localhost"
+      ip: "192.168.122.145"
+      bmc:
+        url: "hostname or ip"
+    postconfig:
+    - name: "custom_kernel"
+      kernel_repo_url: "https://download.devel.redhat.com/brewroot/work/tasks/2286/66882286/"
+      kernel_version: "5.14.0-570.idpf.IIC_500.el9_6.x86_64"
