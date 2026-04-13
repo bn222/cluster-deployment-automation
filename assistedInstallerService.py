@@ -361,7 +361,7 @@ class AssistedInstallerService:
                 'url': self.get_nightly_pullspec(version),
                 'version': version,
             }
-        elif re.search(r'4\.21\.0-ec.[0-9]+', version):
+        elif re.search(r'4\.21\.[0-9]+', version):
             ret = {
                 'openshift_version': '4.21-multi',
                 'cpu_architectures': ['x86_64', 'arm64', 'ppc64le', 's390x'],
