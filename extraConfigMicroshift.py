@@ -112,6 +112,9 @@ def ExtraConfigMicroshift(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dic
     logger.info(f"ACC date: {acc_date}")
 
     logger.info("Installing microshift")
+    # Remove pre-installed bootc to avoid file conflicts with rpm-ostree (RHEL-144611).
+    # Both packages ship files under /usr/libexec/libostree/ext/ starting with bootc >= 1.12.
+    acc.run("rpm -e --nodeps bootc 2>/dev/null || true")
     acc.run_or_die("dnf install -y microshift microshift-multus", retry=60)
     ret = acc.run(r"grep '\[crio.runtime.runtimes.crun\]' /etc/crio/crio.conf")
     if not ret.success():
