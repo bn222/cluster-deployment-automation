@@ -89,6 +89,12 @@ class ExtraConfigArgs:
     import_pull_secret: bool = False
     registry_type: str = RegistryType.IN_CLUSTER.value
 
+    # Custom kernel installation
+    # Base URL for kernel RPMs (e.g., https://download.devel.redhat.com/brewroot/work/tasks/2286/66882286/)
+    kernel_repo_url: Optional[str] = None
+    # Kernel version to install (e.g., 5.14.0-570.idpf.IIC_500.el9_6.x86_64)
+    kernel_version: Optional[str] = None
+
     def __post_init__(self) -> None:
         if self.registries is not None:
             registry_dict = self.registries
