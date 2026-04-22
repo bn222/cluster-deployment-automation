@@ -66,6 +66,22 @@ def masquarade(rsh: host.Host, cc: ClustersConfig) -> None:
     rsh.run_or_die(f"{ip_tables} -A FORWARD -i {lan_interface} -o {wan_interface} -j ACCEPT")
 
 
+def fix_stale_ovnkube_node(acc: host.Host) -> None:
+    kubeconfig = "/var/lib/microshift/resources/kubeadmin/kubeconfig"
+    ret = acc.run(f"KUBECONFIG={kubeconfig} kubectl -n openshift-ovn-kubernetes get pod -l app=ovnkube-node --no-headers 2>/dev/null")
+    if "ContainerCreating" not in ret.out:
+        return
+    # ovnkube-node is stuck due to a stale CRI-O sandbox name reservation.
+    # Restarting CRI-O clears the reservation; force-deleting the pod lets kubelet recreate it.
+    logger.info("ovnkube-node stuck in ContainerCreating — restarting CRI-O to clear stale sandbox reservation")
+    acc.run_or_die("systemctl restart crio")
+    time.sleep(15)
+    pod_name = acc.run(f"KUBECONFIG={kubeconfig} kubectl -n openshift-ovn-kubernetes get pod -l app=ovnkube-node -o name --no-headers 2>/dev/null").out.strip()
+    if pod_name:
+        acc.run(f"KUBECONFIG={kubeconfig} kubectl -n openshift-ovn-kubernetes delete {pod_name} --grace-period=0 --force 2>/dev/null")
+        logger.info(f"Force-deleted {pod_name} — ovn-controller will restart and unblock ovnkube-master")
+
+
 def ExtraConfigMicroshift(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, Future[Optional[host.Result]]]) -> None:
     [f.result() for (_, f) in futures.items()]
     logger.info("Running post config step to start Microshift on the IPU")
@@ -135,6 +151,10 @@ def ExtraConfigMicroshift(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dic
 
     acc.run("systemctl stop firewalld")
     acc.run("systemctl disable firewalld")
+
+    logger.info("Waiting 2 minutes for microshift to stabilize before checking OVN pods")
+    time.sleep(120)
+    fix_stale_ovnkube_node(acc)
 
     def cb() -> None:
         acc.run("ip r del default via 192.168.0.1")
