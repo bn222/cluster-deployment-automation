@@ -166,6 +166,21 @@ class VmClusterNode(ClusterNode):
     def has_booted(self) -> bool:
         return self.hostconn.vm_is_running(self.config.name)
 
+    def _cleanup_machined_entries(self) -> None:
+        # virsh destroy/undefine leaves orphaned systemd-machined scope units
+        # (qemu-N-<name> entries in /run/systemd/machines/) that survive across
+        # runs and cause "MachineExists" errors on the next virsh start.
+        name = self.config.name
+        r = self.hostconn.run("machinectl list --no-legend 2>/dev/null")
+        if r.returncode != 0:
+            return
+        for line in r.out.splitlines():
+            parts = line.split()
+            if parts and name in parts[0]:
+                machine = parts[0]
+                logger.info(f"Cleaning up stale machined entry: {machine}")
+                self.hostconn.run(f"machinectl terminate {machine}")
+
     def teardown(self) -> None:
         # remove the image only if it really exists
         image_path = self.config.image_path
@@ -178,6 +193,7 @@ class VmClusterNode(ClusterNode):
             logger.info(r.err if r.err else r.out.strip())
             r = self.hostconn.run(f"virsh undefine {self.config.name}")
             logger.info(r.err if r.err else r.out.strip())
+            self._cleanup_machined_entries()
 
     def ensure_reboot(self) -> bool:
         def vm_state(h: host.Host, node_name: str, running: bool) -> bool:
@@ -192,6 +208,7 @@ class VmClusterNode(ClusterNode):
         if not self.hostconn.vm_is_running(name):
             # VM is not running, so we need to start it manually
             logger.info(f"VM {name} is not running after reboot, starting it manually")
+            self._cleanup_machined_entries()
             r = self.hostconn.run(f"virsh start {name}")
             if not r.success():
                 # Check if it failed because domain is already active (race condition)
