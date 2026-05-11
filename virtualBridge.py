@@ -192,6 +192,11 @@ class VirBridge:
             logger.info("Bridge needs to be reconfigured: unexpected bridge IP")
             needs_reconfigure = True
 
+        active_ret = self.hostconn.run("virsh net-info default | grep Active")
+        if "no" in active_ret.out:
+            logger.info("Bridge needs to be reconfigured: the default network is down")
+            needs_reconfigure = True
+
         if needs_reconfigure:
             logger.info("Destoying and recreating bridge")
             logger.info(f"creating default-net.xml on {hostname}")

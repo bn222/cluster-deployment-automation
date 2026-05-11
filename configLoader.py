@@ -13,8 +13,8 @@ class LineNumberLoader(yaml.SafeLoader):
     def construct_mapping(self, node: MappingNode, deep: bool = False) -> Any:
         mapping = {}
         for key_node, value_node in node.value:
-            key = self.construct_object(key_node, deep=deep)  # type: ignore
-            value = self.construct_object(value_node, deep=deep)  # type: ignore
+            key = self.construct_object(key_node, deep=deep)
+            value = self.construct_object(value_node, deep=deep)
             mapping[key] = value
             if isinstance(key_node, ScalarNode):
                 mapping[f"_line_{key}"] = key_node.start_mark.line
