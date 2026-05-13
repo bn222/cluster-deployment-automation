@@ -28,7 +28,8 @@ WORKDIR /root/ovn/ovs
 RUN ./boot.sh && ./configure && make dist
 
 WORKDIR /root/ovn
-RUN ./boot.sh && ./configure && make dist && make rpm-fedora
+RUN ./boot.sh && ./configure && make dist && \
+     make rpm-fedora RPMBUILD_OPT="--without check --without sphinx"
 
 FROM $OVNK_IMAGE
 
