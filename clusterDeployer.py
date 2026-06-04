@@ -437,7 +437,7 @@ class ClusterDeployer(BaseDeployer):
         nodes_with_futures = [(n.config.name, executor.submit(self._install_worker_with_retry, infra_env, n)) for n in worker_nodes]
         wait_futures("install worker", nodes_with_futures)
 
-        self.wait_for_workers()
+        common.wait_true("workers to be ready", 0, self.wait_for_workers)
 
         nodes_with_futures = [(n.config.name, executor.submit(n.set_password)) for n in worker_nodes]
         wait_futures("set root password to redhat", nodes_with_futures)
@@ -610,24 +610,18 @@ class ClusterDeployer(BaseDeployer):
             api_vip = None
         dnsutil.dnsmasq_update(cluster_name, api_vip)
 
-    def wait_for_workers(self) -> None:
-        logger.info(f'waiting for {len(self._cc.workers)} workers to be ready')
-        prev_ready = 0
-        for try_count in itertools.count(0):
-            workers = [w.name for w in self._cc.workers]
-            ready_count = sum(self.client().is_ready(w) for w in workers)
-            self._ai.check_any_host_error()
+    def wait_for_workers(self) -> bool:
+        workers = [w.name for w in self._cc.workers]
+        ready_count = sum(self.client().is_ready(w) for w in workers)
+        self._ai.check_any_host_error()
 
-            if prev_ready != ready_count:
-                logger.info(f"{ready_count}/{len(workers)} is ready (try #{try_count})")
-                prev_ready = ready_count
+        if ready_count == len(workers):
+            return True
 
-            if ready_count == len(workers):
-                break
+        self.client().approve_csr()
+        self.bluefield_workarounds()
 
-            self.client().approve_csr()
-            self.bluefield_workarounds()
-            time.sleep(30)
+        return False
 
     def bluefield_workarounds(self) -> None:
         bf_workers = [x for x in self._cc.workers if x.kind == "bf"]
