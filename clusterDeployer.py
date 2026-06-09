@@ -518,18 +518,20 @@ class ClusterDeployer(BaseDeployer):
         if not node.wait_for_boot(self._cc.full_ip_range):
             return False
 
-        if not master and not self._rename_worker(node):
+        # Rename workers always, and masters in bridge mode (external DHCP assigns FQDN hostnames)
+        needs_rename = not master or self._cc.network_mode == "bridge"
+        if needs_rename and not self._rename_worker(node):
             return False
 
         return self._wait_known(node)
 
     def _rename_worker(self, node: ClusterNode) -> bool:
-        logger.info(f"Waiting for connectivity to worker {node.config.name}")
+        logger.info(f"Waiting for connectivity to {node.config.name}")
         rh = host.RemoteHost(node.ip())
         rh.ssh_connect("core")
 
         ip_range = self._cc.full_ip_range
-        logger.info(f"Connectivity established to worker {node.config.name} checking that it has an IP in range: {ip_range}")
+        logger.info(f"Connectivity established to {node.config.name}, checking that it has an IP in range: {ip_range}")
 
         def any_address_in_range(h: host.Host, ip_range: tuple[str, str]) -> bool:
             for ipaddr in common.ip_addrs(h):
@@ -542,7 +544,7 @@ class ClusterDeployer(BaseDeployer):
             return False
 
         if not any_address_in_range(rh, ip_range):
-            logger.error(f"Worker {node.config.name} doesn't have an IP in range {ip_range}.")
+            logger.error(f"Node {node.config.name} doesn't have an IP in range {ip_range}.")
             return False
 
         logger.info(f"Waiting for {node.config.name} rename to succeed")

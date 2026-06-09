@@ -131,6 +131,12 @@ class ClusterHost:
         self.ensure_linked_to_network(self.bridge)
 
     def ensure_linked_to_network(self, dhcp_bridge: VirBridge) -> None:
+        # In bridge mode, VMs connect directly to the pre-existing kernel bridge
+        # No need to add physical interface as slave or configure DHCP filtering
+        if dhcp_bridge.is_bridge_mode():
+            logger.info("Bridge mode: skipping network linking (using pre-existing kernel bridge)")
+            return
+
         if not self.needs_api_network:
             return
         assert self.api_port is not None
@@ -159,6 +165,11 @@ class ClusterHost:
         self.hostconn.run(f"nmcli device set {self.api_port} managed no")
 
     def ensure_not_linked_to_network(self) -> None:
+        # In bridge mode, we didn't do any linking, so nothing to undo
+        if self.bridge.is_bridge_mode():
+            logger.info("Bridge mode: skipping network unlinking (nothing was linked)")
+            return
+
         if not self.needs_api_network:
             return
         assert self.api_port is not None

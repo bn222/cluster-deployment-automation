@@ -84,12 +84,13 @@ class AssistedInstallerService:
     CONTROLLER_IMAGE = "registry.redhat.io/rhai/assisted-installer-controller-rhel9:38eb19a9a5ae047e047dd29f8979c6595bba9150"
     AGENT_DOCKER_IMAGE = "registry.redhat.io/rhai/assisted-installer-agent-rhel9:d30a801984dd4d26d2be2a9682bf638b1545595b"
 
-    def __init__(self, version: str, ip: str, resume_deployment: bool = False, proxy: Optional[str] = None, noproxy: Optional[str] = None, branch: str = "master"):
+    def __init__(self, version: str, ip: str, resume_deployment: bool = False, proxy: Optional[str] = None, noproxy: Optional[str] = None, branch: str = "master", bridge_name: str = "virbr0"):
         self._version = version
         self._ip = ip
         self._proxy = proxy
         self._noproxy = noproxy
         self._resume_deployment = resume_deployment
+        self._bridge_name = bridge_name
         base_url = f"https://raw.githubusercontent.com/openshift/assisted-service/{branch}"
         pod_config_url = f"{base_url}/deploy/podman/configmap.yml"
         pod_file = f"{base_url}/deploy/podman/pod-persistent.yml"
@@ -510,8 +511,10 @@ class AssistedInstallerService:
 
     def _ensure_libvirt_running(self) -> None:
         lh = host.LocalHost()
-        if not common.ip_links(lh, ifname="virbr0"):
-            logger.info("Can't find virbr0. Trying to restart libvirt.")
+        bridge = self._bridge_name
+
+        if not common.ip_links(lh, ifname=bridge):
+            logger.info(f"Can't find {bridge}. Trying to restart libvirt.")
             libvirt = Libvirt(lh)
             libvirt.configure()
             cmd = "virsh net-start default"
@@ -521,8 +524,8 @@ class AssistedInstallerService:
             # Need to find out if/how we can remove this to speed up.
             time.sleep(5)
 
-        if not common.ip_links(lh, ifname="virbr0"):
-            logger.error_and_exit("Can't find virbr0. Make sure that libvirt is running.")
+        if not common.ip_links(lh, ifname=bridge):
+            logger.error_and_exit(f"Can't find {bridge}. Make sure that libvirt is running.")
 
     def wait_for_api(self) -> None:
         self._ensure_libvirt_running()

@@ -203,6 +203,8 @@ class BridgeConfig:
     ip: str
     mask: str
     dynamic_ip_range: Optional[tuple[str, str]] = None
+    mode: str = "nat"  # "nat" or "bridge"
+    bridge_name: str = "virbr0"  # kernel bridge name for bridge mode
 
 
 class ClustersConfig:
@@ -214,6 +216,8 @@ class ClustersConfig:
     kind: str
     version: str
     network_api_port: str
+    network_mode: str
+    bridge_name: str
     masters: list[NodeConfig]
     workers: list[NodeConfig]
     configured_workers: list[NodeConfig]
@@ -243,6 +247,8 @@ class ClustersConfig:
         self.kind = "openshift"
         self.version = "4.14.0-nightly"
         self.network_api_port = "auto"
+        self.network_mode = "nat"
+        self.bridge_name = "br-cda-0"
         self.masters: list[NodeConfig] = []
         self.workers: list[NodeConfig] = []
         self.configured_workers: list[NodeConfig] = []
@@ -276,6 +282,12 @@ class ClustersConfig:
                 self.install_iso = cc["install_iso"]
         if "network_api_port" in cc:
             self.network_api_port = cc["network_api_port"]
+        if "network_mode" in cc:
+            self.network_mode = cc["network_mode"]
+            if self.network_mode not in ("nat", "bridge"):
+                logger.error_and_exit(f"Invalid network_mode '{self.network_mode}'. Must be 'nat' or 'bridge'.")
+        if "bridge_name" in cc:
+            self.bridge_name = cc["bridge_name"]
         self.name = cc["name"]
         if "ntp_source" in cc:
             self.ntp_source = cc["ntp_source"]
@@ -355,8 +367,19 @@ class ClustersConfig:
             logger.error_and_exit("The supplied ip_range config is too small for the number of nodes")
 
         dynamic_ip_range = common.ip_range(self.ip_range[1], common.ip_range_size(ip_range) - common.ip_range_size(self.ip_range))
-        self.local_bridge_config = BridgeConfig(ip=self.ip_range[0], mask=ip_mask, dynamic_ip_range=dynamic_ip_range)
-        self.remote_bridge_config = BridgeConfig(ip=ip_range[1], mask=ip_mask)
+        self.local_bridge_config = BridgeConfig(
+            ip=self.ip_range[0],
+            mask=ip_mask,
+            dynamic_ip_range=dynamic_ip_range,
+            mode=self.network_mode,
+            bridge_name=self.bridge_name,
+        )
+        self.remote_bridge_config = BridgeConfig(
+            ip=ip_range[1],
+            mask=ip_mask,
+            mode=self.network_mode,
+            bridge_name=self.bridge_name,
+        )
 
     def get_last_ip(self) -> str | None:
         hostconn = host.LocalHost()

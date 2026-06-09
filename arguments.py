@@ -15,6 +15,9 @@ MASTERS_STEP = "masters"
 WORKERS_STEP = "workers"
 POST_STEP = "post"
 
+# Default Assisted Installer URL (used in NAT mode)
+DEFAULT_AI_URL = "192.168.122.1"
+
 
 def all_steps() -> list[str]:
     return [PRE_STEP, MASTERS_STEP, WORKERS_STEP, POST_STEP]
@@ -87,7 +90,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('-v', '--verbosity', choices=['debug', 'info', 'warning', 'error', 'critical'], default='info', help='Set the logging level (default: info)')
     parser.add_argument('--secret', dest='secrets_path', default='', action='store', type=str, help='pull_secret.json path (default is in cwd)')
     parser.add_argument('--cda-config', dest='cda_config', default='/root/cda-config.yaml', action='store', type=str, help='defaults to /root/cda-config.yaml')
-    parser.add_argument('--assisted-installer-url', dest='url', default='192.168.122.1', action='store', type=str, help='If set to 0.0.0.0 (the default), Assisted Installer will be started locally')
+    parser.add_argument('--assisted-installer-url', dest='url', default=DEFAULT_AI_URL, action='store', type=str, help='Assisted Installer URL. Auto-detected for bridge mode.')
 
     subparsers = parser.add_subparsers(title='subcommands', dest='subcommand')
 
