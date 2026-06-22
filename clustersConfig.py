@@ -338,7 +338,8 @@ class ClustersConfig:
         n_nodes = len(cc["masters"]) + len(cc["workers"]) + 1
 
         # Get the last IP used in the running cluster.
-        last_ip = self.get_last_ip()
+        # Default to 0.0.0.0 if network doesn't exist, so we still consider node IPs from config.
+        last_ip = self.get_last_ip() or "0.0.0.0"
 
         # Update the last IP based on the config.
         for node in self.all_nodes():
