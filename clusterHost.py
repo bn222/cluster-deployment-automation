@@ -151,7 +151,8 @@ class ClusterHost:
             logger.info(f"No master set for interface {self.api_port}, setting it to {br_name}")
             self.hostconn.run(f"ip link set {self.api_port} master {br_name}")
         elif interface.master != br_name:
-            logger.error_and_exit(f"Incorrect master set for interface {self.api_port}")
+            logger.error_and_exit(f"Interface {self.api_port} is already attached to bridge '{interface.master}', cannot use it for {br_name}. "
+                                  f"Please set 'network_api_port' in your cluster config to specify a different interface.")
 
         logger.info(f"Setting interface {self.api_port} as unmanaged in NetworkManager")
         self.hostconn.run(f"nmcli device set {self.api_port} managed no")
