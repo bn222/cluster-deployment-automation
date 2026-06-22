@@ -216,6 +216,9 @@ class VirBridge:
             # We need to investigate how to remove the sleep to speed up
             time.sleep(5)
 
+            # Re-fetch network XML after reconfiguration so the DHCP range check below uses current state
+            ret = self.hostconn.run(cmd)
+
         # Reconfiguring bridge by deleting and recreating it causes existing bridge configuration (dhcp entries, bridge masters...) to get lost.
         # The dynamic range might change if we add workers. Update dynamic range ... dynamically, without restarting bridge, to avoid
         # losing existing bridge config.
