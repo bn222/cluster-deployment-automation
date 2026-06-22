@@ -95,6 +95,12 @@ def _resolvconf_ensure_orig() -> None:
         logger.info(f"resolv.conf: point {RESOLVCONF_ORIG} to /run/NetworkManager/resolv.conf")
         lh = host.LocalHost()
         lh.run_or_die(f"ln -snf /run/NetworkManager/resolv.conf {RESOLVCONF_ORIG}")
+    elif b"systemd-resolved" in rc_content_orig and os.path.exists("/run/systemd/resolve/resolv.conf"):
+        # This is the systemd-resolved stub (127.0.0.53). Use the real resolv.conf
+        # which contains actual upstream DNS servers, not the stub.
+        logger.info(f"resolv.conf: point {RESOLVCONF_ORIG} to /run/systemd/resolve/resolv.conf")
+        lh = host.LocalHost()
+        lh.run_or_die(f"ln -snf /run/systemd/resolve/resolv.conf {RESOLVCONF_ORIG}")
     else:
         logger.info(f"resolv.conf: write {RESOLVCONF_ORIG}")
         with common.atomic_write(RESOLVCONF_ORIG, text=False) as f:
