@@ -72,9 +72,10 @@ class ClusterHost:
             if not self.hostconn.is_localhost():
                 self.hostconn.ssh_connect(self.config.username, self.config.password)
 
-        # This host needs an api network port if it runs vms and there are more
-        # than one physical host in the deployment.
-        self.needs_api_network = (self.hosts_vms and any(node_config.node != c.name for node_config in cc.all_nodes())) or self.hostconn.is_localhost()
+        # This host needs an api network port if it runs vms and there are
+        # physical nodes or nodes on other hosts in the deployment.
+        has_external_nodes = any(node_config.node != c.name or node_config.kind != "vm" for node_config in cc.all_nodes())
+        self.needs_api_network = self.hosts_vms and has_external_nodes
         if self.needs_api_network:
             if self.config.network_api_port == "auto":
                 self.api_port = common.get_auto_port(self.hostconn)
