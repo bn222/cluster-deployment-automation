@@ -77,12 +77,12 @@ non-standard way, the web-ui can't be used.
 class AssistedInstallerService:
     # Freeze SAAS version to avoid unexpected breakages.
     # The values are taken from:
-    # https://gitlab.cee.redhat.com/service/app-interface/-/blob/3f8136532181238d2959fb550080bf0c7b4c83a4/data/services/assisted-installer/cicd/target/production/assisted-service.yaml
+    # https://gitlab.cee.redhat.com/service/app-interface/-/blob/b4634f0f0a8897f6ca5b0fe20b47c1b313bc9964/data/services/assisted-installer/cicd/target/production/assisted-service.yaml
     #
     SAAS_VERSION = "latest"
-    INSTALLER_IMAGE = "registry.redhat.io/rhai/assisted-installer-rhel9:38eb19a9a5ae047e047dd29f8979c6595bba9150"
-    CONTROLLER_IMAGE = "registry.redhat.io/rhai/assisted-installer-controller-rhel9:38eb19a9a5ae047e047dd29f8979c6595bba9150"
-    AGENT_DOCKER_IMAGE = "registry.redhat.io/rhai/assisted-installer-agent-rhel9:d30a801984dd4d26d2be2a9682bf638b1545595b"
+    INSTALLER_IMAGE = "registry.redhat.io/rhai/assisted-installer-rhel9:c41e0c7d465a9357a49036b350368f008730080e"
+    CONTROLLER_IMAGE = "registry.redhat.io/rhai/assisted-installer-controller-rhel9:c41e0c7d465a9357a49036b350368f008730080e"
+    AGENT_DOCKER_IMAGE = "registry.redhat.io/rhai/assisted-installer-agent-rhel9:9b81f45f43a67c390e5bdbde909b0190f3b61183"
 
     def __init__(self, version: str, ip: str, resume_deployment: bool = False, proxy: Optional[str] = None, noproxy: Optional[str] = None, branch: str = "master"):
         self._version = version
@@ -364,6 +364,34 @@ class AssistedInstallerService:
         elif re.search(r'4\.21\.[0-9]+', version):
             ret = {
                 'openshift_version': '4.21-multi',
+                'cpu_architectures': ['x86_64', 'arm64', 'ppc64le', 's390x'],
+                'url': self.get_normal_pullspec(version),
+                'version': version,
+            }
+        elif re.search(r'4\.22\.0-nightly', version):
+            ret = {
+                'openshift_version': '4.22-multi',
+                'cpu_architectures': ['x86_64', 'arm64', 'ppc64le', 's390x'],
+                'url': self.get_nightly_pullspec(version),
+                'version': version,
+            }
+        elif re.search(r'4\.22\.[0-9]+', version):
+            ret = {
+                'openshift_version': '4.22-multi',
+                'cpu_architectures': ['x86_64', 'arm64', 'ppc64le', 's390x'],
+                'url': self.get_normal_pullspec(version),
+                'version': version,
+            }
+        elif re.search(r'5\.0\.0-nightly', version):
+            ret = {
+                'openshift_version': '5.0-multi',
+                'cpu_architectures': ['x86_64', 'arm64', 'ppc64le', 's390x'],
+                'url': self.get_nightly_pullspec(version),
+                'version': version,
+            }
+        elif re.search(r'5\.0\.0-ec.[0-9]+', version):
+            ret = {
+                'openshift_version': '5.0-multi',
                 'cpu_architectures': ['x86_64', 'arm64', 'ppc64le', 's390x'],
                 'url': self.get_normal_pullspec(version),
                 'version': version,

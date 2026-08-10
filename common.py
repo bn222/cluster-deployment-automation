@@ -859,7 +859,7 @@ def render_template_to_string(template_file: str, **kwargs: Any) -> str:
             template_content = f.read()
 
         template = jinja2.Template(template_content)
-        rendered = template.render(**kwargs)
+        rendered: str = template.render(**kwargs)
 
         return rendered
 

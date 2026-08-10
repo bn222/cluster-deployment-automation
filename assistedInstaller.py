@@ -37,6 +37,9 @@ class ClusterInfo:
 
 class AssistedClientAutomation(AssistedClient):  # type: ignore
     def __init__(self, url: str, ais: Optional[AssistedInstallerService]):
+        if not url.startswith("http://") and not url.startswith("https://"):
+            logger.info("Assisted Installer Client is missing scheme from URL, falling back to http://.")
+            url = f"http://{url}"
         super().__init__(url, quiet=True, debug=False)
         self.ais = ais
 
@@ -227,7 +230,7 @@ class AssistedClientAutomation(AssistedClient):  # type: ignore
 
     def allow_add_workers(self, cluster_name: str) -> None:
         uuid = self.get_ai_cluster_info(cluster_name).id
-        requests.post(f"http://{self.url}/api/assisted-install/v2/clusters/{uuid}/actions/allow-add-workers")
+        requests.post(f"{self.url}/api/assisted-install/v2/clusters/{uuid}/actions/allow-add-workers")
 
     def get_ai_cluster_info(self, cluster_name: str) -> AssistedClientClusterInfo:
         cluster_info = self.info_cluster(cluster_name)

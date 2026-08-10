@@ -47,10 +47,13 @@ class K8sClient:
         self.oc(f"delete node {node}")
 
     def approve_csr(self) -> None:
-        certs_api = kubernetes.client.CertificatesV1Api(self._api_client)
-        for e in certs_api.list_certificate_signing_request().items:
-            if e.status.conditions is None:
-                self.oc(f"adm certificate approve {e.metadata.name}")
+        try:
+            certs_api = kubernetes.client.CertificatesV1Api(self._api_client)
+            for e in certs_api.list_certificate_signing_request().items:
+                if e.status.conditions is None:
+                    self.oc(f"adm certificate approve {e.metadata.name}")
+        except Exception as e:
+            logger.debug(f"Failed to approve CSR: {e}")
 
     def get_ip(self, name: str) -> Optional[str]:
         for e in self._client.list_node().items:

@@ -443,12 +443,13 @@ class ClusterDeployer(BaseDeployer):
         wait_futures("set root password to redhat", nodes_with_futures)
 
     def _wait_master_reboot(self, infra_env: str, node: ClusterNode) -> bool:
-        def master_ready(ai: AssistedClientAutomation, node_name: str) -> bool:
-            info = ai.get_ai_host(node_name)
+        def master_ready(node_name: str) -> bool:
+            self.client().approve_csr()
+            info = self._ai.get_ai_host(node_name)
             return info is not None and (info.status in ["error", "installing-pending-user-action"] or (info.status == "installing-in-progress" and info.status_info == "Rebooting"))
 
         name = node.config.name
-        common.wait_true(f"master {name}", 0, master_ready, ai=self._ai, node_name=name)
+        common.wait_true(f"master {name}", 0, master_ready, node_name=name)
         info = self._ai.get_ai_host(name)
         if info is not None:
             logger.info(f"{node.config.name} status is now: {info.status}, {info.status_info}")
