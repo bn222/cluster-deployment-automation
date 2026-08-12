@@ -19,6 +19,8 @@ EXECUTOR_SIZE = 20
 IMAGE_PATH = "/tmp/image.tar"
 VERSION_KEY = "VERSION_ID="
 UBI_IMAGE = "registry.access.redhat.com/ubi{}/ubi:{}"
+LABEL_REPO = "io.openshift.build.source-location"
+LABEL_REF = "io.openshift.build.commit.id"
 
 
 def ExtraConfigCustomOvn(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict[str, Future[Optional[host.Result]]]) -> None:
@@ -37,7 +39,10 @@ def ExtraConfigCustomOvn(cc: ClustersConfig, cfg: ExtraConfigArgs, futures: dict
     ubi_image = UBI_IMAGE.format(major, version)
     logger.info(f"Using {ubi_image} as base image.")
 
-    build_image(node, cfg, ubi_image)
+    ovnk_repo, ovnk_ref = detect_ovnk_version(node)
+    logger.info(f"Detected ovn-kubernetes version ({ovnk_repo}): {ovnk_ref}")
+
+    build_image(node, cfg, ubi_image, ovnk_repo, ovnk_ref)
     save_image(node)
 
     executor = ThreadPoolExecutor(max_workers=EXECUTOR_SIZE)
@@ -82,7 +87,15 @@ def detect_ubi_version(node: host.Host) -> Tuple[str, str]:
     return "", ""
 
 
-def build_image(node: host.Host, cfg: ExtraConfigArgs, ubi_image: str) -> None:
+def detect_ovnk_version(node: host.Host) -> Tuple[str, str]:
+    result = node.run_or_die(f"sudo crictl inspecti -o json localhost/{ORIGINAL_IMAGE}")
+    info = json.loads(result.out)
+    labels = info["info"]["labels"]
+
+    return labels[LABEL_REPO], labels[LABEL_REF]
+
+
+def build_image(node: host.Host, cfg: ExtraConfigArgs, ubi_image: str, ovnk_repo: str, ovnk_ref: str) -> None:
     logger.info("Building custom OVN image")
     node.copy_to("manifests/ovn/Dockerfile", "/tmp/Dockerfile")
     node.run_or_die(
@@ -91,6 +104,8 @@ def build_image(node: host.Host, cfg: ExtraConfigArgs, ubi_image: str) -> None:
         f"--build-arg OVNK_IMAGE={ORIGINAL_IMAGE} "
         f"--build-arg OVN_REPO={cfg.ovn_repo or DEFAULT_OVN_REPO} "
         f"--build-arg OVN_REF={cfg.ovn_ref or DEFAULT_OVN_REF} "
+        f"--build-arg OVNK_REPO={ovnk_repo} "
+        f"--build-arg OVNK_REF={ovnk_ref} "
         f"--build-arg OVN_REMOVE_DEPS=\"{REMOVE_DEPS}\" "
         "-f /tmp/Dockerfile . "
         ">/tmp/ovn-custom-image.log 2>&1"
