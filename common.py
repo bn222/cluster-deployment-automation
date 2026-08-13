@@ -479,6 +479,9 @@ def get_auto_port(host: host.Host) -> str:
         if not ipa.has_carrier():
             # No carrier, this interface is not a candidate.
             return False
+        if ipa.master is not None:
+            # Already attached to a bridge (e.g., podman, docker), skip it.
+            return False
         if any(ai.family == 'inet' or (ai.family == 'inet6' and not ai.local.startswith("fe80:")) for ai in ipa.addr_info):
             # We expect that there is no IP address. However, Ipv6 link local
             # addresses may be configured (for example, if NetworkManager in

@@ -40,7 +40,16 @@ class VirBridge:
         self.config = config
         self.libvirt = Libvirt(h)
 
+    def is_bridge_mode(self) -> bool:
+        """Check if using bridge-forward mode (vs NAT mode)."""
+        return self.config.mode == "bridge"
+
     def setup_dhcp_entries(self, nodes: list[NodeConfig]) -> None:
+        # In bridge mode, we use external DHCP - skip libvirt DHCP configuration
+        if self.is_bridge_mode():
+            logger.info("Bridge mode: skipping DHCP setup (using external DHCP)")
+            return
+
         # DHCP entries should have been removed during teardown.
         # However, leases sometimes came back.
         self.remove_dhcp_entries(nodes)
@@ -58,6 +67,11 @@ class VirBridge:
             self.hostconn.run_or_die(cmd)
 
     def remove_dhcp_entries(self, nodes: list[NodeConfig]) -> None:
+        # In bridge mode, we use external DHCP - nothing to remove
+        if self.is_bridge_mode():
+            logger.info("Bridge mode: skipping DHCP cleanup (using external DHCP)")
+            return
+
         def filter_dhcp_leases(j: list[dict[str, str]], removed_macs: list[str], names: list[str]) -> list[dict[str, str]]:
             filtered = []
             for entry in j:
@@ -137,7 +151,8 @@ class VirBridge:
         if api_port is not None:
             self.hostconn.run(f"ip link set {api_port} up")
 
-    def _network_xml(self) -> str:
+    def _network_xml_nat(self) -> str:
+        """Generate libvirt network XML for NAT mode (original behavior)."""
         if self.config.dynamic_ip_range is None:
             dhcp_part = ""
         else:
@@ -155,6 +170,26 @@ class VirBridge:
                 </ip>
                 </network>"""
 
+    def _network_xml_bridge(self) -> str:
+        """Generate libvirt network XML for bridge-forward mode.
+
+        This mode connects VMs directly to a pre-existing kernel bridge,
+        allowing them to be on the same L2 network as physical hosts.
+        No IP/DHCP is configured on the libvirt side - external DHCP is used.
+        """
+        return f"""
+                <network>
+                <name>default</name>
+                <forward mode='bridge'/>
+                <bridge name='{self.config.bridge_name}'/>
+                </network>"""
+
+    def _network_xml(self) -> str:
+        """Generate appropriate network XML based on configured mode."""
+        if self.config.mode == "bridge":
+            return self._network_xml_bridge()
+        return self._network_xml_nat()
+
     def _ensure_run_as_root(self) -> None:
         qemu_conf = self.hostconn.read_file("/etc/libvirt/qemu.conf")
         if re.search('\nuser = "root"', qemu_conf) and re.search('\nuser = "root"', qemu_conf):
@@ -162,12 +197,67 @@ class VirBridge:
         self.hostconn.run("sed -e 's/#\\(user\\|group\\) = \".*\"$/\\1 = \"root\"/' -i /etc/libvirt/qemu.conf")
         self.libvirt.restart("qemu")
 
+    def _configure_bridge_mode(self) -> None:
+        """Configure libvirt network in bridge-forward mode.
+
+        This is a simpler configuration that just connects to a pre-existing
+        kernel bridge. No IP or DHCP configuration is done on the libvirt side.
+        """
+        hostname = self.hostconn.hostname()
+
+        cmd = "virsh net-dumpxml default"
+        ret = self.hostconn.run(cmd)
+
+        # Check if already configured correctly for bridge mode
+        needs_reconfigure = False
+        if ret.returncode != 0:
+            logger.info("Bridge needs to be configured: default network does not exist")
+            needs_reconfigure = True
+        elif "mode='bridge'" not in ret.out:
+            logger.info("Bridge needs to be reconfigured: not in bridge forward mode")
+            needs_reconfigure = True
+        elif f"name='{self.config.bridge_name}'" not in ret.out:
+            logger.info(f"Bridge needs to be reconfigured: wrong bridge name (expected {self.config.bridge_name})")
+            needs_reconfigure = True
+
+        active_ret = self.hostconn.run("virsh net-info default | grep Active")
+        if "no" in active_ret.out:
+            logger.info("Bridge needs to be reconfigured: the default network is down")
+            needs_reconfigure = True
+
+        if needs_reconfigure:
+            logger.info(f"Configuring bridge-forward network using kernel bridge {self.config.bridge_name}")
+            logger.info(f"creating default-net.xml on {hostname}")
+            contents = self._network_xml_bridge()
+
+            bridge_xml = os.path.join("/tmp", 'vir_bridge.xml')
+            self.hostconn.write(bridge_xml, contents)
+
+            # Destroy existing network if any
+            self.hostconn.run("virsh net-destroy default")
+            self.hostconn.run("virsh net-undefine default")
+
+            # Define and start the bridge-forward network
+            self.hostconn.run_or_die(f"virsh net-define {bridge_xml}")
+            self.hostconn.run_or_die("virsh net-start default")
+            self.hostconn.run_or_die("virsh net-autostart default")
+
+            logger.info("Bridge-forward network configured successfully")
+        else:
+            logger.info("Bridge-forward network already configured correctly")
+
     def configure(self, api_port: Optional[str]) -> None:
         hostname = self.hostconn.hostname()
         self.libvirt.configure()
 
         self._ensure_run_as_root()
 
+        # Bridge mode has simpler configuration - just connect to existing kernel bridge
+        if self.config.mode == "bridge":
+            self._configure_bridge_mode()
+            return
+
+        # NAT mode: full configuration with IP, DHCP, STP checks
         # stp must be disabled or it might conflict with default configuration of some physical switches
         # 'bridge' section of network 'default' can't be updated => destroy and recreate
         # check that default exists and contains stp=off
@@ -215,6 +305,9 @@ class VirBridge:
             # Not sure why/whether this is needed. But we saw failures w/o it.
             # We need to investigate how to remove the sleep to speed up
             time.sleep(5)
+
+            # Re-fetch network XML after reconfiguration so the DHCP range check below uses current state
+            ret = self.hostconn.run(cmd)
 
         # Reconfiguring bridge by deleting and recreating it causes existing bridge configuration (dhcp entries, bridge masters...) to get lost.
         # The dynamic range might change if we add workers. Update dynamic range ... dynamically, without restarting bridge, to avoid

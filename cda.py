@@ -6,7 +6,7 @@ from assistedInstallerService import AssistedInstallerService
 from clustersConfig import ClustersConfig, ExtraConfigArgs
 from clusterDeployer import ClusterDeployer
 from isoDeployer import IsoDeployer
-from arguments import parse_args
+from arguments import parse_args, DEFAULT_AI_URL
 import argparse
 import host
 from logger import logger
@@ -15,6 +15,7 @@ from virtualBridge import VirBridge
 import configLoader
 from cdaConfig import CdaConfig
 import auth
+import common
 import os
 from state_file import StateFile
 
@@ -27,18 +28,52 @@ def check_and_cleanup_disk(threshold_gb: int = 10) -> None:
         h.run("podman image prune -a -f")
 
 
+def get_ai_url_for_bridge_mode(cc: ClustersConfig, args: argparse.Namespace) -> tuple[str, bool]:
+    """Get the Assisted Installer URL, auto-detecting for bridge mode.
+
+    In bridge mode, the default NAT URL (192.168.122.1) doesn't exist.
+    We use the IP of the kernel bridge instead, so the AI is reachable from VMs.
+
+    Returns:
+        Tuple of (ai_url, start_locally) where start_locally indicates if AI should be started.
+    """
+    # If user explicitly specified a URL different from default, use it (external AI)
+    if args.url != DEFAULT_AI_URL:
+        return args.url, False
+
+    # NAT mode: use the default, start AI locally
+    if cc.network_mode != "bridge":
+        return args.url, True
+
+    # Bridge mode: get IP of the kernel bridge, start AI locally
+    bridge_ip = common.port_to_ip(host.LocalHost(), cc.bridge_name)
+    if bridge_ip is None:
+        logger.error_and_exit(
+            f"Bridge mode is enabled but could not get IP of bridge '{cc.bridge_name}'. "
+            f"Make sure the bridge exists and has an IP address. "
+            f"You can create it with: scripts/setup-bridge.sh <interface> {cc.bridge_name}"
+        )
+
+    logger.info(f"Bridge mode: using {bridge_ip} as Assisted Installer URL (from {cc.bridge_name})")
+    return bridge_ip, True
+
+
 def main_deploy_openshift(cc: ClustersConfig, args: argparse.Namespace, state_file: StateFile) -> None:
     # Make sure the local virtual bridge base configuration is correct.
     local_bridge = VirBridge(host.LocalHost(), cc.local_bridge_config)
     local_bridge.configure(api_port=None)
 
-    # microshift does not use assisted installer so we don't need this check
-    if args.url == cc.ip_range[0]:
+    # Get the appropriate AI URL (auto-detected for bridge mode)
+    ai_url, start_ai_locally = get_ai_url_for_bridge_mode(cc, args)
+
+    if start_ai_locally:
         resume_deployment = "master" not in args.steps
-        ais = AssistedInstallerService(cc.version, args.url, resume_deployment, cc.proxy, cc.noproxy)
+        # Use the appropriate bridge name based on network mode
+        bridge_name = cc.bridge_name if cc.network_mode == "bridge" else "virbr0"
+        ais = AssistedInstallerService(cc.version, ai_url, resume_deployment, cc.proxy, cc.noproxy, bridge_name=bridge_name)
         ais.start()
     else:
-        logger.info(f"Will use Assisted Installer running at {args.url}")
+        logger.info(f"Will use Assisted Installer running at {ai_url}")
         ais = None
 
     """
@@ -47,7 +82,7 @@ def main_deploy_openshift(cc: ClustersConfig, args: argparse.Namespace, state_fi
     The usage details are here:
         https://aicli.readthedocs.io/en/latest/
     """
-    ai = AssistedClientAutomation(f"{args.url}:8090", ais)
+    ai = AssistedClientAutomation(f"{ai_url}:8090", ais)
     cd = ClusterDeployer(cc, ai, args.steps, args.secrets_path, state_file, args.resume)
 
     if args.additional_post_config:

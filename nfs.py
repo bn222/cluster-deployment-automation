@@ -41,10 +41,13 @@ class NFS:
 
     def _add(self, dir_name: str) -> None:
         contents = self._host.read_file("/etc/exports")
-        self._host.write("/etc/exports", f"{contents}\n{dir_name}")
+        # Export options: ro for ISO hosting, insecure for BMC/iDRAC access
+        export_line = f"{dir_name} *(ro,sync,no_root_squash,insecure,no_subtree_check)"
+        self._host.write("/etc/exports", f"{contents}\n{export_line}")
 
     def _export_fs(self) -> None:
         self._host.run("systemctl enable nfs-server")
+        self._configure_firewall()
         started_at = time.monotonic()
         while True:
             ret = self._host.run("systemctl restart nfs-server")
@@ -52,10 +55,25 @@ class NFS:
                 break
             if time.monotonic() > started_at + 60:
                 logger.error_and_exit(f"failed to `systemctl restart nfs-server`: {ret}")
-            ret = self._host.run("sudo systemctl disable --now firewalld")
-            if ret.success():
-                break
             time.sleep(1)
+
+    def _configure_firewall(self) -> None:
+        """Configure firewall to allow NFS traffic."""
+        # Check if firewalld is running
+        ret = self._host.run("systemctl is-active firewalld")
+        if not ret.success():
+            logger.info("firewalld not active, skipping firewall configuration")
+            return
+
+        # Add NFS services to firewall
+        nfs_services = ["nfs", "nfs3", "mountd", "rpc-bind"]
+        for service in nfs_services:
+            ret = self._host.run(f"firewall-cmd --query-service={service}")
+            if not ret.success():
+                logger.info(f"Adding {service} to firewall")
+                self._host.run(f"firewall-cmd --add-service={service} --permanent")
+
+        self._host.run("firewall-cmd --reload")
 
     def _ip(self) -> Optional[str]:
         return common.port_to_ip(self._host, self._port)
