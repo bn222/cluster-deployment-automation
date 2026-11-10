@@ -77,12 +77,12 @@ non-standard way, the web-ui can't be used.
 class AssistedInstallerService:
     # Freeze SAAS version to avoid unexpected breakages.
     # The values are taken from:
-    # https://gitlab.cee.redhat.com/service/app-interface/-/blob/b4634f0f0a8897f6ca5b0fe20b47c1b313bc9964/data/services/assisted-installer/cicd/target/production/assisted-service.yaml
+    # https://gitlab.cee.redhat.com/service/app-interface/-/blob/2adbd040e135420619207c007e68b0828de25be5/data/services/assisted-installer/cicd/target/production/assisted-service.yaml
     #
     SAAS_VERSION = "latest"
-    INSTALLER_IMAGE = "registry.redhat.io/rhai/assisted-installer-rhel9:c41e0c7d465a9357a49036b350368f008730080e"
-    CONTROLLER_IMAGE = "registry.redhat.io/rhai/assisted-installer-controller-rhel9:c41e0c7d465a9357a49036b350368f008730080e"
-    AGENT_DOCKER_IMAGE = "registry.redhat.io/rhai/assisted-installer-agent-rhel9:9b81f45f43a67c390e5bdbde909b0190f3b61183"
+    INSTALLER_IMAGE = "registry.redhat.io/rhai/assisted-installer-rhel9:af8a77c1d2c0cbed9c1be0b2589274c2177cda9e"
+    CONTROLLER_IMAGE = "registry.redhat.io/rhai/assisted-installer-controller-rhel9:af8a77c1d2c0cbed9c1be0b2589274c2177cda9e"
+    AGENT_DOCKER_IMAGE = "registry.redhat.io/rhai/assisted-installer-agent-rhel9:2f087389cb375967797b90a20b870847cd519b28"
 
     def __init__(self, version: str, ip: str, resume_deployment: bool = False, proxy: Optional[str] = None, noproxy: Optional[str] = None, branch: str = "master"):
         self._version = version
