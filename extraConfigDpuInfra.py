@@ -171,9 +171,9 @@ def _ExtraConfigDpuInfra_common(cc: ClustersConfig, futures: dict[str, Future[Op
     while True:
         pods = client._client.list_namespaced_pod("openshift-dpu-network-operator").items
         if len(pods) == 1:
-            if pods[0].status.phase == "Running":
+            if pods[0].status.phase == "Running":  # type: ignore[union-attr]
                 break
-            logger.info(f"Pod is in {pods[0].status.phase} state")
+            logger.info(f"Pod is in {pods[0].status.phase} state")  # type: ignore[union-attr]
         elif len(pods) > 1:
             logger.info("unexpected number of pods")
             sys.exit(-1)
