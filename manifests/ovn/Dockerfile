@@ -8,7 +8,7 @@ ARG OVN_REF
 ARG OVNK_REPO
 ARG OVNK_REF
 
-RUN dnf install -y git go rpm-build
+RUN dnf install -y git go jq rpm-build
 ENV PATH="/root/go/bin:${PATH}"
 
 WORKDIR /root
@@ -45,7 +45,11 @@ RUN cp /root/ovn/ovn-nb.ovsschema go-controller/pkg/nbdb/ovn-nb.ovsschema
 RUN cp /root/ovn/ovn-sb.ovsschema go-controller/pkg/sbdb/ovn-sb.ovsschema
 
 # Rebuild ovn-kubernetes with the new schema.
-RUN cd go-controller; make modelgen && CGO_ENABLED=1 make
+RUN cd go-controller && \
+    toolchain="$(go mod edit -json | jq -er '.Toolchain')" && \
+    export GOTOOLCHAIN="$toolchain" && \
+    make modelgen && \
+    CGO_ENABLED=1 make
 
 FROM $OVNK_IMAGE
 
