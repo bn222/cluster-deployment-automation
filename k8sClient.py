@@ -13,20 +13,20 @@ class K8sClient:
     def __init__(self, kubeconfig: str, host: host.Host = host.LocalHost()):
         self._kc = kubeconfig
         c = yaml.safe_load(host.read_file(kubeconfig))
-        self._api_client = kubernetes.config.new_client_from_config_dict(c)
+        self._api_client = kubernetes.config.new_client_from_config_dict(c)  # type: ignore[no-untyped-call]
         self._client = kubernetes.client.CoreV1Api(self._api_client)
         self._host = host
 
     def is_ready(self, name: str) -> bool:
         for e in self._client.list_node().items:
-            for con in e.status.conditions:
+            for con in e.status.conditions:  # type: ignore[union-attr]
                 if con.type == "Ready":
-                    if name == e.metadata.name:
+                    if name == e.metadata.name:  # type: ignore[union-attr]
                         return str(con.status) == "True"
         return False
 
     def get_nodes(self) -> list[str]:
-        return [e.metadata.name for e in self._client.list_node().items]
+        return [e.metadata.name for e in self._client.list_node().items]  # type: ignore[union-attr, misc]
 
     def wait_ready(self, name: str, cb: Callable[[], None] = lambda: None) -> None:
         logger.info(f"waiting for {name} to be ready")
@@ -50,15 +50,15 @@ class K8sClient:
         try:
             certs_api = kubernetes.client.CertificatesV1Api(self._api_client)
             for e in certs_api.list_certificate_signing_request().items:
-                if e.status.conditions is None:
-                    self.oc(f"adm certificate approve {e.metadata.name}")
+                if e.status.conditions is None:  # type: ignore[union-attr]
+                    self.oc(f"adm certificate approve {e.metadata.name}")  # type: ignore[union-attr]
         except Exception as e:
             logger.debug(f"Failed to approve CSR: {e}")
 
     def get_ip(self, name: str) -> Optional[str]:
         for e in self._client.list_node().items:
-            if name == e.metadata.name:
-                for addr in e.status.addresses:
+            if name == e.metadata.name:  # type: ignore[union-attr]
+                for addr in e.status.addresses:  # type: ignore[union-attr]
                     if addr.type == "InternalIP":
                         return str(addr.address)
         return None
