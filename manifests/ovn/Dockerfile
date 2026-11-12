@@ -38,7 +38,7 @@ RUN ./boot.sh && ./configure && make dist -j$(nproc) && \
 WORKDIR /root
 RUN git clone ${OVNK_REPO}
 WORKDIR /root/ovn-kubernetes
-RUN git checkout ${OVNK_IMAGE_SHA}
+RUN git checkout ${OVNK_REF}
 
 # Copy the schema from OVN.
 RUN cp /root/ovn/ovn-nb.ovsschema go-controller/pkg/nbdb/ovn-nb.ovsschema
