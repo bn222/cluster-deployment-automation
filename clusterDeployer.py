@@ -355,6 +355,8 @@ class ClusterDeployer(BaseDeployer):
         nodes_with_futures = [(n.config.name, executor.submit(self._start_node, infra_env, n, True)) for n in master_nodes]
         wait_futures("start node", nodes_with_futures)
 
+        self.update_etc_hosts()
+
         self._ai.ensure_cluster_installing(cluster_name)
 
         self._ai.download_kubeconfig_and_secrets(self._cc.name, self._cc.kubeconfig)
