@@ -589,7 +589,7 @@ class ClusterDeployer(BaseDeployer):
 
     def update_etc_hosts(self) -> None:
         cluster_name = self._cc.name
-        api_name = f"api.{cluster_name}.redhat.com"
+        api_name = f"api.{cluster_name}.{self._cc.base_dns_domain}"
         api_vip = self._ai.get_ai_cluster_info(cluster_name).api_vip
 
         hosts = Hosts()
