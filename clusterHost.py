@@ -72,9 +72,10 @@ class ClusterHost:
             if not self.hostconn.is_localhost():
                 self.hostconn.ssh_connect(self.config.username, self.config.password)
 
-        # This host needs an api network port if it runs vms and there are more
-        # than one physical host in the deployment.
-        self.needs_api_network = (self.hosts_vms and any(node_config.node != c.name for node_config in cc.all_nodes())) or self.hostconn.is_localhost()
+        # This host needs an api network port if it runs vms and there are
+        # physical nodes or nodes on other hosts in the deployment.
+        has_external_nodes = any(node_config.node != c.name or node_config.kind != "vm" for node_config in cc.all_nodes())
+        self.needs_api_network = self.hosts_vms and has_external_nodes
         if self.needs_api_network:
             if self.config.network_api_port == "auto":
                 self.api_port = common.get_auto_port(self.hostconn)
@@ -130,6 +131,12 @@ class ClusterHost:
         self.ensure_linked_to_network(self.bridge)
 
     def ensure_linked_to_network(self, dhcp_bridge: VirBridge) -> None:
+        # In bridge mode, VMs connect directly to the pre-existing kernel bridge
+        # No need to add physical interface as slave or configure DHCP filtering
+        if dhcp_bridge.is_bridge_mode():
+            logger.info("Bridge mode: skipping network linking (using pre-existing kernel bridge)")
+            return
+
         if not self.needs_api_network:
             return
         assert self.api_port is not None
@@ -151,12 +158,18 @@ class ClusterHost:
             logger.info(f"No master set for interface {self.api_port}, setting it to {br_name}")
             self.hostconn.run(f"ip link set {self.api_port} master {br_name}")
         elif interface.master != br_name:
-            logger.error_and_exit(f"Incorrect master set for interface {self.api_port}")
+            logger.error_and_exit(f"Interface {self.api_port} is already attached to bridge '{interface.master}', cannot use it for {br_name}. "
+                                  f"Please set 'network_api_port' in your cluster config to specify a different interface.")
 
         logger.info(f"Setting interface {self.api_port} as unmanaged in NetworkManager")
         self.hostconn.run(f"nmcli device set {self.api_port} managed no")
 
     def ensure_not_linked_to_network(self) -> None:
+        # In bridge mode, we didn't do any linking, so nothing to undo
+        if self.bridge.is_bridge_mode():
+            logger.info("Bridge mode: skipping network unlinking (nothing was linked)")
+            return
+
         if not self.needs_api_network:
             return
         assert self.api_port is not None

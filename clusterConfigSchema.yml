@@ -5,6 +5,8 @@ clusters:
     ingress_vip: "..."
     external_port: "<device name> optional, detected automatically"
     network_api_port: "<auto / device name>"
+    network_mode: "<nat / bridge> - default: nat. Use 'bridge' for hybrid VM+physical deployments on same L2 network"
+    bridge_name: "<kernel bridge name> - default: br-cda-0. Required when network_mode=bridge. Must be pre-created on host"
     ip_range: "IP range (<start>-<end>) to use for connectivity between cluster nodes (optional)"
     ip_mask: "IP mask (x.y.z.t) to use for connectivity between cluster nodes (optional)"
     masters:
