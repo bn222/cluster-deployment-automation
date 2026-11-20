@@ -223,6 +223,8 @@ class VirBridge:
         # We can't modify the dhcp range, but we can delete/add it back. First delete it.
         range_elem = None
         xml_str = ""
+        ret = self.hostconn.run("virsh net-dumpxml default")
+
         if expected_dhcp_range not in ret.out:
             tree = et.fromstring(ret.out)
             range_elem = next((it for it in tree.iter('range')), et.Element(''))
