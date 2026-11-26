@@ -355,6 +355,8 @@ class ClusterDeployer(BaseDeployer):
         nodes_with_futures = [(n.config.name, executor.submit(self._start_node, infra_env, n, True)) for n in master_nodes]
         wait_futures("start node", nodes_with_futures)
 
+        self.update_etc_hosts()
+
         self._ai.ensure_cluster_installing(cluster_name)
 
         self._ai.download_kubeconfig_and_secrets(self._cc.name, self._cc.kubeconfig)
@@ -589,7 +591,7 @@ class ClusterDeployer(BaseDeployer):
 
     def update_etc_hosts(self) -> None:
         cluster_name = self._cc.name
-        api_name = f"api.{cluster_name}.redhat.com"
+        api_name = f"api.{cluster_name}.{self._cc.base_dns_domain}"
         api_vip = self._ai.get_ai_cluster_info(cluster_name).api_vip
 
         hosts = Hosts()
